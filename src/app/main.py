@@ -1,4 +1,4 @@
-"""HTTP app: `/healthz`, the JSON API, and the built frontend."""
+"""HTTP app: `/healthz`, the JSON API, `/mcp`, and the built frontend."""
 
 import contextlib
 import os
@@ -12,6 +12,7 @@ from starlette.routing import Route
 
 from app.api import api_routes
 from app.config import Settings, load_settings
+from app.mcp_server import build_mcp
 from app.recipes.store import RecipeStore
 from app.web import web_routes
 
@@ -33,6 +34,15 @@ def create_app(
     if static_dir is None and os.environ.get("STATIC_DIR"):
         static_dir = Path(os.environ["STATIC_DIR"])
     store = RecipeStore(data_dir)
+    server = build_mcp(store)
+    mcp_app = server.streamable_http_app(
+        streamable_http_path="/mcp",
+        stateless_http=True,
+        json_response=True,
+        # Not a bind address: it turns off the SDK's localhost-only Host check.
+        # Cloudflare Access is the gate, and the container publishes no ports.
+        host="0.0.0.0",
+    )
 
     async def healthz(request: Request) -> JSONResponse:
         return JSONResponse({"status": "ok", "version": version})
@@ -41,12 +51,14 @@ def create_app(
     async def lifespan(app: Starlette):
         if settings.seed_examples:
             store.seed_if_empty()
-        yield
+        async with server.session_manager.run():
+            yield
 
     return Starlette(
         routes=[
             Route("/healthz", healthz),
             *api_routes(store),
+            *mcp_app.routes,
             *web_routes(static_dir),
         ],
         lifespan=lifespan,
