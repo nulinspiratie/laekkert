@@ -2,7 +2,7 @@
 // or the phone bottom bar, around the page. `side` picks the theme through
 // `data-side` (see styles/tokens.css).
 
-import { useEffect, type ReactNode } from 'react'
+import { useLayoutEffect, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { defaultQuery } from './browse'
 import { DrinksTab, FoodTab, Grid, List, Logo } from './icons'
@@ -26,7 +26,7 @@ export function Shell({ side, view, onView, phoneActions, phoneBar = true, child
   const desktop = useIsDesktop()
 
   // The page background lives on <body>, outside this element, so it needs the side too.
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.dataset.side = side
   }, [side])
 

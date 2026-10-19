@@ -158,6 +158,14 @@ export function Back({ strokeWidth = 2, ...props }: IconProps) {
   )
 }
 
+export function Chevron(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="m9 6 6 6-6 6" />
+    </Svg>
+  )
+}
+
 export function Plus({ strokeWidth = 2.25, ...props }: IconProps) {
   return (
     <Svg size={18} strokeWidth={strokeWidth} {...props}>

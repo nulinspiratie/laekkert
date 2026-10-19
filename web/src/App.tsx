@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, Route, Routes, useParams } from 'react-router'
-import { getRecipe, listRecipes } from './api'
+import { getRecipe } from './api'
 import { defaultQuery } from './browse'
-import { getLastSide, setLastSide } from './prefs'
+import Browse from './Browse'
+import { getLastSide } from './prefs'
 import { Shell } from './Shell'
-import { SIDE_LABELS, isSide, type Ingredient, type Recipe, type RecipeSummary, type Side } from './types'
+import { SIDE_LABELS, isSide, type Ingredient, type Recipe, type Side } from './types'
 
 export default function App() {
   return (
@@ -30,40 +31,7 @@ function NotFound() {
 function SidePage() {
   const { side } = useParams()
   if (!isSide(side)) return <NotFound />
-  return <RecipeList key={side} side={side} />
-}
-
-function RecipeList({ side }: { side: Side }) {
-  const [recipes, setRecipes] = useState<RecipeSummary[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    setLastSide(side)
-    let live = true
-    listRecipes(side).then(
-      (list) => live && setRecipes(list),
-      (err: Error) => live && setError(err.message),
-    )
-    return () => {
-      live = false
-    }
-  }, [side])
-
-  return (
-    <Shell side={side}>
-      {error && <p role="alert">{error}</p>}
-      {recipes?.length === 0 && <p>No recipes yet.</p>}
-      {recipes && recipes.length > 0 && (
-        <ul>
-          {recipes.map((r) => (
-            <li key={r.slug}>
-              <Link to={`/${side}/${r.slug}`}>{r.name}</Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Shell>
-  )
+  return <Browse key={side} side={side} />
 }
 
 function RecipePage() {

@@ -1,8 +1,10 @@
 /* Design tokens. :root is the Food theme; [data-side='drinks'] re-skins it.
    Values come from docs/design/artboards (Main.dc.html for Food,
-   DrinksDesktop/DrinksPhone.dc.html for Drinks). */
+   DrinksDesktop/DrinksPhone.dc.html for Drinks). The Food block also matches
+   [data-side='food'], so a Food shell inside a Drinks document gets Food colours. */
 
-:root {
+:root,
+[data-side='food'] {
   --font-serif: 'Young Serif', Georgia, serif;
   --font-sans: 'Hanken Grotesk', system-ui, sans-serif;
 

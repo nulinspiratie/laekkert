@@ -13,6 +13,12 @@ export interface BrowseState {
   sort: SortKey
 }
 
+/** The sort choices the browse page offers, in display order. */
+export const SORT_OPTIONS: readonly { key: SortKey; label: string }[] = [
+  { key: 'time', label: 'Cooking time' },
+  { key: 'name', label: 'A–Z' },
+]
+
 export const CATEGORIES: Record<Side, readonly string[]> = {
   food: ['mains', 'sides', 'desserts', 'sauces', 'prep'],
   drinks: ['cocktails', 'mocktails', 'syrups', 'prep'],
