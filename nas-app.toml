@@ -2,13 +2,13 @@
 # The slug is always the repo name; it is not set here.
 
 [app]
-description = "Placeholder app from nas-app-template"
+description = "Lækkert: food and drinks recipes"
 internal_port = 8080          # keep 8080 unless there is a reason
 health_path = "/healthz"
 
 [routing]
 subdomain = ""                # empty = the slug; becomes <subdomain>.serwan.me
-claude_access = false         # true = add the Claude service-token rule in Cloudflare Access
+claude_access = true          # true = add the Claude service-token rule in Cloudflare Access
 
 [storage]
 data = true                   # mount /volume1/docker/<slug>/data at /data

@@ -1,15 +1,11 @@
-# nas-app-template
+# Lækkert
 
-Template for apps hosted on Serwan's NAS. A repo made from it with **Use this template**
-publishes a working image to GHCR on its first push, with no file edited:
-`ghcr.io/nulinspiratie/<repo-name>:main` and `:<short-sha>` (the repo name lowercased).
-The image is a placeholder Python app that already follows every runtime convention
-(port 8080, `/healthz` with the commit SHA, config from `/config/config.toml`, writes only
-to `/data`, uid 1000, read-only filesystem). The template repo itself runs the tests and
-an image build but never publishes.
+Lækkert is a recipe app for food and drinks, kept as separate sides, that runs on Serwan's
+NAS and that Claude can read and (later) edit over MCP. The PoC plan is in
+[`docs/plan.md`](docs/plan.md); the rules an agent follows are in [`CLAUDE.md`](CLAUDE.md).
 
-The full design is in [`docs/template-spec.md`](docs/template-spec.md); the rules an agent
-follows are in [`CLAUDE.md`](CLAUDE.md).
+Made from `nulinspiratie/nas-app-template`; the notes below on how such an app deploys
+still apply.
 
 ## Day 1 for a new app
 
@@ -32,13 +28,14 @@ follows are in [`CLAUDE.md`](CLAUDE.md).
 
 ## Local commands
 
-Needs [`uv`](https://docs.astral.sh/uv/) and [`just`](https://just.systems/); Docker for
-`just build`.
+Needs [`uv`](https://docs.astral.sh/uv/), [`just`](https://just.systems/) and Node 24 (npm);
+Docker for `just build`.
 
 ```sh
-just test      # pytest
-just lint      # ruff + nas-app.toml check
-just run       # http://localhost:8080 with config.example.toml
+just test      # pytest and the frontend tests (vitest)
+just lint      # ruff, nas-app.toml check, frontend typecheck + oxlint
+just run       # builds web/, then http://localhost:8080 with config.example.toml
+just web-dev   # frontend dev server with hot reload, proxying to `just run`
 just build     # local linux/amd64 image <slug>:local (never pushed)
 just handoff   # hand-off block (the home-server PR description)
 ```
@@ -49,7 +46,8 @@ There is no deploy command: deploying is `git push` to `main`.
 
 | Path | What it is |
 | --- | --- |
-| `src/app/` | Placeholder app (`main.py`) and config loader (`config.py`) |
+| `src/app/` | Backend: app (`main.py`), JSON API, MCP server, recipe store, seed recipes |
+| `web/` | Frontend: Vite + React, built into the image at `/app/static` |
 | `config.example.toml` | Every app setting with its default; becomes `containers/<slug>/config.toml` |
 | `nas-app.toml` | Deploy manifest: port, health path, subdomain, Claude access, data, secret names |
 | `deploy/compose.example.yml` | The compose the app session writes in its home-server PR |
