@@ -1,3 +1,4 @@
+import json
 import shutil
 
 import pytest
@@ -108,3 +109,56 @@ def test_list_with_blank_q_is_unfiltered(client, q):
 
 def test_list_with_q_still_requires_side(client):
     assert client.get("/api/recipes?q=dai").status_code == 400
+
+
+def declare_image(tmp_path, data=b"\xff\xd8jpeg-bytes"):
+    folder = tmp_path / "recipes/drinks/daiquiri"
+    recipe = json.loads((folder / "recipe.json").read_text())
+    recipe["image"] = "photo.jpg"
+    (folder / "recipe.json").write_text(json.dumps(recipe))
+    (folder / "photo.jpg").write_bytes(data)
+
+
+def test_image_route_serves_bytes_and_cache_header(client, tmp_path):
+    declare_image(tmp_path)
+    response = client.get("/api/recipes/drinks/daiquiri/files/photo.jpg")
+    assert response.status_code == 200
+    assert response.content == b"\xff\xd8jpeg-bytes"
+    assert response.headers["content-type"] == "image/jpeg"
+    assert response.headers["cache-control"] == "private, max-age=3600"
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "%2e%2e%2frecipe.json",
+        "..%2Fdaiquiri%2Frecipe.json",
+        "%2e%2e/x",
+        "recipe.json",
+        "timeline.jsonl",
+        "other.jpg",
+        "missing.jpg",
+    ],
+)
+def test_image_route_404s_for_encoded_traversal(client, tmp_path, name):
+    declare_image(tmp_path)
+    (tmp_path / "recipes/drinks/daiquiri/timeline.jsonl").write_text("{}\n")
+    (tmp_path / "recipes/drinks/daiquiri/other.jpg").write_bytes(b"x")
+    response = client.get(f"/api/recipes/drinks/daiquiri/files/{name}")
+    assert response.status_code == 404
+    assert response.json() == {"error": "not found"}
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/recipes/bar/daiquiri/files/photo.jpg",
+        "/api/recipes/drinks/nope/files/photo.jpg",
+        "/api/recipes/drinks/..%2Ffood/files/photo.jpg",
+    ],
+)
+def test_image_route_404s_for_unknown_recipe(client, tmp_path, path):
+    declare_image(tmp_path)
+    response = client.get(path)
+    assert response.status_code == 404
+    assert response.json() == {"error": "not found"}

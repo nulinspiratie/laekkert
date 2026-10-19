@@ -1,7 +1,7 @@
 """JSON API the web app reads recipes through."""
 
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import FileResponse, JSONResponse
 from starlette.routing import Route
 
 from app.recipes.catalog import Catalog
@@ -35,12 +35,23 @@ def api_routes(store: RecipeStore, catalog: Catalog) -> list[Route]:
             ingredient["g_per_tsp"] = catalog.g_per_tsp(ingredient["item"])
         return JSONResponse(body)
 
+    async def recipe_file(request: Request) -> FileResponse | JSONResponse:
+        path = store.file_path(
+            request.path_params["side"],
+            request.path_params["slug"],
+            request.path_params["name"],
+        )
+        if path is None:
+            return not_found()
+        return FileResponse(path, headers={"Cache-Control": "private, max-age=3600"})
+
     async def unknown(request: Request) -> JSONResponse:
         return not_found()
 
     return [
         Route("/api/recipes", list_recipes),
         Route("/api/recipes/{side}/{slug}", recipe_detail),
+        Route("/api/recipes/{side}/{slug}/files/{name}", recipe_file),
         # Without this, unknown /api paths would fall through to the SPA.
         Route("/api/{rest:path}", unknown, methods=ALL_METHODS),
     ]
