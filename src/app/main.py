@@ -13,6 +13,7 @@ from starlette.routing import Route
 from app.api import api_routes
 from app.config import Settings, load_settings
 from app.mcp_server import build_mcp
+from app.recipes.catalog import Catalog
 from app.recipes.store import RecipeStore
 from app.web import web_routes
 
@@ -34,6 +35,7 @@ def create_app(
     if static_dir is None and os.environ.get("STATIC_DIR"):
         static_dir = Path(os.environ["STATIC_DIR"])
     store = RecipeStore(data_dir)
+    catalog = Catalog(data_dir)
     server = build_mcp(store)
     mcp_app = server.streamable_http_app(
         streamable_http_path="/mcp",
@@ -51,13 +53,15 @@ def create_app(
     async def lifespan(app: Starlette):
         if settings.seed_examples:
             store.seed_if_empty()
+        # Reference data, not example recipes, so it ignores `seed_examples`.
+        catalog.seed_if_missing()
         async with server.session_manager.run():
             yield
 
     return Starlette(
         routes=[
             Route("/healthz", healthz),
-            *api_routes(store),
+            *api_routes(store, catalog),
             *mcp_app.routes,
             *web_routes(static_dir),
         ],

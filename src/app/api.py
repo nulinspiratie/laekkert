@@ -4,6 +4,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
+from app.recipes.catalog import Catalog
 from app.recipes.model import SIDES
 from app.recipes.store import RecipeStore
 
@@ -14,7 +15,7 @@ def not_found() -> JSONResponse:
     return JSONResponse({"error": "not found"}, status_code=404)
 
 
-def api_routes(store: RecipeStore) -> list[Route]:
+def api_routes(store: RecipeStore, catalog: Catalog) -> list[Route]:
     async def list_recipes(request: Request) -> JSONResponse:
         side = request.query_params.get("side")
         if side not in SIDES:
@@ -27,7 +28,10 @@ def api_routes(store: RecipeStore) -> list[Route]:
         recipe = store.get(request.path_params["side"], request.path_params["slug"])
         if recipe is None:
             return not_found()
-        return JSONResponse(recipe.model_dump(mode="json"))
+        body = recipe.model_dump(mode="json")
+        for ingredient in body["ingredients"]:
+            ingredient["g_per_tsp"] = catalog.g_per_tsp(ingredient["item"])
+        return JSONResponse(body)
 
     async def unknown(request: Request) -> JSONResponse:
         return not_found()

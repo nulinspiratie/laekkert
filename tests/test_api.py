@@ -35,6 +35,17 @@ def test_detail(client):
     assert body["format_version"] == 1 and body["ingredients"][0]["unit"] == "ml"
 
 
+def test_detail_adds_g_per_tsp(client):
+    items = {
+        i["item"]: i
+        for i in client.get("/api/recipes/food/chicken-leek-traybake").json()[
+            "ingredients"
+        ]
+    }
+    assert items["smoked paprika"]["g_per_tsp"] == 2.3
+    assert items["chicken thighs"]["g_per_tsp"] is None
+
+
 @pytest.mark.parametrize(
     "path",
     [
