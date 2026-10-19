@@ -6,6 +6,7 @@ from starlette.routing import Route
 
 from app.recipes.catalog import Catalog
 from app.recipes.model import SIDES
+from app.recipes.search import search
 from app.recipes.store import RecipeStore
 
 ALL_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]
@@ -22,7 +23,8 @@ def api_routes(store: RecipeStore, catalog: Catalog) -> list[Route]:
             return JSONResponse(
                 {"error": "side must be food or drinks"}, status_code=400
             )
-        return JSONResponse({"recipes": [r.summary() for r in store.list(side)]})
+        recipes = search(store.list(side), request.query_params.get("q", ""))
+        return JSONResponse({"recipes": [r.summary() for r in recipes]})
 
     async def recipe_detail(request: Request) -> JSONResponse:
         recipe = store.get(request.path_params["side"], request.path_params["slug"])

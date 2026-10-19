@@ -88,3 +88,23 @@ def test_data_dir_from_env(tmp_path, monkeypatch):
     with TestClient(create_app(Settings())):
         pass
     assert (tmp_path / "recipes/drinks/daiquiri/recipe.json").is_file()
+
+
+def test_list_with_q_filters_and_orders(client):
+    recipes = client.get("/api/recipes?side=food&q=chiken leek").json()["recipes"]
+    assert [r["slug"] for r in recipes] == ["chicken-leek-traybake"]
+    assert client.get("/api/recipes?side=food&q=pizza").json() == {"recipes": []}
+    drinks = client.get("/api/recipes?side=drinks&q=dai").json()["recipes"]
+    assert [r["slug"] for r in drinks] == ["daiquiri"]
+
+
+@pytest.mark.parametrize("q", ["", "   "])
+def test_list_with_blank_q_is_unfiltered(client, q):
+    unfiltered = client.get("/api/recipes?side=food").json()
+    assert client.get("/api/recipes", params={"side": "food", "q": q}).json() == (
+        unfiltered
+    )
+
+
+def test_list_with_q_still_requires_side(client):
+    assert client.get("/api/recipes?q=dai").status_code == 400
