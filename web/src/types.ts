@@ -17,6 +17,10 @@ export interface Ingredient {
   original: string
 }
 
+export interface RecipeIngredient extends Ingredient {
+  g_per_tsp: number | null
+}
+
 export interface Source {
   url: string | null
   photo: string | null
@@ -36,7 +40,7 @@ export interface RecipeSummary {
 export interface Recipe extends RecipeSummary {
   format_version: number
   servings: number
-  ingredients: Ingredient[]
+  ingredients: RecipeIngredient[]
   steps: string[]
   source: Source | null
 }

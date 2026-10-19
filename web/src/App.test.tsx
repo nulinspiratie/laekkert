@@ -23,9 +23,9 @@ const traybake = {
   servings: 4,
   time_minutes: 45,
   ingredients: [
-    { amount: 600, unit: 'g', item: 'chicken thighs', note: 'boneless', no_scale: false, original: '' },
-    { amount: null, unit: 'g', item: 'smoked paprika', note: '', no_scale: false, original: '1 tsp' },
-    { amount: null, unit: 'to taste', item: 'salt', note: '', no_scale: true, original: '' },
+    { amount: 600, unit: 'g', item: 'chicken thighs', note: 'boneless', no_scale: false, original: '', g_per_tsp: null },
+    { amount: null, unit: 'g', item: 'smoked paprika', note: '', no_scale: false, original: '1 tsp', g_per_tsp: 2.3 },
+    { amount: null, unit: 'to taste', item: 'salt', note: '', no_scale: true, original: '', g_per_tsp: null },
   ],
   steps: ['Heat the oven.', 'Roast everything.'],
   source: null,
