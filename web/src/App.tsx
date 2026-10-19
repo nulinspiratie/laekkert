@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, Route, Routes, useParams } from 'react-router'
 import { getRecipe, listRecipes } from './api'
-import { getLastSide, setLastSide } from './lastSide'
-import { isSide, type Ingredient, type Recipe, type RecipeSummary, type Side } from './types'
-
-const SIDE_LABELS: Record<Side, string> = { food: 'Food', drinks: 'Drinks' }
+import { defaultQuery } from './browse'
+import { getLastSide, setLastSide } from './prefs'
+import { Shell } from './Shell'
+import { SIDE_LABELS, isSide, type Ingredient, type Recipe, type RecipeSummary, type Side } from './types'
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to={`/${getLastSide()}`} replace />} />
+      <Route path="/" element={<Home />} />
       <Route path="/:side" element={<SidePage />} />
       <Route path="/:side/:slug" element={<RecipePage />} />
       <Route path="*" element={<NotFound />} />
@@ -17,20 +17,14 @@ export default function App() {
   )
 }
 
-function NotFound() {
-  return <p>Not found</p>
+function Home() {
+  const side = getLastSide()
+  const query = defaultQuery(side)
+  return <Navigate to={`/${side}${query ? `?${query}` : ''}`} replace />
 }
 
-function SideSwitch({ current }: { current: Side }) {
-  return (
-    <nav>
-      {(Object.keys(SIDE_LABELS) as Side[]).map((side) => (
-        <Link key={side} to={`/${side}`} aria-current={side === current ? 'page' : undefined}>
-          {SIDE_LABELS[side]}
-        </Link>
-      ))}
-    </nav>
-  )
+function NotFound() {
+  return <p>Not found</p>
 }
 
 function SidePage() {
@@ -56,8 +50,7 @@ function RecipeList({ side }: { side: Side }) {
   }, [side])
 
   return (
-    <main>
-      <SideSwitch current={side} />
+    <Shell side={side}>
       {error && <p role="alert">{error}</p>}
       {recipes?.length === 0 && <p>No recipes yet.</p>}
       {recipes && recipes.length > 0 && (
@@ -69,7 +62,7 @@ function RecipeList({ side }: { side: Side }) {
           ))}
         </ul>
       )}
-    </main>
+    </Shell>
   )
 }
 
@@ -99,7 +92,7 @@ function RecipeDetail({ side, slug }: { side: Side; slug: string }) {
   if (recipe === null) return <NotFound />
   if (recipe === undefined) return null
   return (
-    <main>
+    <Shell side={side}>
       <Link to={`/${side}`}>← {SIDE_LABELS[side]}</Link>
       <h1>{recipe.name}</h1>
       <p>Serves {recipe.servings}</p>
@@ -115,7 +108,7 @@ function RecipeDetail({ side, slug }: { side: Side; slug: string }) {
           <li key={i}>{step}</li>
         ))}
       </ol>
-    </main>
+    </Shell>
   )
 }
 

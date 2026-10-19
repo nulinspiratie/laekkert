@@ -1,0 +1,142 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-10-19T12:00:00Z"
+  },
+  "title": "Recipe App",
+  "launch": {
+    "view": "canvas"
+  },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1000,
+      "title": "Food \u00b7 grid \u00b7 desktop",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "FoodListDesktop.dc.html": {
+      "x": 1520,
+      "y": 0,
+      "w": 1440,
+      "h": 1000,
+      "title": "Food \u00b7 list \u00b7 desktop",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "FoodGridPhone.dc.html": {
+      "x": 3040,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "Food \u00b7 grid \u00b7 phone",
+      "is_interactive": true
+    },
+    "FoodListPhone.dc.html": {
+      "x": 3510,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "Food \u00b7 list \u00b7 phone",
+      "is_interactive": true
+    },
+    "DrinksDesktop.dc.html": {
+      "x": 0,
+      "y": 1400,
+      "w": 1440,
+      "h": 1000,
+      "title": "Drinks \u00b7 grid \u00b7 desktop",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "DrinksPhone.dc.html": {
+      "x": 1520,
+      "y": 1400,
+      "w": 390,
+      "h": 844,
+      "title": "Drinks \u00b7 grid \u00b7 phone",
+      "is_interactive": true
+    },
+    "RecipeDesktop.dc.html": {
+      "x": 0,
+      "y": 2800,
+      "w": 1440,
+      "h": 2080,
+      "title": "Recipe page \u00b7 desktop",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "RecipePhone.dc.html": {
+      "x": 1520,
+      "y": 2800,
+      "w": 390,
+      "h": 2400,
+      "title": "Recipe page \u00b7 phone",
+      "is_interactive": true
+    },
+    "EditorDesktop.dc.html": {
+      "x": 0,
+      "y": 5600,
+      "w": 1440,
+      "h": 2100,
+      "title": "Recipe editor \u00b7 desktop",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "FilterSheetPhone.dc.html": {
+      "x": 1520,
+      "y": 5600,
+      "w": 390,
+      "h": 844,
+      "title": "Filter sheet \u00b7 phone",
+      "is_interactive": true
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "FoodListDesktop.dc.html",
+    "FoodGridPhone.dc.html",
+    "FoodListPhone.dc.html",
+    "DrinksDesktop.dc.html",
+    "DrinksPhone.dc.html",
+    "RecipeDesktop.dc.html",
+    "RecipePhone.dc.html",
+    "EditorDesktop.dc.html",
+    "FilterSheetPhone.dc.html"
+  ],
+  "notes": {
+    "t1": {
+      "x": 0,
+      "y": -300,
+      "text": "1 \u00b7 Food browse",
+      "kind": "title1",
+      "maxW": 3900
+    },
+    "t2": {
+      "x": 0,
+      "y": 1100,
+      "text": "2 \u00b7 Drinks browse",
+      "kind": "title1",
+      "maxW": 1910
+    },
+    "t3": {
+      "x": 0,
+      "y": 2500,
+      "text": "3 \u00b7 Recipe page",
+      "kind": "title1",
+      "maxW": 1910
+    },
+    "t4": {
+      "x": 0,
+      "y": 5300,
+      "text": "4\u20135 \u00b7 Editor and phone filters",
+      "kind": "title1",
+      "maxW": 1910
+    }
+  },
+  "designSystems": []
+}

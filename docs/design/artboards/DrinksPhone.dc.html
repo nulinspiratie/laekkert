@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Drinks, grid view, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;family=Young+Serif&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#E8E3D5}
+a{color:#234836}a:hover{color:#16301F}
+button,input,select{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #E8E3D5; color: #1E2621; font-family: 'Hanken Grotesk', system-ui, sans-serif">
+
+  <div style="background: #1C2620; color: #EDE6D6; padding: 28px 16px 16px; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; align-items: flex-start; gap: 12px">
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 6px">
+        <div style="font-size: 11px; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; color: #B9C4B4">The bar</div>
+        <h1 style="margin: 0; font-family: 'Young Serif', Georgia, serif; font-weight: 400; font-size: 36px; line-height: 1">Drinks</h1>
+      </div>
+      <button type="button" aria-label="Search drinks" style="width: 48px; height: 48px; border: 1px solid #3A4740; border-radius: 50%; background: #26322B; color: #EDE6D6; display: flex; align-items: center; justify-content: center; cursor: pointer">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+      </button>
+    </div>
+    <div role="radiogroup" aria-label="From your bar" style="display: flex; gap: 8px">
+      <button type="button" role="radio" aria-checked="true" style="min-height: 44px; padding: 0 14px; border: 0; border-radius: 999px; background: #3E7558; color: #FFFFFF; font-weight: 600; font-size: 14px; cursor: pointer; white-space: nowrap">All 24</button>
+      <button type="button" role="radio" aria-checked="false" style="min-height: 44px; padding: 0 14px; border: 1px solid #3A4740; border-radius: 999px; background: transparent; color: #E2DCCB; font-weight: 600; font-size: 14px; cursor: pointer; white-space: nowrap">Can make 15</button>
+      <button type="button" role="radio" aria-checked="false" style="min-height: 44px; padding: 0 14px; border: 1px solid #3A4740; border-radius: 999px; background: transparent; color: #E2DCCB; font-weight: 600; font-size: 14px; cursor: pointer; white-space: nowrap">Fresh only 6</button>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 16px">
+    <sc-for list="{{drinks}}" as="d" hint-placeholder-count="6">
+      <a href="RecipePhone.dc.html" style="display: flex; flex-direction: column; background: #F5F1E6; border: 1px solid #D2CBB8; border-radius: 14px; overflow: hidden; text-decoration: none; color: #1E2621">
+        <div style="position: relative">
+          <sc-if value="{{d.photo}}" hint-placeholder-val="{{true}}">
+            <div role="img" aria-label="Photo of {{d.name}}" style="aspect-ratio: 4 / 3; background-color: {{d.tone}}; background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.10) 0 2px, transparent 2px 11px)"></div>
+          </sc-if>
+          <sc-if value="{{d.noPhoto}}" hint-placeholder-val="{{false}}">
+            <div style="aspect-ratio: 4 / 3; background: #2E5A44; color: #D9E6D6; display: flex; align-items: center; justify-content: center; position: relative">
+              <div style="position: absolute; inset: 7px; border: 1px solid rgba(217,230,214,.3); border-radius: 7px"></div>
+              <sc-if value="{{d.isRocks}}" hint-placeholder-val="{{true}}"><svg width="46" height="46" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15h24l-2.2 23H14.2z"></path><rect x="17" y="24" width="9" height="8" rx="1.5"></rect><path d="M13 21h22"></path></svg></sc-if>
+              <sc-if value="{{d.isHighball}}" hint-placeholder-val="{{false}}"><svg width="46" height="46" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 10h16l-1.6 30H17.6z"></path><path d="M17 17h14"></path><path d="M29 4l-4 20"></path></svg></sc-if>
+              <sc-if value="{{d.isCoupe}}" hint-placeholder-val="{{false}}"><svg width="46" height="46" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14h30c0 8-6.5 13-15 13S9 22 9 14z"></path><path d="M24 27v11M17 38h14"></path></svg></sc-if>
+            </div>
+          </sc-if>
+          <div style="position: absolute; top: 8px; left: 8px; display: flex">
+            <sc-if value="{{d.can}}" hint-placeholder-val="{{true}}">
+              <span style="display: flex; align-items: center; gap: 4px; height: 26px; padding: 0 9px 0 7px; border-radius: 999px; background: #1F4231; color: #F2F5EE; font-size: 12px; font-weight: 600">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"></path></svg>
+                Can make now
+              </span>
+            </sc-if>
+            <sc-if value="{{d.fresh}}" hint-placeholder-val="{{false}}">
+              <span style="display: flex; align-items: center; gap: 4px; height: 26px; padding: 0 9px 0 7px; border-radius: 999px; background: #F6EAD0; color: #6A460C; border: 1px solid #D9BE84; font-size: 12px; font-weight: 600">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10h16l-1.5 9h-13z"></path><path d="m8 10 3-5M16 10l-3-5"></path></svg>
+                Buy: {{d.freshItems}}
+              </span>
+            </sc-if>
+          </div>
+        </div>
+        <div style="padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 6px; flex: 1">
+          <div style="font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #4E554B">{{d.cat}}</div>
+          <div style="font-family: 'Young Serif', Georgia, serif; font-size: 17px; line-height: 1.2; flex: 1">{{d.name}}</div>
+          <div style="height: 1px; background: #C9D6C6"></div>
+          <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #474D44">
+            <span style="display: flex; align-items: center; gap: 3px"><svg width="14" height="14" viewBox="0 0 24 24" fill="#B07A22" stroke="#B07A22" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="m12 4 2.4 5 5.4.6-4 3.7 1.1 5.3L12 16l-4.9 2.6 1.1-5.3-4-3.7 5.4-.6z"></path></svg>{{d.rating}}</span>
+            <span style="flex: 1"></span>
+            <span style="display: flex; gap: 4px; color: #2E5A44">
+              <sc-if value="{{d.fav}}" hint-placeholder-val="{{false}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" role="img" aria-label="Favourite"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"></path></svg></sc-if>
+              <sc-if value="{{d.next}}" hint-placeholder-val="{{false}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" role="img" aria-label="Try next"><path d="M7 4h10v16l-5-3.5L7 20z"></path></svg></sc-if>
+            </span>
+          </div>
+        </div>
+      </a>
+    </sc-for>
+  </div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 16px 30px; background: #1C2620; display: flex; align-items: center; gap: 8px">
+    <nav aria-label="Food or drinks" style="flex: 1; display: flex; gap: 4px; padding: 4px; background: #2C3832; border-radius: 999px">
+      <a href="FoodGridPhone.dc.html" style="flex: 1; display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 999px; color: #CFC9B8; text-decoration: none; font-weight: 600">Food</a>
+      <a href="DrinksPhone.dc.html" aria-current="page" style="flex: 1; display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 999px; background: #3E7558; color: #FFFFFF; text-decoration: none; font-weight: 600">Drinks</a>
+    </nav>
+    <button type="button" aria-label="Filters" style="width: 52px; height: 52px; border-radius: 50%; border: 1px solid #3A4740; background: #26322B; color: #EDE6D6; display: flex; align-items: center; justify-content: center; cursor: pointer">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg>
+    </button>
+    <button type="button" aria-label="Switch to list view" style="width: 52px; height: 52px; border-radius: 50%; border: 1px solid #3A4740; background: #26322B; color: #EDE6D6; display: flex; align-items: center; justify-content: center; cursor: pointer">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.5M4.5 12h.5M4.5 18h.5"></path></svg>
+    </button>
+    <a href="EditorDesktop.dc.html" aria-label="New drink" style="width: 52px; height: 52px; border-radius: 50%; background: #E8DFC9; color: #1C2620; display: flex; align-items: center; justify-content: center">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+    </a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const drinks = [
+      { name: 'Negroni', cat: 'Stirred', rating: '4.5', photo: true, tone: '#7E2A22', fav: true, can: true },
+      { name: 'Daiquiri', cat: 'Sours', rating: '4.5', photo: true, tone: '#CFC596', fav: true, freshItems: 'limes' },
+      { name: 'Old Fashioned', cat: 'Stirred', rating: '4.0', glass: 'rocks', can: true },
+      { name: 'Paloma', cat: 'Highballs', rating: '4.0', glass: 'highball', next: true, freshItems: 'grapefruit' },
+      { name: 'Espresso martini', cat: 'After dinner', rating: '4.0', photo: true, tone: '#3B2B22', can: true },
+      { name: 'Gimlet', cat: 'Sours', rating: '3.5', glass: 'coupe', can: true }
+    ].map((d) => ({
+      ...d,
+      photo: !!d.photo, noPhoto: !d.photo,
+      isRocks: d.glass === 'rocks', isHighball: d.glass === 'highball', isCoupe: d.glass === 'coupe',
+      can: !!d.can, fresh: !!d.freshItems,
+      fav: !!d.fav, next: !!d.next
+    }));
+    return { drinks };
+  }
+}
+</script>
+</body>
+</html>
