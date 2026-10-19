@@ -533,10 +533,13 @@
   background: var(--card-rule);
 }
 
+/* The time and up to three marks can be wider than a 360 px phone's half-width
+   card, so the marks drop to their own line (right-aligned) rather than clip. */
 .recipe-card-meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 6px 10px;
   min-height: 18px;
   font-size: 13px;
   color: var(--muted);
@@ -550,12 +553,24 @@
   display: flex;
   align-items: center;
   gap: 5px;
+  white-space: nowrap;
 }
 
 .marks {
   display: flex;
   gap: 6px;
   color: var(--accent-ink);
+}
+
+/* The phone grid card's marks are 16 px with a 4 px gap in FoodGridPhone. */
+.recipe-card .marks {
+  gap: 4px;
+  margin-left: auto;
+}
+
+.recipe-card .marks svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* ---- Phone list rows ---- */
@@ -659,8 +674,17 @@
   }
 
   .recipe-card-meta {
-    gap: 14px;
+    gap: 6px 14px;
     font-size: 14px;
+  }
+
+  .recipe-card .marks {
+    gap: 6px;
+  }
+
+  .recipe-card .marks svg {
+    width: 18px;
+    height: 18px;
   }
 
   /* List mode: a table of links. */

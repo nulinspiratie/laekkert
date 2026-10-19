@@ -9,6 +9,14 @@ code: read them as text to lift colours, SVG paths, spacing and type. Do not run
 load Google Fonts and a `support.js` that is not part of the snapshot; the app does neither
 (fonts are self-hosted through `@fontsource`).
 
+## Export format (decided in M1)
+
+The design tool's export is a set of HTML artboards with inline styles and a `canvas.json`
+layout, not code to ship. They are kept verbatim in `artboards/` as the reference and rebuilt
+by hand as React components with CSS in `web/src/styles/`: colours and fonts become the tokens
+below, SVG paths and spacing are lifted from the artboards as text. Nothing from the export is
+loaded at runtime.
+
 ## Artboard to component
 
 | Artboard | Built as |
@@ -18,7 +26,7 @@ load Google Fonts and a `support.js` that is not part of the snapshot; the app d
 | `FoodGridPhone.dc.html`, `FoodListPhone.dc.html` | same, phone |
 | `FilterSheetPhone.dc.html` | `FilterPanel.tsx` as a phone sheet (Task 7) |
 | `DrinksDesktop.dc.html`, `DrinksPhone.dc.html` | same pages with the Drinks theme (Task 7) |
-| `RecipeDesktop.dc.html`, `RecipePhone.dc.html` | `RecipePage.tsx`, `Ingredients.tsx` (Task 8) |
+| `RecipeDesktop.dc.html`, `RecipePhone.dc.html` | `RecipeView.tsx`, `Ingredients.tsx` (Task 8) |
 | `EditorDesktop.dc.html` | not built (M2) |
 | the header and phone bottom bar of all of them | `Shell.tsx` (Task 6) |
 
@@ -64,3 +72,10 @@ Drinks has no separate `--rule` in the design; it reuses `--border`.
 
 Layout: desktop is `(min-width: 768px)`; phone has 16 px gutters (`.gutter` in `base.css`) and
 every control is at least 44 x 44 px.
+
+## Screenshots
+
+`screenshots/m1/` holds what the built M1 UI looks like, for comparing against the artboards:
+`food-grid-*`, `food-list-*`, `drinks-*`, `recipe-*` (phone 390 x 844 at 2x, desktop 1440 x 1000)
+and `filter-sheet-phone.png`. They were taken from the app running on three example recipes plus
+two with generated photos; the gradient "photos" are placeholders, not recipe images.

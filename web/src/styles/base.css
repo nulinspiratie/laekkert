@@ -81,8 +81,10 @@ button {
 }
 
 .shell--bar .shell-main {
-  /* Clears the fixed bottom bar on a phone. */
-  padding-bottom: 104px;
+  /* Breathing room above the bottom bar. The bar sticks to the bottom of the
+     screen but takes its own space in the page (see .shell-bar), so the page
+     never needs to guess its height. */
+  padding-bottom: 28px;
 }
 
 .shell-header {
@@ -173,11 +175,12 @@ button {
 /* Phone bottom bar */
 
 .shell-bar {
-  position: fixed;
-  left: 0;
-  right: 0;
+  /* Sticky, not fixed: it is the last thing in the shell column, so its real
+     height (76 px plus the notch's safe-area inset) is already reserved. */
+  position: sticky;
   bottom: 0;
   z-index: 10;
+  flex: none;
   display: flex;
   align-items: center;
   gap: 8px;
