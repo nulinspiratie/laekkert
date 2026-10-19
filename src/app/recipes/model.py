@@ -108,7 +108,9 @@ class NewerFormatError(ValueError):
 MIGRATIONS: dict[int, Callable[[dict], dict]] = {}
 
 
-def parse_recipe(data: dict) -> Recipe:
+def parse_recipe(data: object) -> Recipe:
+    if not isinstance(data, dict):
+        raise ValueError("a recipe must be a JSON object")
     version = data.get("format_version")
     if isinstance(version, bool) or not isinstance(version, int):
         raise ValueError("format_version is missing or not an integer")
@@ -116,6 +118,9 @@ def parse_recipe(data: dict) -> Recipe:
         raise NewerFormatError(
             f"format_version {version} is newer than this app ({FORMAT_VERSION})"
         )
-    for v in range(version, FORMAT_VERSION):
+    steps = range(version, FORMAT_VERSION)
+    if version < 1 or any(v not in MIGRATIONS for v in steps):
+        raise ValueError(f"format_version {version} is not supported")
+    for v in steps:
         data = MIGRATIONS[v](data)
     return Recipe.model_validate(data)

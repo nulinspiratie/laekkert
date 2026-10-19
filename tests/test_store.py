@@ -104,3 +104,20 @@ def test_seed_failure_is_logged_not_raised(tmp_path, monkeypatch, caplog):
     with caplog.at_level(logging.WARNING, logger="app.recipes"):
         assert RecipeStore(tmp_path).seed_if_empty() is False
     assert "read-only" in caplog.text
+
+
+@pytest.mark.parametrize("text", ["[]", "null", "42", '"x"'])
+def test_non_object_file_is_skipped(store, caplog, text):
+    write(store, "drinks", "odd", text)
+    with caplog.at_level(logging.WARNING, logger="app.recipes"):
+        assert [r.slug for r in store.list("drinks")] == ["daiquiri", "virgin-mojito"]
+    assert "odd" in caplog.text
+
+
+@pytest.mark.parametrize("version", [0, -1])
+def test_unsupported_old_format_is_skipped(store, caplog, version):
+    data = json.loads((store.recipes_dir / "drinks/daiquiri/recipe.json").read_text())
+    write(store, "drinks", "ancient", json.dumps({**data, "format_version": version}))
+    with caplog.at_level(logging.WARNING, logger="app.recipes"):
+        assert "ancient" not in [r.slug for r in store.list("drinks")]
+    assert "ancient" in caplog.text
