@@ -31,9 +31,11 @@ Everything else in V1 comes after the PoC.
 - **Claude on the phone:** claude.ai custom connectors need OAuth (they support Dynamic
   Client Registration) and cannot send Cloudflare service-token headers. The plan is for
   Cloudflare Access to act as the OAuth server for `/mcp` (Access's MCP/OAuth support on
-  the app's Access application), so the app itself has no auth code. This is proven in
-  M0 with read-only tools. Fallback if Access cannot do it for a tunnel-backed app:
-  exempt `/mcp` from Access and add the MCP SDK's own OAuth to the app (needs one secret).
+  the app's Access application), so the app itself has no auth code. **Proven in M0:**
+  with Managed OAuth (and Dynamic Client Registration) on the Access application,
+  claude.ai registers itself, signs in through Access and calls the read-only tools; the
+  Claude service token still works for cloud sessions. The fallback (exempt `/mcp` from
+  Access, add the MCP SDK's own OAuth to the app) is not needed.
 - **Seed data:** the app ships a few example recipes and copies them into `/data` the
   first time it starts with no recipes (`seed_examples` in `config.toml`). Bar Book
   recipes come later through the Claude import flow.
@@ -68,6 +70,15 @@ unstyled React list/detail with the Food/Drinks switch, `/mcp` with `list_recipe
 `read_recipe`, Dockerfile/CI for the mixed archetype, first deploy and the home-server
 PR. Done when claude.ai on Serwan's phone lists the seeded drinks through the connector.
 
+**Done** (2026-10-19): deployed as `1390c71`; the claude.ai connector lists Daiquiri and
+Virgin mojito. Found on the way: uid 1000 cannot read the NAS's home-server checkout
+(DSM home-folder ACLs), so the config applier now copies `config.toml` to
+`/volume1/docker/laekkert/config.toml` and the stack mounts that copy (home-server
+`de72be0`, `cd2ddf3`; template fix in nas-app-template PR 3). Two minors left for later:
+an encoded NUL in a page path (`/%00`) answers 500 instead of the app; and `main.py`
+lifts the MCP sub-app's routes without its middleware, which matters only if M3 ever
+needs the MCP SDK's own auth.
+
 ### M1: Reading (design migration happens here)
 
 Migrate the Claude Design output. Food/Drinks with own accent colour; list, detail,
@@ -97,7 +108,5 @@ with illustration fallback; offline PWA.
 ## Open questions
 
 - Claude Design export format (M1).
-- Whether Cloudflare Access's OAuth for MCP works for this tunnel-backed app (M0 answers
-  it; see the fallback above).
 - Image licensing on import (M3).
 - Whether claude.ai can pass a chat-attached photo to an MCP tool (M3).
