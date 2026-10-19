@@ -3,5 +3,5 @@
 # at /config/config.toml. Never put secrets here: they are env vars, declared
 # in nas-app.toml.
 
-# Text shown on the home page.
-greeting = "Hello from nas-app-template"
+# Copy the bundled example recipes into the data folder when it has no recipes yet.
+seed_examples = true

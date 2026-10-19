@@ -19,7 +19,7 @@ lint:
 
 # Run the app locally on http://localhost:8080 with config.example.toml
 run:
-    APP_CONFIG=config.example.toml uv run app
+    APP_CONFIG=config.example.toml APP_DATA_DIR=.data uv run app
 
 # Build the image locally (linux/amd64), tagged <slug>:local, never pushed
 build *args:

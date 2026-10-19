@@ -16,7 +16,7 @@ DEFAULT_CONFIG_PATH = "/config/config.toml"
 
 @dataclass(frozen=True)
 class Settings:
-    greeting: str = "Hello from nas-app-template"
+    seed_examples: bool = True
 
 
 def load_settings(path: str | os.PathLike[str] | None = None) -> Settings:
