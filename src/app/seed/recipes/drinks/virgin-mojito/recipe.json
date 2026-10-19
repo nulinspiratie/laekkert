@@ -1,0 +1,21 @@
+{
+  "format_version": 1,
+  "slug": "virgin-mojito",
+  "side": "drinks",
+  "name": "Virgin mojito",
+  "category": "mocktails",
+  "servings": 1,
+  "time_minutes": 5,
+  "ingredients": [
+    {"amount": 8, "unit": "piece", "item": "mint leaves"},
+    {"amount": 25, "unit": "ml", "item": "lime juice", "note": "fresh"},
+    {"amount": 20, "unit": "ml", "item": "simple syrup", "note": "1:1"},
+    {"amount": 100, "unit": "ml", "item": "soda water"}
+  ],
+  "steps": [
+    "Gently press the mint with the syrup in a highball.",
+    "Add the lime juice, fill with crushed ice and top with soda.",
+    "Stir once and garnish with a mint sprig."
+  ],
+  "tags": ["mocktail"]
+}

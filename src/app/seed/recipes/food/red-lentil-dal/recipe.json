@@ -1,0 +1,27 @@
+{
+  "format_version": 1,
+  "slug": "red-lentil-dal",
+  "side": "food",
+  "name": "Red lentil dal",
+  "category": "mains",
+  "servings": 4,
+  "time_minutes": 35,
+  "ingredients": [
+    {"amount": 250, "unit": "g", "item": "red lentils", "note": "rinsed"},
+    {"amount": 1, "unit": "piece", "item": "onion", "note": "finely chopped"},
+    {"amount": 3, "unit": "piece", "item": "garlic cloves", "note": "grated"},
+    {"amount": 15, "unit": "g", "item": "ginger", "note": "grated"},
+    {"amount": 400, "unit": "ml", "item": "coconut milk"},
+    {"amount": 600, "unit": "ml", "item": "water"},
+    {"amount": 6, "unit": "g", "item": "ground turmeric"},
+    {"amount": 30, "unit": "g", "item": "butter"},
+    {"unit": "to taste", "item": "salt", "no_scale": true}
+  ],
+  "steps": [
+    "Soften the onion in the butter for 8 minutes, then add the garlic, ginger and turmeric for 1 minute.",
+    "Add the lentils, coconut milk and water and simmer for 20 minutes, stirring now and then, until thick.",
+    "Season with salt and serve with rice."
+  ],
+  "tags": ["vegetarian"],
+  "marks": ["try_next"]
+}

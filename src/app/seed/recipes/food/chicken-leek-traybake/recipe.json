@@ -1,0 +1,26 @@
+{
+  "format_version": 1,
+  "slug": "chicken-leek-traybake",
+  "side": "food",
+  "name": "Chicken and leek traybake",
+  "category": "mains",
+  "servings": 4,
+  "time_minutes": 45,
+  "ingredients": [
+    {"amount": 800, "unit": "g", "item": "chicken thighs", "note": "bone-in, skin on"},
+    {"amount": 2, "unit": "piece", "item": "leeks", "note": "in 3 cm pieces"},
+    {"amount": 500, "unit": "g", "item": "baby potatoes", "note": "halved"},
+    {"amount": 30, "unit": "ml", "item": "olive oil"},
+    {"unit": "g", "item": "smoked paprika", "original": "1 tsp"},
+    {"amount": 1, "unit": "piece", "item": "lemon", "note": "zest and juice", "no_scale": true},
+    {"unit": "to taste", "item": "salt", "no_scale": true}
+  ],
+  "steps": [
+    "Heat the oven to 200 °C.",
+    "Toss the potatoes and leeks with half the oil and a little salt in a large tray.",
+    "Rub the chicken with the rest of the oil, the paprika, lemon zest and salt, and lay it skin up on the vegetables.",
+    "Roast for 40 minutes until the skin is crisp, then squeeze over the lemon juice."
+  ],
+  "tags": ["batch cook"],
+  "marks": ["tried", "kid_approved"]
+}

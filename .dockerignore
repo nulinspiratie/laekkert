@@ -14,10 +14,12 @@ __pycache__/
 .coverage
 .python-version
 
-# Node
+# Node (patterns are rooted at the context, so web/ is listed too)
 node_modules/
 dist/
 build/
+web/node_modules/
+web/dist/
 
 # Local-only / never-bake-into-image
 .env

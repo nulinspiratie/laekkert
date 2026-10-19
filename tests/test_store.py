@@ -1,0 +1,123 @@
+import json
+import logging
+import shutil
+
+import pytest
+
+from app.recipes.model import SIDES, parse_recipe
+from app.recipes.store import SEED_DIR, RecipeStore
+
+
+@pytest.fixture
+def store(tmp_path):
+    s = RecipeStore(tmp_path)
+    assert s.seed_if_empty()
+    return s
+
+
+def write(store, side, slug, text):
+    path = store.recipes_dir / side / slug / "recipe.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+    return path
+
+
+def test_seed_recipes_are_valid():
+    for side in SIDES:
+        folders = sorted((SEED_DIR / side).iterdir())
+        assert folders, f"no seed recipes for {side}"
+        for folder in folders:
+            r = parse_recipe(json.loads((folder / "recipe.json").read_text()))
+            assert (r.side, r.slug) == (side, folder.name)
+
+
+def test_list_is_per_side_and_sorted(store):
+    assert [r.slug for r in store.list("drinks")] == ["daiquiri", "virgin-mojito"]
+    assert {r.side for r in store.list("food")} == {"food"}
+
+
+def test_get_returns_recipe(store):
+    assert store.get("drinks", "daiquiri").name == "Daiquiri"
+
+
+def test_get_unknown_returns_none(store):
+    assert store.get("drinks", "nope") is None
+    assert store.get("bar", "daiquiri") is None
+
+
+@pytest.mark.parametrize("slug", ["../food", "..", "daiquiri/../x", "%2e%2e", ""])
+def test_get_rejects_unsafe_slug(store, slug):
+    assert store.get("drinks", slug) is None
+
+
+def test_corrupt_file_is_skipped_with_warning(store, caplog):
+    write(store, "drinks", "broken", "{not json")
+    with caplog.at_level(logging.WARNING, logger="app.recipes"):
+        assert [r.slug for r in store.list("drinks")] == ["daiquiri", "virgin-mojito"]
+    assert "broken" in caplog.text
+    assert store.get("drinks", "broken") is None
+
+
+def test_newer_format_file_is_skipped(store, caplog):
+    data = json.loads((store.recipes_dir / "drinks/daiquiri/recipe.json").read_text())
+    write(store, "drinks", "future", json.dumps({**data, "format_version": 99}))
+    with caplog.at_level(logging.WARNING, logger="app.recipes"):
+        assert "future" not in [r.slug for r in store.list("drinks")]
+    assert "future" in caplog.text
+
+
+def test_folder_slug_mismatch_is_skipped(store, caplog):
+    text = (store.recipes_dir / "drinks/daiquiri/recipe.json").read_text()
+    write(store, "drinks", "other", text)
+    with caplog.at_level(logging.WARNING, logger="app.recipes"):
+        assert [r.slug for r in store.list("drinks")] == ["daiquiri", "virgin-mojito"]
+    assert "other" in caplog.text
+    assert store.get("drinks", "other") is None
+
+
+def test_seed_if_empty_copies_once(tmp_path):
+    s = RecipeStore(tmp_path)
+    assert s.seed_if_empty() is True
+    path = tmp_path / "recipes/drinks/daiquiri/recipe.json"
+    path.write_text(path.read_text().replace("Daiquiri", "Edited"))
+    assert s.seed_if_empty() is False
+    assert "Edited" in path.read_text()
+
+
+def test_seed_skipped_when_any_recipe_exists(tmp_path):
+    s = RecipeStore(tmp_path)
+    src = SEED_DIR / "drinks/daiquiri/recipe.json"
+    write(s, "drinks", "daiquiri", src.read_text())
+    assert s.seed_if_empty() is False
+    assert s.list("food") == []
+
+
+def test_missing_data_dir_lists_empty(tmp_path):
+    assert RecipeStore(tmp_path / "nope").list("food") == []
+
+
+def test_seed_failure_is_logged_not_raised(tmp_path, monkeypatch, caplog):
+    def deny(*args, **kwargs):
+        raise PermissionError("read-only file system")
+
+    monkeypatch.setattr(shutil, "copytree", deny)
+    with caplog.at_level(logging.WARNING, logger="app.recipes"):
+        assert RecipeStore(tmp_path).seed_if_empty() is False
+    assert "read-only" in caplog.text
+
+
+@pytest.mark.parametrize("text", ["[]", "null", "42", '"x"'])
+def test_non_object_file_is_skipped(store, caplog, text):
+    write(store, "drinks", "odd", text)
+    with caplog.at_level(logging.WARNING, logger="app.recipes"):
+        assert [r.slug for r in store.list("drinks")] == ["daiquiri", "virgin-mojito"]
+    assert "odd" in caplog.text
+
+
+@pytest.mark.parametrize("version", [0, -1])
+def test_unsupported_old_format_is_skipped(store, caplog, version):
+    data = json.loads((store.recipes_dir / "drinks/daiquiri/recipe.json").read_text())
+    write(store, "drinks", "ancient", json.dumps({**data, "format_version": version}))
+    with caplog.at_level(logging.WARNING, logger="app.recipes"):
+        assert "ancient" not in [r.slug for r in store.list("drinks")]
+    assert "ancient" in caplog.text
