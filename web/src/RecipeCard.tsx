@@ -1,7 +1,7 @@
 // One recipe in the browse page, three ways: a grid card, a phone list row and a
 // desktop table row. All are links to the recipe.
 
-import { Link } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { MARK_LABELS, type FilterMark } from './browse'
 import { capitalise, formatTime } from './format'
 import { Bookmark, Chevron, Clock, Heart, Kid } from './icons'
@@ -27,9 +27,15 @@ function MarkIcons({ recipe, size }: { recipe: RecipeSummary; size: number }) {
 
 const href = (recipe: RecipeSummary) => `/${recipe.side}/${encodeURIComponent(recipe.slug)}`
 
+/** The recipe page's back link returns to the browse query the visitor came from. */
+function useBrowseState() {
+  return { browse: useLocation().search }
+}
+
 export function RecipeCard({ recipe }: { recipe: RecipeSummary }) {
+  const state = useBrowseState()
   return (
-    <Link to={href(recipe)} className="recipe-card">
+    <Link to={href(recipe)} state={state} className="recipe-card">
       <PhotoTile
         side={recipe.side}
         slug={recipe.slug}
@@ -58,8 +64,9 @@ export function RecipeCard({ recipe }: { recipe: RecipeSummary }) {
 
 /** The phone's list mode. */
 export function RecipeRow({ recipe }: { recipe: RecipeSummary }) {
+  const state = useBrowseState()
   return (
-    <Link to={href(recipe)} className="recipe-row">
+    <Link to={href(recipe)} state={state} className="recipe-row">
       <PhotoTile
         side={recipe.side}
         slug={recipe.slug}
@@ -80,8 +87,9 @@ export function RecipeRow({ recipe }: { recipe: RecipeSummary }) {
 
 /** The desktop's list mode: photo, name and category, time, marks. */
 export function RecipeTableRow({ recipe }: { recipe: RecipeSummary }) {
+  const state = useBrowseState()
   return (
-    <Link to={href(recipe)} className="recipe-table-row">
+    <Link to={href(recipe)} state={state} className="recipe-table-row">
       <PhotoTile
         side={recipe.side}
         slug={recipe.slug}

@@ -68,6 +68,14 @@ describe('spoons', () => {
     expect(formatAmount(ing({ amount: 14.5, unit: 'ml' }), 1, 'spoons').text).toBe('1 tbsp')
   })
 
+  test('exact boundaries land on the spoon side', () => {
+    // 27.6 / 2.3 is 12.000000000000002 in floating point: still 4 tbsp, not "28 g".
+    const spice = ing({ amount: 27.6, g_per_tsp: 2.3 })
+    expect(formatAmount(spice, 1, 'spoons')).toEqual({ text: '4 tbsp', flag: null })
+    // 6.9 / 2.3 is 3.0000000000000004: 1 tbsp, not "3 tsp".
+    expect(formatAmount(ing({ amount: 6.9, g_per_tsp: 2.3 }), 1, 'spoons').text).toBe('1 tbsp')
+  })
+
   test('grams convert with g_per_tsp', () => {
     const paprika = ing({ amount: 2.3, item: 'smoked paprika', g_per_tsp: 2.3 })
     expect(formatAmount(paprika, 1, 'spoons')).toEqual({ text: '1 tsp', flag: null })
@@ -96,6 +104,11 @@ describe('special rows', () => {
   test('no_scale ignores the factor', () => {
     const lemon = ing({ amount: 1, unit: 'piece', item: 'lemon', no_scale: true })
     expect(formatAmount(lemon, 3, 'metric').text).toBe('1')
+  })
+
+  test('to taste wins over an original string', () => {
+    const salt = ing({ amount: null, unit: 'to taste', item: 'salt', original: 'salt to taste' })
+    expect(formatAmount(salt, 1, 'metric')).toEqual({ text: '', flag: null })
   })
 
   test('to taste has no amount text', () => {

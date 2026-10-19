@@ -12,14 +12,14 @@ const GLYPHS: Record<Side, Record<string, Glyph>> = {
   drinks: { cocktails: Coupe, mocktails: Highball, syrups: Rocks, prep: Rocks },
 }
 
-export type TileSize = 'card' | 'row'
+export type TileSize = 'card' | 'row' | 'hero'
 
 export interface PhotoTileProps {
   side: Side
   slug: string
   category: string
   image: string | null
-  /** card: the 4:3 top of a grid card. row: the small square of a list row. */
+  /** card: the 4:3 top of a grid card. row: the small square of a list row. hero: fills the recipe page's hero box. */
   size: TileSize
 }
 
@@ -28,7 +28,11 @@ export function PhotoTile({ side, slug, category, image, size }: PhotoTileProps)
     // The recipe's name is shown beside the picture, so the picture is decoration.
     return (
       <div className={`photo-tile photo-tile--${size}`}>
-        <img src={recipeImageUrl(side, slug, image)} alt="" loading="lazy" />
+        <img
+          src={recipeImageUrl(side, slug, image)}
+          alt=""
+          loading={size === 'hero' ? 'eager' : 'lazy'}
+        />
       </div>
     )
   }

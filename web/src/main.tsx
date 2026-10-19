@@ -14,6 +14,7 @@ import '@fontsource/hanken-grotesk/latin-ext-700.css'
 import './styles/tokens.css'
 import './styles/base.css'
 import './styles/browse.css'
+import './styles/recipe.css'
 import App from './App.tsx'
 
 createRoot(document.getElementById('root')!).render(

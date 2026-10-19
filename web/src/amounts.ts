@@ -5,6 +5,8 @@ export type AmountFlag = 'not-metric' | 'no-spoon-conversion' | null
 
 // Spoon amounts up to this many tsp (4 tbsp) are shown in spoons; bigger ones stay metric.
 const MAX_SPOON_TSP = 12
+// A division like 27.6 / 2.3 can land a hair above the boundary it should sit on.
+const EPSILON = 1e-9
 // Gram amounts up to this are small enough that a missing spoon conversion is worth flagging.
 const MAX_FLAGGED_GRAMS = 30
 
@@ -59,11 +61,12 @@ export function formatAmount(
   factor: number,
   mode: UnitMode,
 ): { text: string; flag: AmountFlag } {
+  // "to taste" has no amount, whatever the original string said.
+  if (ing.unit === 'to taste') return { text: '', flag: null }
   if (ing.amount === null) {
     if (ing.original) return { text: ing.original, flag: 'not-metric' }
     return { text: '', flag: null }
   }
-  if (ing.unit === 'to taste') return { text: '', flag: null }
 
   const scaled = ing.amount * (ing.no_scale ? 1 : factor)
 
@@ -81,7 +84,7 @@ export function formatAmount(
         const tsp =
           ing.unit === 'ml' ? scaled / 5 : ing.g_per_tsp ? scaled / ing.g_per_tsp : null
         if (tsp !== null) {
-          if (tsp <= MAX_SPOON_TSP) return { text: spoons(tsp), flag: null }
+          if (tsp <= MAX_SPOON_TSP + EPSILON) return { text: spoons(tsp), flag: null }
         } else if (scaled <= MAX_FLAGGED_GRAMS) {
           return { text: metric(scaled, ing.unit), flag: 'no-spoon-conversion' }
         }
