@@ -39,8 +39,9 @@ Everything else in V1 comes after the PoC.
 - **Seed data:** the app ships a few example recipes and copies them into `/data` the
   first time it starts with no recipes (`seed_examples` in `config.toml`). Bar Book
   recipes come later through the Claude import flow.
-- **Design:** the Claude Design session's output is migrated at the start of M1; its
-  export format is decided then.
+- **Design:** the Claude Design session's output is migrated at the start of M1. Its
+  export format (HTML artboards) is kept as a snapshot and rebuilt as components; see
+  `docs/design/README.md`.
 
 ## Storage (under `/data`, Git-friendly)
 
@@ -87,6 +88,17 @@ tsp/tbsp toggle with flagged missing conversions; fuzzy search; tag and mark fil
 default food view (kid approved, by cooking time); photo-less recipes that look
 intentional; PWA manifest.
 
+**Done:** the design is migrated
+as React components with the Food and Drinks themes; browse page with grid and list, fuzzy
+search, mark, category and tag filters, the default kid-approved view and the phone filter
+sheet; recipe page with the servings stepper (rounding, `no_scale`) and the tsp/tbsp toggle
+with flagged missing conversions; photo-less tiles; recipe images served from `/data`; the
+ingredient catalog; an installable PWA manifest with icons (no service worker, so no offline
+yet). The built UI was checked against the artboards at phone and desktop widths with no
+horizontal scroll at 360 px; the screenshots are in `docs/design/screenshots/m1/`. Claude
+Design's export format is decided: HTML artboards kept as a reference snapshot and rebuilt as
+components, see [docs/design/README.md](design/README.md).
+
 ### M2: Editing and timeline
 
 Form editor (all fields of requirement 5, image upload); tags and marks with their rules
@@ -107,6 +119,5 @@ with illustration fallback; offline PWA.
 
 ## Open questions
 
-- Claude Design export format (M1).
 - Image licensing on import (M3).
 - Whether claude.ai can pass a chat-attached photo to an MCP tool (M3).
