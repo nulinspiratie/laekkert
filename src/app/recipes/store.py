@@ -19,6 +19,8 @@ log = logging.getLogger("app.recipes")
 
 # The recipe's own data; never served as a "file", whatever the recipe declares.
 DATA_FILES = {"recipe.json", "timeline.jsonl"}
+# Only raster images are served: an SVG or HTML file would run script on our origin.
+IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".heic"}
 
 
 class RecipeStore:
@@ -44,7 +46,8 @@ class RecipeStore:
         """The image or source photo a recipe declares, if it is on disk.
 
         Only the exact name the recipe declares is served, and only when it is a
-        plain file name that resolves to a regular file inside the recipe folder.
+        plain raster image file name that resolves to a regular file inside the
+        recipe folder.
         """
         recipe = self.get(side, slug)
         if recipe is None:
@@ -57,6 +60,7 @@ class RecipeStore:
             or name.startswith(".")
             or "/" in name
             or "\\" in name
+            or Path(name).suffix.lower() not in IMAGE_SUFFIXES
         ):
             return None
         folder = (self.recipes_dir / side / slug).resolve()

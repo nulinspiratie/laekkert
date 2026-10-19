@@ -54,6 +54,24 @@ def test_accents_and_case():
     assert search([other, brulee], "CREME brulee") == [brulee]
 
 
+@pytest.mark.parametrize(
+    ("query", "slug"),
+    [
+        ("rodgrod", "rodgrod"),
+        ("rod", "rodgrod"),
+        ("smorrebrod", "smorrebrod"),
+        ("aebleskiver", "aebleskiver"),
+    ],
+)
+def test_danish_letters_fold(query, slug):
+    recipes = [
+        make_recipe("Rødgrød med fløde", ["red berries"], slug="rodgrod"),
+        make_recipe("Smørrebrød", ["rye bread"], slug="smorrebrod"),
+        make_recipe("Æbleskiver", ["flour"], slug="aebleskiver"),
+    ]
+    assert [r.slug for r in search(recipes, query)] == [slug]
+
+
 def test_every_word_must_match():
     traybake = make_recipe("Chicken and leek traybake", ["chicken thighs", "leeks"])
     assert search([traybake], "chicken pizza") == []

@@ -16,13 +16,18 @@ from app.recipes.model import Recipe
 
 MIN_PREFIX = 2
 MIN_RATIO = 80
+# Letters NFKD leaves whole, spelled the way a keyboard without them would.
+FOLD = str.maketrans({"ø": "o", "æ": "ae", "ð": "d", "þ": "th", "ł": "l"})
 
 
 def words(text: str) -> list[str]:
-    """Lowercase, accent-free alphanumeric words: "Crème brûlée" -> creme, brulee."""
+    """Lowercase, accent-free alphanumeric words: "Crème brûlée" -> creme, brulee.
+
+    Ø, æ and ð fold too, so "rodgrod" finds "Rødgrød".
+    """
     decomposed = unicodedata.normalize("NFKD", text)
     plain = "".join(c for c in decomposed if not unicodedata.combining(c))
-    return re.findall(r"[^\W_]+", plain.casefold())
+    return re.findall(r"[^\W_]+", plain.casefold().translate(FOLD))
 
 
 def word_score(query_word: str, word: str) -> float:

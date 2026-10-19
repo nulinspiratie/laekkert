@@ -43,7 +43,13 @@ def api_routes(store: RecipeStore, catalog: Catalog) -> list[Route]:
         )
         if path is None:
             return not_found()
-        return FileResponse(path, headers={"Cache-Control": "private, max-age=3600"})
+        return FileResponse(
+            path,
+            headers={
+                "Cache-Control": "private, max-age=3600",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
 
     async def unknown(request: Request) -> JSONResponse:
         return not_found()

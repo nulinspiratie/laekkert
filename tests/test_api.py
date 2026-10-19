@@ -126,6 +126,7 @@ def test_image_route_serves_bytes_and_cache_header(client, tmp_path):
     assert response.content == b"\xff\xd8jpeg-bytes"
     assert response.headers["content-type"] == "image/jpeg"
     assert response.headers["cache-control"] == "private, max-age=3600"
+    assert response.headers["x-content-type-options"] == "nosniff"
 
 
 @pytest.mark.parametrize(

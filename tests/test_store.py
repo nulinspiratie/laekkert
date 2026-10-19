@@ -183,6 +183,19 @@ def test_file_path_refuses_symlink_out_of_folder(store, tmp_path):
     assert store.file_path("drinks", "daiquiri", "photo.jpg") is None
 
 
+@pytest.mark.parametrize("name", ["page.svg", "page.html", "notes.txt", "noext"])
+def test_file_path_refuses_non_raster_files(store, name):
+    folder = declare(store, "drinks", "daiquiri", image=name)
+    (folder / name).write_text("<script>alert(1)</script>")
+    assert store.file_path("drinks", "daiquiri", name) is None
+
+
+def test_file_path_extension_is_case_insensitive(store):
+    folder = declare(store, "drinks", "daiquiri", image="IMG_1.JPEG")
+    (folder / "IMG_1.JPEG").write_bytes(b"jpeg")
+    assert store.file_path("drinks", "daiquiri", "IMG_1.JPEG") == folder / "IMG_1.JPEG"
+
+
 def test_file_path_unknown_recipe_or_side(store):
     assert store.file_path("drinks", "nope", "photo.jpg") is None
     assert store.file_path("bar", "daiquiri", "photo.jpg") is None
