@@ -1,0 +1,21 @@
+services:
+  <slug>:
+    image: ghcr.io/nulinspiratie/<slug>:main
+    container_name: <slug>
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    user: "1000:1000"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      APP_CONFIG: /config/config.toml
+    # env_file: [.env]          # only when nas-app.toml lists secrets
+    volumes:
+      - ./config.toml:/config/config.toml:ro
+      - /volume1/docker/<slug>/data:/data   # only when storage.data = true
+    networks: [tunnel]
+
+networks:
+  tunnel:
+    external: true

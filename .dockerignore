@@ -1,0 +1,46 @@
+# VCS
+.git
+.github
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.python-version
+
+# Node
+node_modules/
+dist/
+build/
+
+# Local-only / never-bake-into-image
+.env
+.env.*
+!.env.example
+.data/
+logs/
+certs/
+
+# Editor & OS noise
+.DS_Store
+.vscode/
+.idea/
+
+# Project metadata not needed at runtime
+.ai/
+.claude/
+.worktrees/
+.superpowers/
+docs/
+tests/
+*.md
+!README.md
+
+# Local-build-only helpers
+scripts/

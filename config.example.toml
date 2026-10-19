@@ -1,0 +1,7 @@
+# App settings. Every setting is listed here with its default.
+# Copied to containers/<slug>/config.toml in home-server and mounted read-only
+# at /config/config.toml. Never put secrets here: they are env vars, declared
+# in nas-app.toml.
+
+# Text shown on the home page.
+greeting = "Hello from nas-app-template"

@@ -1,0 +1,17 @@
+# Deploy manifest. Read by scripts/handoff.py and checked in CI.
+# The slug is always the repo name; it is not set here.
+
+[app]
+description = "Placeholder app from nas-app-template"
+internal_port = 8080          # keep 8080 unless there is a reason
+health_path = "/healthz"
+
+[routing]
+subdomain = ""                # empty = the slug; becomes <subdomain>.serwan.me
+claude_access = false         # true = add the Claude service-token rule in Cloudflare Access
+
+[storage]
+data = true                   # mount /volume1/docker/<slug>/data at /data
+
+[secrets]
+names = []                    # env var names only, e.g. ["OPENAI_API_KEY"]; values never in git
