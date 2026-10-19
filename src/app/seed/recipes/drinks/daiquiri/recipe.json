@@ -1,0 +1,20 @@
+{
+  "format_version": 1,
+  "slug": "daiquiri",
+  "side": "drinks",
+  "name": "Daiquiri",
+  "category": "cocktails",
+  "servings": 1,
+  "time_minutes": 5,
+  "ingredients": [
+    {"amount": 50, "unit": "ml", "item": "white rum"},
+    {"amount": 25, "unit": "ml", "item": "lime juice", "note": "fresh"},
+    {"amount": 15, "unit": "ml", "item": "simple syrup", "note": "1:1"}
+  ],
+  "steps": [
+    "Shake everything hard with ice.",
+    "Double strain into a chilled coupe."
+  ],
+  "tags": ["classic"],
+  "marks": ["tried", "favourite"]
+}
