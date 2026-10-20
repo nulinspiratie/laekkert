@@ -1,5 +1,6 @@
 import json
 import logging
+import threading
 
 import pytest
 from pydantic import ValidationError
@@ -319,6 +320,12 @@ def test_fresh_unknown_name_adds_fresh_item(catalog, bar):
     assert not bar.inventory_path.exists()
 
 
+def test_fresh_unknown_name_drops_a_stale_inventory_key(catalog, bar):
+    write_inventory(bar, {"Orange juice": "have", "gin": "have"})
+    bar.apply(BarChanges(fresh=["orange juice"]))
+    assert read_inventory(bar)["items"] == {"gin": "have"}
+
+
 def test_fresh_clears_state_and_not_fresh_is_unsorted(catalog, store, bar):
     drink(store, "Paloma", "tequila", "grapefruit juice")
     bar.apply(BarChanges(have=["grapefruit juice", "tequila"]))
@@ -542,7 +549,7 @@ def test_delete_rules(catalog, store, bar):
         bar, "Deleting isn't possible here.", allow_delete=False, delete=["campari"]
     )
 
-    view = bar.apply(BarChanges(delete=["Campari", "angostura"]))
+    view = bar.apply(BarChanges(delete=["Campari", "angostura", "campari"]))
     assert names(view) == ["falernum", "white rum"]
     assert catalog.raw() == [
         {"name": "white rum", "kind": "spirits"},
@@ -601,18 +608,19 @@ def test_refused_change_writes_nothing(catalog, store, bar):
 
 
 @pytest.mark.parametrize(
-    "text",
+    "content",
     [
-        "{bad",
-        '{"format_version": 2, "items": {}}',
-        '{"format_version": 1, "items": []}',
-        '{"items": {}}',
+        b"{bad",
+        b'{"format_version": 2, "items": {}}',
+        b'{"format_version": 1, "items": []}',
+        b'{"items": {}}',
+        b'{"format_version": 1, "items": {"cr\xe8me": "have"}}',  # not UTF-8
     ],
 )
-def test_unreadable_inventory_refuses_writes(catalog, store, bar, caplog, text):
+def test_unreadable_inventory_refuses_writes(catalog, store, bar, caplog, content):
     entries(catalog, {"name": "gin", "kind": "spirits"})
     drink(store, "Gin shot", "gin", "vermouth")
-    bar.inventory_path.write_text(text)
+    bar.inventory_path.write_bytes(content)
     before = (catalog.path.read_bytes(), bar.inventory_path.read_bytes())
     with caplog.at_level(logging.WARNING, logger="app.recipes"):
         view = bar.view()
@@ -636,6 +644,61 @@ def test_unreadable_catalog_refuses_writes(catalog, store, bar):
         bar.apply(BarChanges(have=["gin"]))
     assert catalog.path.read_text() == "{not json"
     assert not bar.inventory_path.exists()
+
+
+def test_undecodable_catalog_refuses_writes(catalog, store, bar):
+    drink(store, "Gin shot", "gin")
+    catalog.path.parent.mkdir(parents=True, exist_ok=True)
+    content = b'{"format_version": 1, "ingredients": [{"name": "cr\xe8me"}]}'
+    catalog.path.write_bytes(content)
+    assert names(bar.view()) == ["gin"]
+    with pytest.raises(CatalogUnavailable):
+        bar.apply(BarChanges(have=["gin"]))
+    assert catalog.path.read_bytes() == content
+
+
+class _RacyBar(Bar):
+    """A bar whose cache, once armed, is cleared right after it is next read.
+
+    That is what a write on another thread does if it lands while `view()`
+    is using the cache.
+    """
+
+    armed = False
+
+    @property
+    def _cache(self):
+        value = self.__dict__["_racy_cache"]
+        if self.armed:
+            self.armed = False
+            self.__dict__["_racy_cache"] = (None, {})
+        return value
+
+    @_cache.setter
+    def _cache(self, value):
+        self.__dict__["_racy_cache"] = value
+
+
+def test_view_never_sees_a_cache_cleared_under_it(tmp_path, catalog, store):
+    drink(store, "Gin shot", "gin")
+    bar = _RacyBar(tmp_path, catalog, store)
+    write_inventory(bar, {"gin": "have"})
+    assert item(bar.view(), "gin").state == "have"  # fills the cache
+    bar.armed = True
+    assert item(bar.view(), "gin").state == "have"  # served from the cache
+
+
+def test_concurrent_changes_are_all_kept(store, bar):
+    names_ = [f"bottle {i}" for i in range(20)]
+    threads = [
+        threading.Thread(target=bar.apply, args=(BarChanges(have=[name]),))
+        for name in names_
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert sorted(read_inventory(bar)["items"]) == sorted(names_)
 
 
 def test_too_many_names_refused():

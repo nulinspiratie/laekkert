@@ -98,13 +98,13 @@ class Catalog:
         raises `CatalogUnavailable`, so nobody writes over it.
         """
         try:
-            text = self.path.read_text(encoding="utf-8")
+            content = self.path.read_bytes()
         except FileNotFoundError:
             return []
         except OSError as exc:
             raise CatalogUnavailable(UNAVAILABLE) from exc
         try:
-            data = json.loads(text)
+            data = json.loads(content.decode("utf-8"))
             version = data["format_version"]
             ingredients = data["ingredients"]
         except (ValueError, KeyError, TypeError) as exc:

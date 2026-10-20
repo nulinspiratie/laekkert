@@ -533,7 +533,7 @@ def _apply(changes: BarChanges, draft: _Draft) -> None:
     for name in changes.fresh:
         item = draft.registry.item_key(name)
         if item is None:
-            draft.new_item(name, fresh=True)
+            draft.clear_state(draft.new_item(name, fresh=True))
             continue
         draft.clear_state(item)
         entry = draft.touch(item)
@@ -566,8 +566,12 @@ def _apply(changes: BarChanges, draft: _Draft) -> None:
         draft.touch(item)
         draft.clear_state(item)
 
+    deleted: set[str] = set()
     for name in changes.delete:
+        if draft.key(name) in deleted:
+            continue  # the same item named twice
         item = draft.bar_item(name)
+        deleted.add(item)
         if item in draft.registry.used_in:
             raise BarError(USED)
         entry = draft.registry.entry(item)
@@ -614,13 +618,13 @@ class Bar:
     def _read_strict(self) -> dict:
         """The inventory file as parsed; raises InventoryUnavailable if it is bad."""
         try:
-            text = self.inventory_path.read_text(encoding="utf-8")
+            content = self.inventory_path.read_bytes()
         except FileNotFoundError:
             return {"format_version": INVENTORY_FORMAT_VERSION, "items": {}}
         except OSError as exc:
             raise InventoryUnavailable(UNAVAILABLE) from exc
         try:
-            data = json.loads(text)
+            data = json.loads(content.decode("utf-8"))
             version = data["format_version"]
             items = data["items"]
         except (ValueError, KeyError, TypeError) as exc:
@@ -642,16 +646,17 @@ class Bar:
             mtime_ns = None
         if mtime_ns is None:
             return {}
-        if self._cache[0] != mtime_ns:
-            try:
-                items = self._read_strict()["items"]
-            except InventoryUnavailable as exc:
-                log.warning(
-                    "ignoring %s: %s", self.inventory_path, exc.__cause__ or exc
-                )
-                items = {}
-            self._cache = (mtime_ns, items)
-        return self._cache[1]
+        # One read of the cache: a write on another thread may replace it.
+        cached_mtime_ns, cached = self._cache
+        if cached_mtime_ns == mtime_ns:
+            return cached
+        try:
+            items = self._read_strict()["items"]
+        except InventoryUnavailable as exc:
+            log.warning("ignoring %s: %s", self.inventory_path, exc.__cause__ or exc)
+            items = {}
+        self._cache = (mtime_ns, items)
+        return items
 
     def _write(self, data: dict) -> None:
         data = {**data, "format_version": INVENTORY_FORMAT_VERSION}
