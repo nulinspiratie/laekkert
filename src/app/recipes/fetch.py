@@ -56,10 +56,21 @@ async def _resolve(host: str, port: int) -> list[str]:
     return [info[4][0] for info in infos]
 
 
+# IPv6 prefixes whose last 32 bits are an IPv4 address: IPv4-compatible (::/96),
+# NAT64 (64:ff9b::/96) and SIIT (::ffff:0:0:0/96). Python counts them as global.
+_IPV4_IN_LAST_32 = [
+    ipaddress.IPv6Network("::/96"),
+    ipaddress.IPv6Network("64:ff9b::/96"),
+    ipaddress.IPv6Network("::ffff:0:0:0/96"),
+]
+
+
 def _is_public(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     """True for a global unicast address, looking inside IPv6 forms of IPv4."""
     if isinstance(ip, ipaddress.IPv6Address):
         embedded = [ip.ipv4_mapped, ip.sixtofour, *(ip.teredo or ())]
+        if any(ip in net for net in _IPV4_IN_LAST_32):
+            embedded.append(ipaddress.IPv4Address(ip.packed[12:]))
         if any(inner is not None and not _is_public(inner) for inner in embedded):
             return False
     return ip.is_global and not ip.is_multicast

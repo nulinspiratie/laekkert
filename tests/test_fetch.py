@@ -125,7 +125,7 @@ def test_refuses_non_http_scheme(url):
 
 def test_refuses_odd_port():
     calls = []
-    with pytest.raises(FetchError):
+    with pytest.raises(FetchError, match="^Only http and https links can be fetched$"):
         run(fetcher({}, calls=calls).image("https://example.com:8080/"))
     assert calls == []
 
@@ -144,9 +144,10 @@ def test_allows_standard_ports():
 
 def test_refuses_credentials_in_url():
     calls = []
-    with pytest.raises(FetchError):
+    sentence = "^Only http and https links can be fetched$"
+    with pytest.raises(FetchError, match=sentence):
         run(fetcher({}, calls=calls).image("https://user:pw@example.com/a.png"))
-    with pytest.raises(FetchError):
+    with pytest.raises(FetchError, match=sentence):
         run(fetcher({}, calls=calls).image("https://user@example.com/a.png"))
     assert calls == []
 
@@ -159,6 +160,10 @@ def test_refuses_credentials_in_url():
         "169.254.169.254",
         "::1",
         "::ffff:127.0.0.1",
+        "::127.0.0.1",
+        "::10.0.0.5",
+        "64:ff9b::a00:5",
+        "::ffff:0:a00:5",
         "fc00::1",
         "224.0.0.1",
     ],
