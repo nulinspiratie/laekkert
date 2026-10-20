@@ -22,6 +22,7 @@ const recipe: Recipe = {
   image: 'dal.jpg',
   rating: null,
   last_made: null,
+  version: 0,
 }
 
 /** A valid state to break one field at a time. */

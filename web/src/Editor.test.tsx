@@ -24,6 +24,7 @@ const dal: Recipe = {
   image: 'dal.jpg',
   rating: null,
   last_made: null,
+  version: 3,
 }
 
 const daiquiri: Recipe = {
@@ -217,6 +218,27 @@ test('saving an edit puts the draft to the recipe and returns to it', async () =
   expect(body).toMatchObject({ name: 'Dal', image: 'dal.jpg', tags: ['weeknight'] })
   expect(body).not.toHaveProperty('side')
   expect(fetch.mock.calls.find(([, init]) => init?.method === 'PUT')![0]).toBe('/api/recipes/food/dal')
+})
+
+test('saving sends the version it opened', async () => {
+  const fetch = stubApi([dal], { update: () => json(dal) })
+  await editing()
+  type('Name', 'Dal')
+  fireEvent.click(save())
+  await waitFor(() => expect(location()).toBe('/food/dal'))
+  expect(writes(fetch, 'PUT')[0]).toHaveProperty('base_version', 3)
+})
+
+test('a 409 shows the sentence and keeps the edits', async () => {
+  const sentence = 'This recipe was changed somewhere else since you opened it; reload it to see the change'
+  stubApi([dal], { update: () => json({ error: sentence }, 409) })
+  await editing()
+  type('Name', 'Dal supreme')
+  fireEvent.click(save())
+  expect(await screen.findByRole('alert')).toHaveTextContent(sentence)
+  expect(location()).toBe('/food/dal/edit')
+  expect(screen.getByLabelText('Name')).toHaveValue('Dal supreme')
+  expect(save()).toBeEnabled()
 })
 
 test('the side cannot be changed once the recipe exists', async () => {

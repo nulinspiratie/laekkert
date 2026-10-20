@@ -21,8 +21,7 @@ from app.recipes.catalog import Catalog
 from app.recipes.drafts import parse_draft
 from app.recipes.model import SIDES, Mark, Recipe
 from app.recipes.search import search
-from app.recipes.store import RATING_RANGE, RecipeStore, SaveIncomplete
-from app.recipes.timeline import current_rating, last_made
+from app.recipes.store import RATING_RANGE, RecipeStore, SaveIncomplete, VersionConflict
 from app.recipes.uploads import (
     IMAGE_TYPES,
     MAX_UPLOAD_BYTES,
@@ -81,12 +80,14 @@ def stars(value: object) -> float:
 def write_route(
     handler: Callable[[Request], Awaitable[Response]],
 ) -> Callable[[Request], Awaitable[Response]]:
-    """Turn the store's ValueError into 400 and OSError into 503."""
+    """Turn the store's ValueError into 400, a stale edit into 409, OSError into 503."""
 
     @functools.wraps(handler)
     async def wrapper(request: Request) -> Response:
         try:
             return await handler(request)
+        except VersionConflict as err:
+            return error(str(err), 409)
         except ValueError as err:
             return error(str(err), 400)
         except BodyTooLarge as err:
@@ -158,15 +159,11 @@ def mark_list(body: dict, key: str) -> list[Mark]:
 def api_routes(
     store: RecipeStore, catalog: Catalog, uploads: UploadStore
 ) -> list[Route]:
-    def derived(side: str, slug: str) -> dict:
-        entries = store.timeline(side, slug) or []
-        return {"rating": current_rating(entries), "last_made": last_made(entries)}
-
     def detail(recipe: Recipe) -> dict:
         body = recipe.model_dump(mode="json")
         for ingredient in body["ingredients"]:
             ingredient["g_per_tsp"] = catalog.g_per_tsp(ingredient["item"])
-        return {**body, **derived(recipe.side, recipe.slug)}
+        return {**body, **store.derived(recipe.side, recipe.slug)}
 
     async def list_recipes(request: Request) -> JSONResponse:
         side = request.query_params.get("side")
@@ -174,7 +171,11 @@ def api_routes(
             return error("side must be food or drinks", 400)
         recipes = search(store.list(side), request.query_params.get("q", ""))
         return JSONResponse(
-            {"recipes": [{**r.summary(), **derived(side, r.slug)} for r in recipes]}
+            {
+                "recipes": [
+                    {**r.summary(), **store.derived(side, r.slug)} for r in recipes
+                ]
+            }
         )
 
     async def recipe_detail(request: Request) -> JSONResponse:
@@ -226,9 +227,19 @@ def api_routes(
     async def update_recipe(request: Request) -> JSONResponse:
         if (refusal := needs_json(request)) is not None:
             return refusal
-        draft = parse_draft(await json_object(request))
+        body = await json_object(request)
+        base_version = None
+        if "base_version" in body:
+            base_version = body.pop("base_version")
+            if not isinstance(base_version, int) or isinstance(base_version, bool):
+                raise ValueError("The version must be a whole number")
+        draft = parse_draft(body)
         recipe = store.update(
-            request.path_params["side"], request.path_params["slug"], draft, VIA
+            request.path_params["side"],
+            request.path_params["slug"],
+            draft,
+            VIA,
+            base_version,
         )
         return not_found() if recipe is None else JSONResponse(detail(recipe))
 
