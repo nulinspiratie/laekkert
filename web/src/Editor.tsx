@@ -11,6 +11,7 @@ import {
   blankStep,
   emptyState,
   isDirty,
+  isHeading,
   move,
   stateFromRecipe,
   toDraft,
@@ -19,6 +20,7 @@ import {
   type BadInput,
   type EditorRow,
   type EditorState,
+  type IngredientEntry,
   type SourceMode,
 } from './editor'
 import { capitalise } from './format'
@@ -469,12 +471,12 @@ function Ingredients({
   desktop,
   onRows,
 }: {
-  rows: EditorRow[]
+  rows: IngredientEntry[]
   desktop: boolean
-  onRows: (rows: EditorRow[]) => void
+  onRows: (rows: IngredientEntry[]) => void
 }) {
   const change = (key: string, changes: Partial<EditorRow>) =>
-    onRows(rows.map((row) => (row.key === key ? { ...row, ...changes } : row)))
+    onRows(rows.map((row) => (row.key === key && !isHeading(row) ? { ...row, ...changes } : row)))
   return (
     <section className="ed-card" aria-labelledby="ed-ingredients">
       <h2 id="ed-ingredients">Ingredients</h2>
@@ -489,7 +491,8 @@ function Ingredients({
         </div>
         <ul className="ed-rows">
           {rows.map((row, index) => {
-            const n = index + 1
+            if (isHeading(row)) return null
+            const n = rows.slice(0, index).filter((r) => !isHeading(r)).length + 1
             const amount = (
               <div className="ed-cell ed-cell--amount">
                 <span className="ed-cap" aria-hidden="true">
@@ -622,7 +625,8 @@ function Steps({
       <h2 id="ed-steps">Steps</h2>
       <ol className="ed-steps">
         {steps.map((step, index) => {
-          const n = index + 1
+          if (isHeading(step)) return null
+          const n = steps.slice(0, index).filter((s) => !isHeading(s)).length + 1
           return (
             <li key={step.key} className="ed-step">
               <span className="ed-step-n" aria-hidden="true">
@@ -632,7 +636,7 @@ function Steps({
                 aria-label={`Step ${n}`}
                 rows={2}
                 value={step.text}
-                onChange={(e) => onSteps(steps.map((s) => (s.key === step.key ? { ...s, text: e.target.value } : s)))}
+                onChange={(e) => onSteps(steps.map((s) => (s.key === step.key && !isHeading(s) ? { ...s, text: e.target.value } : s)))}
               />
               <div className="ed-step-tools">
                 <MoveButtons
