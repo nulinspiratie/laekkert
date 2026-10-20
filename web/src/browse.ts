@@ -77,10 +77,20 @@ const CAT_VIEWS: Record<string, DrinksView> = {
   prep: 'syrups',
 }
 
-/** Which view a drinks URL asks for: `show=`, else an old `cat=`, else an old `bar=`, else Can make. */
+/** An old `tag=mocktail` or `tag=mocktails` (compared by name key): mocktails were tagged before they were a view. */
+const isMocktailTag = (tag: string) => ['mocktail', 'mocktails'].includes(normalise(tag))
+
+/** The view a drinks URL names with `show=`, if any. */
+const shownView = (params: URLSearchParams) => DRINKS_VIEWS.find((view) => view === params.get('show'))
+
+/**
+ * Which view a drinks URL asks for: `show=`, else an old mocktail tag, else an old `cat=`, else
+ * an old `bar=`, else Can make.
+ */
 function parseView(params: URLSearchParams): DrinksView {
-  const show = DRINKS_VIEWS.find((view) => view === params.get('show'))
+  const show = shownView(params)
   if (show) return show
+  if (params.getAll('tag').some(isMocktailTag)) return 'mocktails'
   const cat = params.get('cat')
   if (cat && Object.hasOwn(CAT_VIEWS, cat)) return CAT_VIEWS[cat]
   return 'can'
@@ -140,11 +150,13 @@ export function removeTerm(state: BrowseState, term: string): BrowseState {
 export function parseBrowse(side: Side, params: URLSearchParams): BrowseState {
   const cat = params.get('cat')
   const picked = params.getAll('mark')
+  // With no view named, an old mocktail tag became the Mocktails view (see `parseView`).
+  const oldMocktailTag = side === 'drinks' && !shownView(params) ? isMocktailTag : () => false
   return {
     q: params.get('q') ?? '',
     category: side === 'food' && cat && CATEGORIES.food.includes(cat) ? cat : null,
     marks: FILTER_MARKS.filter((mark) => picked.includes(mark)),
-    tags: [...new Set(params.getAll('tag').filter((tag) => tag !== ''))],
+    tags: [...new Set(params.getAll('tag').filter((tag) => tag !== '' && !oldMocktailTag(tag)))],
     sort: SORT_OPTIONS.find(({ key }) => key === params.get('sort'))?.key ?? 'name',
     show: side === 'drinks' ? parseView(params) : null,
     have: side === 'food' ? cleanTerms(params.getAll('have')) : [],

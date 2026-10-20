@@ -463,7 +463,7 @@ function UnsortedSection({
       <p className="bar-unsorted-help">
         {setUp
           ? "New from drinks you added. Until you sort them, drinks that use them don't show under Can make."
-          : 'Nothing is sorted yet, so no drink shows under ‘Can make now’. Tap what you have, then mark the rest in one go.'}
+          : "Nothing is sorted yet, so drinks that need bottles don't show under Can make. Tap what you have, then mark the rest in one go."}
       </p>
       {groupByKind(items).map((group) => (
         <div key={group.kind} className="bar-unsorted-group">

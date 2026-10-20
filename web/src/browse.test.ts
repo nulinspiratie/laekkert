@@ -363,6 +363,21 @@ suite('drinks views', () => {
     expect(parse('drinks', query).show).toBe(view)
   })
 
+  it('opens an old tag=mocktail link on Mocktails and drops the tag', () => {
+    for (const query of ['tag=mocktail', 'tag=Mocktails', 'tag=MOCKTAIL&tag=sour', 'cat=cocktails&tag=mocktail']) {
+      const parsed = parse('drinks', query)
+      expect(parsed.show).toBe('mocktails')
+      expect(parsed.tags).not.toContainEqual(expect.stringMatching(/mocktail/i))
+    }
+    expect(parse('drinks', 'tag=MOCKTAIL&tag=sour').tags).toEqual(['sour'])
+    expect(browseQuery(parse('drinks', 'tag=mocktail&sort=rating'))).toBe('sort=rating&show=mocktails')
+  })
+
+  it('keeps a mocktail tag when the link names a view', () => {
+    expect(parse('drinks', 'show=all&tag=mocktail')).toMatchObject({ show: 'all', tags: ['mocktail'] })
+    expect(parse('food', 'tag=mocktail').tags).toEqual(['mocktail'])
+  })
+
   it('never keeps a category on drinks', () => {
     expect(parse('drinks', 'cat=mocktails').category).toBeNull()
   })

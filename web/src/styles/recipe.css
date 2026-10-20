@@ -917,7 +917,7 @@
     padding: 0 12px;
   }
 
-    /* Too narrow for ingredients beside the method: the method wraps below, so
+  /* Too narrow for ingredients beside the method: the method wraps below, so
      the ingredients card takes the full width rather than leaving a gap. */
   @media (max-width: 963.98px) {
     .ingredients {

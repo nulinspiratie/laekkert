@@ -235,9 +235,9 @@ export default function Browse({ side }: { side: Side }) {
     navigate(search(browseQuery({ ...state, q: value.trim() })), { replace: true })
   }
   const reset = () => navigate(search(defaultQuery(side, state.show)))
-  // "Clear filters" clears the search, marks and tags and keeps the view.
-  const clearFilters = () =>
-    navigate(`/${side}${side === 'drinks' ? search(defaultQuery(side, state.show)).search : ''}`)
+  // "Clear filters" clears the search, marks and tags. Drinks keep the view; food drops every param.
+  const clearedQuery = side === 'drinks' ? defaultQuery(side, state.show) : ''
+  const clearFilters = () => navigate({ pathname: `/${side}`, ...search(clearedQuery) })
   const changeView = (next: View) => {
     setView(next)
     setViewState(next)
@@ -481,7 +481,7 @@ function BarEmpty({ kind, desktop, all, showAll }: BarEmptyProps) {
     content = {
       icon: <Shelf />,
       title: 'Set up your bar first',
-      text: `Lækkert doesn't know what's in your cabinet yet, so nothing can show here. ${how} It takes about a minute.`,
+      text: `Lækkert doesn't know what's in your cabinet yet, so drinks that need bottles can't show here yet. ${how} It takes about a minute.`,
       actions: (
         <>
           <Link to="/bar" className="browse-bar-empty-cta">

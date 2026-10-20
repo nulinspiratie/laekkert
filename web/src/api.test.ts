@@ -141,7 +141,7 @@ test('setMarks and restoreVersion post their bodies', async () => {
   expect(JSON.parse(restore?.body as string)).toEqual({ version: 3 })
 })
 
-const bar = { items: [], set_up: false, counts: { can_make: 0, fresh_only: 0, missing: 0, unsorted: 0, total: 0 } }
+const bar = { items: [], set_up: false, counts: { can_make: 0, missing: 0, unsorted: 0, total: 0 } }
 
 test('getBar gets the bar', async () => {
   const fetch = stubFetch(() => json(bar))

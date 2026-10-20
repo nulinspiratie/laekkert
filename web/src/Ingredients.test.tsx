@@ -153,3 +153,22 @@ test('a drink written for more than 12 starts at 12', () => {
   expect(screen.getByText('12 drinks')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'More' })).toBeDisabled()
 })
+
+test('a mocktail with no tracked bottles shows only the Also needs line', () => {
+  const untracked = (item: string) =>
+    ing({ item, amount: 30, unit: 'ml', bar: { item, state: null, tracked: false, recipe: null } })
+  render(
+    <MemoryRouter>
+      <Ingredients
+        ingredients={[untracked('lime juice'), untracked('ginger beer')]}
+        servings={1}
+        side="drinks"
+        bar={{ status: 'can_make', missing: [], unsorted: [], untracked: ['lime juice', 'ginger beer'] }}
+      />
+    </MemoryRouter>,
+  )
+  const summary = document.querySelector<HTMLElement>('.ingredients-bar')!
+  expect(summary).toHaveTextContent(/^Also needs: lime juice, ginger beer$/)
+  expect(screen.queryByText(/From your bar|Missing:/)).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /in the bar|not sorted/i })).not.toBeInTheDocument()
+})

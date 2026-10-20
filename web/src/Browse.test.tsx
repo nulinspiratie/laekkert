@@ -820,7 +820,7 @@ test('a bar that is not set up shows the set-up box above the Can make list, not
   const view = renderAt('/drinks')
   expect(await screen.findByRole('heading', { name: 'Set up your bar first' })).toBeInTheDocument()
   expect(screen.getByText(/Mark each bottle as have or don't have\./)).toHaveTextContent(
-    "Lækkert doesn't know what's in your cabinet yet, so nothing can show here. Mark each bottle as have or don't have. It takes about a minute.",
+    "Lækkert doesn't know what's in your cabinet yet, so drinks that need bottles can't show here yet. Mark each bottle as have or don't have. It takes about a minute.",
   )
   // The drinks with no tracked bottle are still listed under the box.
   expect(recipeNames()).toEqual(['/drinks/gimlet', '/drinks/shirley-temple'])
@@ -944,6 +944,20 @@ test('a search with no match in the view still points at All drinks', async () =
     '/drinks?q=negroni&show=all',
   )
   expect(recipeNames()).toEqual([])
+})
+
+test('a search with no hits on Can make shows the plain empty state, not "Nothing to make yet"', async () => {
+  // The stub answers every search with all three; none can be made.
+  stubFetch([campariNegroni, maiTai, cornNOil])
+  renderAt('/drinks?q=negroni')
+  expect(await screen.findByRole('link', { name: '3 more in All drinks' })).toHaveAttribute(
+    'href',
+    '/drinks?q=negroni&show=all',
+  )
+  expect(recipeNames()).toEqual([])
+  expect(screen.getByText('Nothing matches these filters.')).toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: 'Nothing to make yet' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: 'Open the bar' })).not.toBeInTheDocument()
 })
 
 test('a search that only syrups match points at Syrups & prep', async () => {

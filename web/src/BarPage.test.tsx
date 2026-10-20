@@ -148,7 +148,7 @@ test('shows the first-visit subtitle and progress', async () => {
   const unsorted = screen.getByRole('region', { name: 'Not sorted yet' })
   expect(
     within(unsorted).getByText(
-      'Nothing is sorted yet, so no drink shows under ‘Can make now’. Tap what you have, then mark the rest in one go.',
+      "Nothing is sorted yet, so drinks that need bottles don't show under Can make. Tap what you have, then mark the rest in one go.",
     ),
   ).toBeInTheDocument()
   expect(within(unsorted).getByRole('button', { name: 'Mark the other 6 as don’t have' })).toBeInTheDocument()
