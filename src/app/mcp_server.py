@@ -461,11 +461,7 @@ def build_mcp(
     ) -> RecipeDraft:
         """The recipe as an editor draft, with only the given fields changed."""
         fields = {
-            **current.model_dump(
-                exclude={"slug", "side", "marks", "format_version", "notes"}
-            ),
-            # Drafts still take steps as plain strings.
-            "steps": [step.text for step in current.steps],
+            **current.model_dump(exclude={"slug", "side", "marks", "format_version"}),
             "image": image,
         }
         for name in changes.model_fields_set - {"source_url"}:

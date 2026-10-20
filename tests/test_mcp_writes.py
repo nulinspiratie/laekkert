@@ -386,6 +386,30 @@ def test_edit_recipe_changes_only_given_fields(client, dal):
     assert after["image"] == before["image"]
 
 
+def test_edit_recipe_keeps_groups_and_notes(client, dal):
+    body = {
+        "name": "Quick dal",
+        "category": "mains",
+        "servings": 2,
+        "time_minutes": None,
+        "ingredients": [
+            {"amount": 200, "unit": "g", "item": "red lentils", "group": "Dal"}
+        ],
+        "steps": [{"text": "Simmer.", "group": "Cook"}],
+        "notes": "Keeps *well*.",
+        "source": None,
+        "tags": [],
+        "image": None,
+        "base_version": 1,
+    }
+    assert client.put("/api/recipes/food/quick-dal", json=body).status_code == 200
+    saved(edit(client, dal, 2, {"servings": 4}))
+    after = read(client, "food", dal)
+    assert after["ingredients"][0]["group"] == "Dal"
+    assert after["steps"] == [{"text": "Simmer.", "group": "Cook"}]
+    assert after["notes"] == "Keeps *well*."
+
+
 def test_edit_recipe_replaces_whole_lists_and_renames_without_moving(client, dal):
     changes = {
         "name": "Better dal",
@@ -460,8 +484,6 @@ def test_edit_recipe_stale_version_refused(client, dal):
             "image",
         )
     }
-    # Requests still send steps as plain strings.
-    body["steps"] = [step["text"] for step in shown["steps"]]
     api = client.put(
         "/api/recipes/food/quick-dal", json={**body, "name": "Dal!", "base_version": 1}
     )

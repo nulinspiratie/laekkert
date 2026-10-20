@@ -46,8 +46,6 @@ def draft(**over):
 def draft_of(recipe, **over):
     fields = set(GOOD)
     data = {k: v for k, v in recipe.model_dump(mode="json").items() if k in fields}
-    # Drafts still take steps as plain strings.
-    data["steps"] = [step["text"] for step in data["steps"]]
     return parse_draft({**data, **over})
 
 

@@ -182,8 +182,6 @@ def draft_from(recipe):
         "name category servings time_minutes ingredients steps source tags image"
     ).split()
     draft = {key: recipe[key] for key in keep}
-    # Drafts still take steps as plain strings.
-    draft["steps"] = [step["text"] for step in recipe["steps"]]
     draft["ingredients"] = [
         {k: v for k, v in i.items() if k not in ("g_per_tsp", "bar")}
         for i in recipe["ingredients"]
