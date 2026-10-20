@@ -134,7 +134,7 @@ test('food page has no bar', () => {
   expect(screen.getByRole('group', { name: 'Servings' })).toBeInTheDocument()
   expect(screen.queryByRole('group', { name: 'Drinks to make' })).not.toBeInTheDocument()
   expect(screen.queryByText(/in the bar/i)).not.toBeInTheDocument()
-  expect(screen.queryByText(/From your bar|Missing:|Buy fresh:/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/From your bar|Missing:|Also needs:/)).not.toBeInTheDocument()
   expect(screen.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual([
     'Fewer servings',
     'More servings',

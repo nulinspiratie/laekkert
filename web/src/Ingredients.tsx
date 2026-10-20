@@ -186,7 +186,10 @@ export function Ingredients({
   )
 }
 
-/** "Missing: a, b" or "From your bar: 2 of 2", and "Buy fresh: x" when the drink has fresh items. */
+/**
+ * "Missing: a, b" or "From your bar: 2 of 2 bottles", and "Also needs: x" for what the bar does
+ * not track (fresh items, syrups, prep).
+ */
 function BarSummary({ bar, ingredients }: { bar: DrinkBar; ingredients: RecipeIngredient[] }) {
   // Unsorted bottles count as missing here; the names go in recipe order.
   const order = (name: string) => ingredients.findIndex((ing) => (ing.bar?.item ?? ing.item) === name)
@@ -206,14 +209,14 @@ function BarSummary({ bar, ingredients }: { bar: DrinkBar; ingredients: RecipeIn
         shelf > 0 && (
           <span className="ingredients-bar-have">
             <Check size={16} strokeWidth={2.5} />
-            From your bar: {shelf} of {shelf}
+            From your bar: {shelf} of {shelf} bottles
           </span>
         )
       )}
       {bar.untracked.length > 0 && (
-        <span className="ingredients-bar-fresh">
+        <span className="ingredients-bar-also">
           <Basket size={16} strokeWidth={2} />
-          Buy fresh: {bar.untracked.join(', ')}
+          Also needs: {bar.untracked.join(', ')}
         </span>
       )}
     </p>
@@ -299,29 +302,20 @@ function DrinkRow({
               state={location.state}
               className="ingredient-recipe"
             >
-              {bar.state === 'dont' ? 'Out? Make it: ' : 'Recipe: '}
-              {bar.recipe.name}
+              Recipe: {bar.recipe.name}
               <Chevron size={14} strokeWidth={2.25} />
             </Link>
           )}
         </span>
-        {bar && !bar.tracked ? (
-          <span className="ingredient-fresh">
-            <Basket size={16} strokeWidth={2} />
-            {desktop ? 'Fresh, buy when needed' : 'Fresh'}
-          </span>
-        ) : (
-          bar &&
-          onToggle && (
-            <StateButton
-              bar={bar}
-              desktop={desktop}
-              waiting={waiting}
-              pending={pending}
-              buttonRef={buttonRef}
-              onClick={() => onToggle(bar)}
-            />
-          )
+        {bar?.tracked && onToggle && (
+          <StateButton
+            bar={bar}
+            desktop={desktop}
+            waiting={waiting}
+            pending={pending}
+            buttonRef={buttonRef}
+            onClick={() => onToggle(bar)}
+          />
         )}
       </div>
       {problem && (
