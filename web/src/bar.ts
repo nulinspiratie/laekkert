@@ -1,10 +1,13 @@
 // The bar's display helpers: grouping, search and the badges drinks wear.
 
 import { ApiError } from './api'
-import type { Bar, BarItem, DrinkBar, DrinkStatus, Kind, Recipe, RecipeIngredient, RecipeSummary } from './types'
+import type { Bar, BarItem, DrinkBar, DrinkStatus, Kind, Recipe, RecipeIngredient } from './types'
 
 /** The kinds in the order the bar shows them. */
 export const KINDS: readonly Kind[] = ['spirits', 'liqueurs', 'aperitifs', 'bitters', 'syrups', 'other']
+
+/** The kinds the bar tracks: syrups have no state, so the bar has no group for them. */
+export const TRACKED_KINDS: readonly Kind[] = KINDS.filter((kind) => kind !== 'syrups')
 
 export const KIND_LABELS: Record<Kind, string> = {
   spirits: 'Spirits',
@@ -38,21 +41,21 @@ export function usedText(n: number): string {
   return n === 1 ? 'Used in 1 drink' : `Used in ${n} drinks`
 }
 
-/** The kinds that have items, in the fixed order, with how many of each are in the bar. */
+/** The tracked kinds that have items, in the fixed order, with how many of each are in the bar. */
 export function groupByKind(items: BarItem[]): { kind: Kind; items: BarItem[]; have: number }[] {
-  return KINDS.map((kind) => {
+  return TRACKED_KINDS.map((kind) => {
     const inKind = items.filter((item) => item.kind === kind)
     return { kind, items: inKind, have: inKind.filter((item) => item.state === 'have').length }
   }).filter((group) => group.items.length > 0)
 }
 
 /** Bottles and the like: everything tracked, sorted or not. */
-export const shelf = (items: BarItem[]): BarItem[] => items.filter((item) => !item.fresh)
+export const shelf = (items: BarItem[]): BarItem[] => items.filter((item) => item.tracked)
 
-export const fresh = (items: BarItem[]): BarItem[] => items.filter((item) => item.fresh)
+export const untracked = (items: BarItem[]): BarItem[] => items.filter((item) => !item.tracked)
 
 export const unsorted = (items: BarItem[]): BarItem[] =>
-  items.filter((item) => !item.fresh && item.state === null)
+  items.filter((item) => item.tracked && item.state === null)
 
 /** "a, b" for up to `max` names; more shows the first `max` and "+N". */
 export function nameList(names: string[], max = 2): string {
@@ -60,13 +63,16 @@ export function nameList(names: string[], max = 2): string {
   return names.length > max ? `${shown} +${names.length - max}` : shown
 }
 
-/** The line a drink's card shows about the bar. */
-export function badge(bar: DrinkBar, phone: boolean): { kind: DrinkStatus; text: string } {
+/**
+ * The line a drink's card shows about the bar; `also` is a drink you can make that uses untracked
+ * items. The text is the same on a phone and a desktop now, so `_phone` is unused.
+ */
+export function badge(bar: DrinkBar, _phone?: boolean): { kind: DrinkStatus | 'also'; text: string } {
   switch (bar.status) {
     case 'can_make':
-      return { kind: 'can_make', text: 'Can make now' }
-    case 'fresh_only':
-      return { kind: 'fresh_only', text: `${phone ? 'Buy' : 'Buy fresh'}: ${nameList(bar.fresh)}` }
+      return bar.untracked.length > 0
+        ? { kind: 'also', text: `Also needs: ${nameList(bar.untracked)}` }
+        : { kind: 'can_make', text: 'Can make now' }
     case 'missing':
       return { kind: 'missing', text: `Missing: ${nameList(bar.missing)}` }
     case 'unsorted':
@@ -74,50 +80,32 @@ export function badge(bar: DrinkBar, phone: boolean): { kind: DrinkStatus; text:
   }
 }
 
-/** Of the drinks that need only fresh items, the fresh item most of them need. */
-export function topFresh(recipes: RecipeSummary[]): { item: string; count: number } | null {
-  const counts = new Map<string, number>()
-  for (const recipe of recipes) {
-    if (recipe.bar?.status !== 'fresh_only') continue
-    for (const name of new Set(recipe.bar.fresh)) counts.set(name, (counts.get(name) ?? 0) + 1)
-  }
-  let top: { item: string; count: number } | null = null
-  for (const [item, count] of counts) {
-    if (top === null || count > top.count || (count === top.count && item.localeCompare(top.item) < 0)) {
-      top = { item, count }
-    }
-  }
-  return top
-}
-
 /** What the bar says about a drink with these ingredients; the server's rule in `BarView.status`. */
 function drinkBar(ingredients: RecipeIngredient[]): DrinkBar {
   const missing: string[] = []
   const unsorted: string[] = []
-  const freshNames: string[] = []
+  const untracked: string[] = []
   for (const ing of ingredients) {
     // No bar item: one saved since the bar was read, so an unsorted bottle.
     const name = ing.bar?.item ?? ing.item
     const state = ing.bar?.state ?? null
-    const group = ing.bar?.fresh ? freshNames : state === 'dont' ? missing : state === null ? unsorted : null
+    const group = ing.bar && !ing.bar.tracked ? untracked : state === 'dont' ? missing : state === null ? unsorted : null
     if (group && !group.includes(name)) group.push(name)
   }
-  const status: DrinkStatus = missing.length
-    ? 'missing'
-    : unsorted.length
-      ? 'unsorted'
-      : freshNames.length
-        ? 'fresh_only'
-        : 'can_make'
-  return { status, missing, unsorted, fresh: freshNames }
+  const status: DrinkStatus = missing.length ? 'missing' : unsorted.length ? 'unsorted' : 'can_make'
+  return { status, missing, unsorted, untracked }
 }
 
-/** A drink with a bar the server just returned laid over its ingredients, and its summary to match. */
+/**
+ * A drink with a bar the server just returned laid over its ingredients, and its summary to match.
+ * Syrups and prep have no bar; theirs stays null.
+ */
 export function withBar(recipe: Recipe, bar: Bar): Recipe {
+  if (recipe.category === 'syrups' || recipe.category === 'prep') return { ...recipe, bar: null }
   const items = new Map(bar.items.map((item) => [normalise(item.name), item]))
   const ingredients = recipe.ingredients.map((ing) => {
     const item = ing.bar ? items.get(normalise(ing.bar.item)) : undefined
-    return ing.bar && item ? { ...ing, bar: { ...ing.bar, state: item.state, fresh: item.fresh } } : ing
+    return ing.bar && item ? { ...ing, bar: { ...ing.bar, state: item.state, tracked: item.tracked } } : ing
   })
   return { ...recipe, ingredients, bar: drinkBar(ingredients) }
 }

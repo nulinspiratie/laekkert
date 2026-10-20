@@ -129,7 +129,7 @@ test('pinch and dash print their unit once', () => {
 
 test('food page has no bar', () => {
   // A food recipe never has bar fields; even if one did, the food side shows none of it.
-  const withBar = ing({ item: 'olive oil', amount: 30, unit: 'ml', bar: { item: 'olive oil', state: 'have', fresh: false, recipe: null } })
+  const withBar = ing({ item: 'olive oil', amount: 30, unit: 'ml', bar: { item: 'olive oil', state: 'have', tracked: true, recipe: null } })
   render(<Ingredients ingredients={[withBar, chicken]} servings={4} side="food" />)
   expect(screen.getByRole('group', { name: 'Servings' })).toBeInTheDocument()
   expect(screen.queryByRole('group', { name: 'Drinks to make' })).not.toBeInTheDocument()

@@ -684,15 +684,15 @@ describe('a drink and the bar', () => {
       ...daiquiri,
       servings: 1,
       ingredients: [
-        { ...ml(50, 'white rum'), bar: { item: 'white rum', state: rum, fresh: false, recipe: null } },
-        { ...ml(25, 'lime juice', 'fresh'), bar: { item: 'lime juice', state: null, fresh: true, recipe: null } },
-        { ...ml(15, 'simple syrup', '1:1'), bar: { item: 'simple syrup', state: syrup, fresh: false, recipe: syrupLink } },
+        { ...ml(50, 'white rum'), bar: { item: 'white rum', state: rum, tracked: true, recipe: null } },
+        { ...ml(25, 'lime juice', 'fresh'), bar: { item: 'lime juice', state: null, tracked: false, recipe: null } },
+        { ...ml(15, 'simple syrup', '1:1'), bar: { item: 'simple syrup', state: syrup, tracked: true, recipe: syrupLink } },
       ],
       bar: {
-        status: missing.length ? 'missing' : unsorted.length ? 'unsorted' : 'fresh_only',
+        status: missing.length ? 'missing' : unsorted.length ? 'unsorted' : 'can_make',
         missing,
         unsorted,
-        fresh: ['lime juice'],
+        untracked: ['lime juice'],
       },
     }
   }
@@ -703,19 +703,19 @@ describe('a drink and the bar', () => {
     name: 'Simple syrup',
     category: 'syrups',
     ingredients: [],
-    bar: { status: 'can_make', missing: [], unsorted: [], fresh: [] },
+    bar: null,
   }
 
   function barOf({ rum, syrup }: Shelves): Bar {
     const used_in = [{ slug: 'daiquiri', name: 'Daiquiri' }]
     return {
       items: [
-        { name: 'white rum', aliases: [], kind: 'spirits', fresh: false, state: rum, used_in, recipe: null },
-        { name: 'lime juice', aliases: [], kind: 'other', fresh: true, state: null, used_in, recipe: null },
-        { name: 'simple syrup', aliases: [], kind: 'syrups', fresh: false, state: syrup, used_in, recipe: syrupLink },
+        { name: 'white rum', aliases: [], kind: 'spirits', tracked: true, untracked_because: null, state: rum, used_in, recipe: null },
+        { name: 'lime juice', aliases: [], kind: 'other', tracked: false, untracked_because: 'marked', state: null, used_in, recipe: null },
+        { name: 'simple syrup', aliases: [], kind: 'syrups', tracked: true, untracked_because: null, state: syrup, used_in, recipe: syrupLink },
       ],
       set_up: true,
-      counts: { can_make: 0, fresh_only: 0, missing: 0, unsorted: 0, total: 1 },
+      counts: { can_make: 0, missing: 0, unsorted: 0, total: 1 },
     }
   }
 

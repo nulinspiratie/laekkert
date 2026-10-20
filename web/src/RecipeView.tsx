@@ -244,7 +244,7 @@ function Page({ recipe, onRecipe }: { recipe: Recipe; onRecipe: (recipe: Recipe)
             <ul className="recipe-tags" aria-label="Tags">
               {recipe.tags.map((tag) => (
                 <li key={tag}>
-                  <Link to={`/${side}?${browseQuery({ q: '', category: null, marks: [], tags: [tag], sort: 'name', bar: null, have: [] })}`}>
+                  <Link to={`/${side}?${browseQuery({ q: '', category: null, marks: [], tags: [tag], sort: 'name', show: side === 'drinks' ? 'all' : null, have: [] })}`}>
                     {tag}
                   </Link>
                 </li>
@@ -302,7 +302,7 @@ function Page({ recipe, onRecipe }: { recipe: Recipe; onRecipe: (recipe: Recipe)
           ingredients={recipe.ingredients}
           servings={recipe.servings}
           side={side}
-          bar={recipe.bar}
+          bar={recipe.bar ?? undefined}
           onBar={side === 'drinks' ? setBarState : undefined}
           busy={busy}
           barError={

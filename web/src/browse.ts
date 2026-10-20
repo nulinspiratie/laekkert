@@ -1,21 +1,41 @@
 // Browse state: what the recipe list shows, kept in the URL query string.
 
 import { normalise } from './bar'
-import type { DrinkStatus, Mark, RecipeSummary, Side } from './types'
+import type { Mark, RecipeSummary, Side } from './types'
 
 export type FilterMark = Extract<Mark, 'favourite' | 'try_next'>
 export type SortKey = 'time' | 'rating' | 'made' | 'name'
-/** The "From your bar" filter: drinks you can make now, or that need only fresh items too. */
-export type BarFilter = 'can' | 'fresh'
+/** The Drinks views: what you can make, every drink, the mocktails, and the syrups and prep. */
+export type DrinksView = 'can' | 'all' | 'mocktails' | 'syrups'
+
+/** The views in display order. */
+export const DRINKS_VIEWS: readonly DrinksView[] = ['can', 'all', 'mocktails', 'syrups']
+
+/** Desktop labels. */
+export const VIEW_LABELS: Record<DrinksView, string> = {
+  can: 'Can make',
+  all: 'All drinks',
+  mocktails: 'Mocktails',
+  syrups: 'Syrups & prep',
+}
+
+/** Phone chip labels; the chips append the count. */
+export const VIEW_CHIP_LABELS: Record<DrinksView, string> = {
+  can: 'Can make',
+  all: 'All',
+  mocktails: 'Mocktails',
+  syrups: 'Syrups',
+}
 
 export interface BrowseState {
   q: string
+  /** Food only: drinks pick a view instead, so this is always null there. */
   category: string | null
   marks: FilterMark[]
   tags: string[]
   sort: SortKey
   /** Drinks only; always null on food. */
-  bar: BarFilter | null
+  show: DrinksView | null
   /** "What you have": ingredient terms, in the order given. Food only; always [] on drinks. */
   have: string[]
 }
@@ -44,9 +64,39 @@ export const MARK_LABELS: Record<FilterMark, string> = {
   try_next: 'Try next',
 }
 
-const BAR_PARAMS: readonly BarFilter[] = ['can', 'fresh']
+/** What an old `cat=` link meant, as a view. */
+const CAT_VIEWS: Record<string, DrinksView> = {
+  cocktails: 'all',
+  mocktails: 'mocktails',
+  syrups: 'syrups',
+  prep: 'syrups',
+}
 
-const BAR_STATUS: Record<BarFilter, DrinkStatus> = { can: 'can_make', fresh: 'fresh_only' }
+/** Which view a drinks URL asks for: `show=`, else an old `cat=`, else an old `bar=`, else Can make. */
+function parseView(params: URLSearchParams): DrinksView {
+  const show = DRINKS_VIEWS.find((view) => view === params.get('show'))
+  if (show) return show
+  const cat = params.get('cat')
+  if (cat && Object.hasOwn(CAT_VIEWS, cat)) return CAT_VIEWS[cat]
+  return 'can'
+}
+
+const isCocktailOrMocktail = (recipe: RecipeSummary) =>
+  recipe.category === 'cocktails' || recipe.category === 'mocktails'
+
+/** Is the recipe in the view? The bar covers cocktails and mocktails; syrups and prep have none. */
+function inView(recipe: RecipeSummary, view: DrinksView): boolean {
+  switch (view) {
+    case 'can':
+      return isCocktailOrMocktail(recipe) && recipe.bar?.status === 'can_make'
+    case 'all':
+      return isCocktailOrMocktail(recipe)
+    case 'mocktails':
+      return recipe.category === 'mocktails'
+    case 'syrups':
+      return recipe.category === 'syrups' || recipe.category === 'prep'
+  }
+}
 
 /** The client's copy of the server's `name_key`: terms with the same key are one term. */
 export function haveKey(term: string): string {
@@ -87,11 +137,11 @@ export function parseBrowse(side: Side, params: URLSearchParams): BrowseState {
   const picked = params.getAll('mark')
   return {
     q: params.get('q') ?? '',
-    category: cat && CATEGORIES[side].includes(cat) ? cat : null,
+    category: side === 'food' && cat && CATEGORIES.food.includes(cat) ? cat : null,
     marks: FILTER_MARKS.filter((mark) => picked.includes(mark)),
     tags: [...new Set(params.getAll('tag').filter((tag) => tag !== ''))],
     sort: SORT_OPTIONS.find(({ key }) => key === params.get('sort'))?.key ?? 'name',
-    bar: side === 'drinks' ? BAR_PARAMS.find((value) => value === params.get('bar')) ?? null : null,
+    show: side === 'drinks' ? parseView(params) : null,
     have: side === 'food' ? cleanTerms(params.getAll('have')) : [],
   }
 }
@@ -103,7 +153,7 @@ export function browseQuery(state: BrowseState): string {
   for (const mark of state.marks) params.append('mark', mark)
   for (const tag of state.tags) params.append('tag', tag)
   if (state.sort !== 'name') params.append('sort', state.sort)
-  if (state.bar) params.append('bar', state.bar)
+  if (state.show && state.show !== 'can') params.append('show', state.show)
   for (const term of state.have) params.append('have', term)
   return params.toString()
 }
@@ -155,9 +205,7 @@ function matchesOtherFilters(recipe: RecipeSummary, state: BrowseState): boolean
 
 export function applyBrowse(recipes: RecipeSummary[], state: BrowseState): RecipeSummary[] {
   const kept = recipes.filter(
-    (recipe) =>
-      matchesOtherFilters(recipe, state) &&
-      (state.bar === null || recipe.bar?.status === BAR_STATUS[state.bar]),
+    (recipe) => matchesOtherFilters(recipe, state) && (state.show === null || inView(recipe, state.show)),
   )
   // A search or a "what you have" list keeps the API's order (relevance, or fewest missing).
   if (state.q || state.have.length > 0) return kept
@@ -180,8 +228,8 @@ export function describe(state: BrowseState): string {
 }
 
 /**
- * The facets of a side's recipes. The bar counts follow the other filters in `state`
- * (not the bar filter itself), so each choice shows what it would leave.
+ * The facets of a side's recipes. The view counts follow the other filters in `state`
+ * (not the view itself), so each view shows what it would leave.
  */
 export function facetCounts(
   side: Side,
@@ -190,7 +238,7 @@ export function facetCounts(
 ): {
   categories: [string, number][]
   tags: string[]
-  bar: { all: number; can: number; fresh: number }
+  views: Record<DrinksView, number>
 } {
   const categories = CATEGORIES[side].map(
     (name): [string, number] => [name, recipes.filter((r) => r.category === name).length],
@@ -202,11 +250,25 @@ export function facetCounts(
   const tags = [...tagCounts.keys()].sort(
     (a, b) => tagCounts.get(b)! - tagCounts.get(a)! || a.localeCompare(b),
   )
-  const barCandidates = state ? recipes.filter((r) => matchesOtherFilters(r, state)) : recipes
-  const bar = {
-    all: barCandidates.length,
-    can: barCandidates.filter((r) => r.bar?.status === BAR_STATUS.can).length,
-    fresh: barCandidates.filter((r) => r.bar?.status === BAR_STATUS.fresh).length,
-  }
-  return { categories, tags, bar }
+  const candidates = state ? recipes.filter((r) => matchesOtherFilters(r, state)) : recipes
+  const count = (view: DrinksView) => candidates.filter((r) => inView(r, view)).length
+  const views = { can: count('can'), all: count('all'), mocktails: count('mocktails'), syrups: count('syrups') }
+  return { categories, tags, views }
+}
+
+/**
+ * On drinks with a search: the matches (other filters applied) the current view hides, and the
+ * view that shows them. All drinks first, then Syrups & prep.
+ */
+export function hiddenMatches(
+  recipes: RecipeSummary[],
+  state: BrowseState,
+): { view: 'all' | 'syrups'; count: number } | null {
+  const { show } = state
+  if (show === null || state.q === '') return null
+  const hidden = recipes.filter((recipe) => matchesOtherFilters(recipe, state) && !inView(recipe, show))
+  const inAll = hidden.filter((recipe) => inView(recipe, 'all')).length
+  if (inAll > 0) return { view: 'all', count: inAll }
+  const inSyrups = hidden.filter((recipe) => inView(recipe, 'syrups')).length
+  return inSyrups > 0 ? { view: 'syrups', count: inSyrups } : null
 }

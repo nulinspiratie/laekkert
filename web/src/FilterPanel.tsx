@@ -9,8 +9,9 @@ import { Link } from 'react-router'
 import {
   FILTER_MARKS,
   MARK_LABELS,
+  DRINKS_VIEWS,
   SORT_OPTIONS,
-  type BarFilter,
+  VIEW_LABELS,
   type BrowseState,
   type FilterMark,
   type facetCounts,
@@ -150,14 +151,6 @@ export function FilterPanel({ side, state, counts, onChange, variant = 'aside', 
   )
 }
 
-type BarCount = keyof ReturnType<typeof facetCounts>['bar']
-
-const BAR_OPTIONS: readonly { value: BarFilter | null; label: string; count: BarCount }[] = [
-  { value: null, label: 'Everything', count: 'all' },
-  { value: 'can', label: 'Can make now', count: 'can' },
-  { value: 'fresh', label: 'Only need fresh items', count: 'fresh' },
-]
-
 function BarSection({
   bar,
   state,
@@ -173,18 +166,18 @@ function BarSection({
     <section className="filter-section">
       <h2>From your bar</h2>
       <div role="radiogroup" aria-label="Inventory" className="filter-bar">
-        {BAR_OPTIONS.map(({ value, label, count }) => (
+        {DRINKS_VIEWS.map((value) => (
           <button
-            key={value ?? 'all'}
+            key={value}
             type="button"
             role="radio"
-            aria-checked={state.bar === value}
+            aria-checked={state.show === value}
             className="filter-bar-option"
-            onClick={() => onChange({ bar: value })}
+            onClick={() => onChange({ show: value })}
           >
             <span className="filter-radio" aria-hidden="true" />
-            <span className="filter-grow">{label}</span>{' '}
-            <span className="filter-count">{counts.bar[count]}</span>
+            <span className="filter-grow">{VIEW_LABELS[value]}</span>{' '}
+            <span className="filter-count">{counts.views[value]}</span>
           </button>
         ))}
       </div>

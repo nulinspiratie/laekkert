@@ -41,9 +41,9 @@ function RatingBadge({ rating, size }: { rating: number | null; size: number }) 
   )
 }
 
-const BADGE_ICONS: Record<DrinkStatus, () => ReactNode> = {
+const BADGE_ICONS: Record<DrinkStatus | 'also', () => ReactNode> = {
   can_make: () => <Check size={15} strokeWidth={2.5} />,
-  fresh_only: () => <Basket size={15} strokeWidth={2} />,
+  also: () => <Basket size={15} strokeWidth={2} />,
   missing: () => <MinusCircle size={15} />,
   unsorted: () => <Question size={15} strokeWidth={2} />,
 }

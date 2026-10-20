@@ -49,8 +49,8 @@ export interface RecipeSummary {
   rating: number | null
   /** UTC timestamp of the latest "made it" entry. */
   last_made: string | null
-  /** Drinks only: what the bar says about making this drink. */
-  bar?: DrinkBar
+  /** Cocktails and mocktails: what the bar says about making this drink. Null for syrups and prep. */
+  bar?: DrinkBar | null
   /** Food only, and only when the request had `have` terms. */
   have?: HaveMatch
 }
@@ -70,7 +70,10 @@ export type Kind = 'spirits' | 'liqueurs' | 'aperitifs' | 'bitters' | 'syrups' |
 /** Whether the household has an item; an unsorted item has no state. */
 export type BarState = 'have' | 'dont'
 
-export type DrinkStatus = 'can_make' | 'fresh_only' | 'missing' | 'unsorted'
+export type DrinkStatus = 'can_make' | 'missing' | 'unsorted'
+
+/** Why an item is not tracked: it is a syrup, a recipe makes it, or it was marked so. */
+export type UntrackedBecause = 'syrups' | 'recipe' | 'marked'
 
 /** A drink as a bar item links to it. */
 export interface DrinkLink {
@@ -82,8 +85,10 @@ export interface BarItem {
   name: string
   aliases: string[]
   kind: Kind
-  fresh: boolean
-  /** Null when unsorted, and always for a fresh item. */
+  /** Whether the bar keeps a state for it. Untracked items never hold drinks back. */
+  tracked: boolean
+  untracked_because: UntrackedBecause | null
+  /** Null when unsorted, and always for an untracked item. */
   state: BarState | null
   used_in: DrinkLink[]
   /** A syrup recipe that makes this item. */
@@ -101,14 +106,15 @@ export interface DrinkBar {
   status: DrinkStatus
   missing: string[]
   unsorted: string[]
-  fresh: string[]
+  /** Untracked items the drink also uses; they do not change its status. */
+  untracked: string[]
 }
 
 /** What the bar says about one ingredient of a drink. */
 export interface IngredientBar {
   item: string
   state: BarState | null
-  fresh: boolean
+  tracked: boolean
   recipe: DrinkLink | null
 }
 
@@ -117,8 +123,8 @@ export interface BarChanges {
   have?: string[]
   dont_have?: string[]
   unsorted?: string[]
-  fresh?: string[]
-  not_fresh?: string[]
+  untrack?: string[]
+  track?: string[]
   kinds?: Record<string, Kind>
   add_names?: Record<string, string[]>
   remove_names?: Record<string, string[]>

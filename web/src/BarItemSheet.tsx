@@ -139,7 +139,7 @@ function SheetBody({ item, bar, titleId, onClose, onChange }: SheetBodyProps) {
       )}
 
       <div className="bar-sheet-body">
-        {!item.fresh && (
+        {item.tracked && (
           <div role="radiogroup" aria-label="In the bar" className="bar-sheet-state">
             <button
               type="button"
@@ -234,10 +234,10 @@ function SheetBody({ item, bar, titleId, onClose, onChange }: SheetBodyProps) {
           <button
             type="button"
             role="switch"
-            aria-checked={item.fresh}
+            aria-checked={!item.tracked}
             aria-labelledby={freshId}
             className="bar-switch"
-            onClick={() => void run(item.fresh ? { not_fresh: [item.name] } : { fresh: [item.name] })}
+            onClick={() => void run(item.tracked ? { untrack: [item.name] } : { track: [item.name] })}
           >
             <span className="bar-switch-track" aria-hidden="true">
               <span className="bar-switch-knob" />

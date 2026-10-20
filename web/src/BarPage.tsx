@@ -5,7 +5,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { changeBar, getBar } from './api'
-import { fresh, groupByKind, KIND_LABELS, matchItem, messageOf, shelf, usedText } from './bar'
+import { groupByKind, KIND_LABELS, matchItem, messageOf, shelf, untracked, usedText } from './bar'
 import { BarItemSheet } from './BarItemSheet'
 import { capitalise } from './format'
 import { Back, Basket, Bottle, Check, Chevron, DrinksTab, MinusCircle, More, Plus, Question, Search } from './icons'
@@ -160,7 +160,7 @@ export function BarPage() {
   const visible = (items: BarItem[]) => items.filter((item) => matchItem(item, q).ok)
   const unsortedShown = visible(allUnsorted)
   const sortedShown = visible(bottles.filter((item) => item.state !== null))
-  const freshShown = visible(fresh(bar.items))
+  const freshShown = visible(untracked(bar.items))
   const noMatch = q !== '' && unsortedShown.length + sortedShown.length + freshShown.length === 0
   const canMake = bar.counts.can_make === 1 ? '1 drink' : `${bar.counts.can_make} drinks`
   const sheetItem = open === null ? null : (bar.items.find((item) => item.name === open) ?? null)
@@ -226,7 +226,7 @@ export function BarPage() {
       desktop={desktop}
       problem={problem}
       onAdd={() => add({ have: [q] })}
-      onFresh={() => add({ fresh: [q] })}
+      onFresh={() => add({ untrack: [q] })}
     />
   )
 

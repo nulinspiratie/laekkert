@@ -192,9 +192,9 @@ function BarSummary({ bar, ingredients }: { bar: DrinkBar; ingredients: RecipeIn
   const order = (name: string) => ingredients.findIndex((ing) => (ing.bar?.item ?? ing.item) === name)
   const missing = [...bar.missing, ...bar.unsorted].sort((a, b) => order(a) - order(b))
   const shelf = new Set(
-    ingredients.flatMap((ing) => (ing.bar && !ing.bar.fresh ? [normalise(ing.bar.item)] : [])),
+    ingredients.flatMap((ing) => (ing.bar?.tracked ? [normalise(ing.bar.item)] : [])),
   ).size
-  if (missing.length === 0 && shelf === 0 && bar.fresh.length === 0) return null
+  if (missing.length === 0 && shelf === 0 && bar.untracked.length === 0) return null
   return (
     <p className="ingredients-bar" aria-live="polite">
       {missing.length > 0 ? (
@@ -210,10 +210,10 @@ function BarSummary({ bar, ingredients }: { bar: DrinkBar; ingredients: RecipeIn
           </span>
         )
       )}
-      {bar.fresh.length > 0 && (
+      {bar.untracked.length > 0 && (
         <span className="ingredients-bar-fresh">
           <Basket size={16} strokeWidth={2} />
-          Buy fresh: {bar.fresh.join(', ')}
+          Buy fresh: {bar.untracked.join(', ')}
         </span>
       )}
     </p>
@@ -305,7 +305,7 @@ function DrinkRow({
             </Link>
           )}
         </span>
-        {bar?.fresh ? (
+        {bar && !bar.tracked ? (
           <span className="ingredient-fresh">
             <Basket size={16} strokeWidth={2} />
             {desktop ? 'Fresh, buy when needed' : 'Fresh'}

@@ -7,10 +7,13 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { getBar, listRecipes } from './api'
-import { topFresh, unsorted } from './bar'
+import { unsorted } from './bar'
 import {
+  DRINKS_VIEWS,
   MARK_LABELS,
   SORT_OPTIONS,
+  VIEW_CHIP_LABELS,
+  VIEW_LABELS,
   addTerm,
   applyBrowse,
   browseQuery,
@@ -19,14 +22,13 @@ import {
   facetCounts,
   parseBrowse,
   removeTerm,
-  type BarFilter,
   type BrowseState,
   type SortKey,
 } from './browse'
 import { FilterPanel, FilterSheet, SearchField, type BarSummary } from './FilterPanel'
 import { capitalise } from './format'
 import { HaveField } from './HaveField'
-import { Basket, Bottle, Close, CoupeBasket, Filters, Grid, List, Plus, Question, Search, Shelf } from './icons'
+import { Basket, Bottle, Close, Filters, Grid, List, Plus, Question, Search, Shelf } from './icons'
 import { getView, setLastSide, setView, type View } from './prefs'
 import { RecipeCard, RecipeRow, RecipeTableRow } from './RecipeCard'
 import { PageHeading, Shell } from './Shell'
@@ -51,11 +53,9 @@ function joinOr(terms: string[]): string {
 /** More terms than this and the empty state says "those" instead of naming them. */
 const NAMED_TERMS = 3
 
-const BAR_LABELS: Record<BarFilter, string> = { can: 'Can make now', fresh: 'Only need fresh items' }
-
-/** The desktop drinks result line: "24 drinks · 15 you can make right now", or the bar filter and its count. */
+/** The desktop drinks result line: "24 drinks · 15 you can make right now", or the view and its count. */
 function barLine(state: BrowseState, recipes: RecipeSummary[]): string {
-  if (state.bar) return `${BAR_LABELS[state.bar]} · ${drinksCount(recipes.length)}`
+  if (state.show) return `${VIEW_LABELS[state.show]} · ${drinksCount(recipes.length)}`
   const can = recipes.filter((recipe) => recipe.bar?.status === 'can_make').length
   return `${drinksCount(recipes.length)} · ${can} you can make right now`
 }
@@ -148,9 +148,12 @@ export default function Browse({ side }: { side: Side }) {
     focusHave.current = false
   }, [haveOpen])
 
-  // A bar that failed to load cannot filter: its controls are hidden, so a bar=
+  // A bar that failed to load cannot filter: its controls are hidden, so show=can
   // left in the URL would shorten the list with no way to see or clear it.
-  const shown = useMemo(() => (bar === 'failed' && state.bar ? { ...state, bar: null } : state), [bar, state])
+  const shown = useMemo(
+    () => (bar === 'failed' && state.show === 'can' ? { ...state, show: 'all' as const } : state),
+    [bar, state],
+  )
   const recipes = useMemo(
     () => (loaded ? applyBrowse(loaded.recipes, { ...shown, q: loaded.q, have: loaded.have }) : null),
     [loaded, shown],
@@ -165,32 +168,19 @@ export default function Browse({ side }: { side: Side }) {
   let subtitle = recipes ? `${describe(described)} · ${plural(recipes.length)}` : describe(described)
   if (desktop && barSummary && recipes) subtitle = barLine(state, recipes)
 
-  // The bar filter left nothing, though the other filters leave some drinks.
+  // The Can make view left nothing, though the other filters leave some drinks.
   let empty: ReactNode | undefined
-  if (loaded && recipes?.length === 0 && shown.bar && counts.bar.all > 0) {
-    const link = (patch: Partial<BrowseState>) => {
-      const query = browseQuery({ ...state, ...patch })
-      return `/${side}${query ? `?${query}` : ''}`
-    }
-    const kind =
-      barSummary && !barSummary.setUp
-        ? 'setup'
-        : state.bar === 'can' && counts.bar.fresh > 0
-          ? 'fresh'
-          : 'nothing'
-    const others = applyBrowse(loaded.recipes, { ...state, q: loaded.q, bar: null })
+  if (loaded && recipes?.length === 0 && shown.show === 'can' && counts.views.all > 0) {
+    const query = browseQuery({ ...state, show: 'all' })
+    const kind = barSummary && !barSummary.setUp ? 'setup' : 'nothing'
     // Until the bar has loaded it is not known whether it is set up.
     empty =
       bar === null ? null : (
         <BarEmpty
           kind={kind}
           desktop={desktop}
-          all={counts.bar.all}
-          fresh={counts.bar.fresh}
-          can={state.bar === 'fresh' ? counts.bar.can : 0}
-          top={topFresh(others)}
-          showAll={link({ bar: null })}
-          showFresh={link({ bar: 'fresh' })}
+          all={counts.views.all}
+          showAll={`/${side}${query ? `?${query}` : ''}`}
         />
       )
   }
@@ -405,23 +395,18 @@ function BarChips({
   counts: ReturnType<typeof facetCounts>
   onChange: (patch: Partial<BrowseState>) => void
 }) {
-  const chips: { value: BarFilter | null; label: string }[] = [
-    { value: null, label: `All ${counts.bar.all}` },
-    { value: 'can', label: `Can make ${counts.bar.can}` },
-    { value: 'fresh', label: `Fresh only ${counts.bar.fresh}` },
-  ]
   return (
     <>
       <div role="radiogroup" aria-label="From your bar" className="browse-bar-chips">
-        {chips.map(({ value, label }) => (
+        {DRINKS_VIEWS.map((value) => (
           <button
-            key={value ?? 'all'}
+            key={value}
             type="button"
             role="radio"
-            aria-checked={state.bar === value}
-            onClick={() => onChange({ bar: value })}
+            aria-checked={state.show === value}
+            onClick={() => onChange({ show: value })}
           >
-            {label}
+            {VIEW_CHIP_LABELS[value]} {counts.views[value]}
           </button>
         ))}
       </div>
@@ -439,21 +424,15 @@ function BarChips({
 }
 
 interface BarEmptyProps {
-  kind: 'setup' | 'fresh' | 'nothing'
+  kind: 'setup' | 'nothing'
   desktop: boolean
-  /** Drinks the other filters leave, and of those, the ones that need only fresh items. */
+  /** Drinks the other filters leave. */
   all: number
-  fresh: number
-  /** With "Fresh only" on, the drinks that can be made now (they rule out "Nothing to make yet"). */
-  can: number
-  /** The fresh item most of the fresh-only drinks need. */
-  top: { item: string; count: number } | null
   showAll: string
-  showFresh: string
 }
 
 /** Why the bar filter leaves nothing, and what to do about it. */
-function BarEmpty({ kind, desktop, all, fresh, can, top, showAll, showFresh }: BarEmptyProps) {
+function BarEmpty({ kind, desktop, all, showAll }: BarEmptyProps) {
   const showAllLink = (
     <Link to={showAll} className="browse-bar-empty-alt">
       {all === 1 ? 'Show 1 drink' : `Show all ${all} drinks`}
@@ -476,37 +455,6 @@ function BarEmpty({ kind, desktop, all, fresh, can, top, showAll, showFresh }: B
           <Link to="/bar" className="browse-bar-empty-cta">
             Set up the bar
           </Link>
-          {showAllLink}
-        </>
-      ),
-    }
-  } else if (kind === 'fresh') {
-    const item = top?.item ?? 'something fresh'
-    content = {
-      icon: <CoupeBasket />,
-      title: 'Nothing without a trip to the shop',
-      text:
-        fresh === 1
-          ? `You have the bottles for 1 drink, but it needs something fresh: ${item}.`
-          : `You have the bottles for ${fresh} drinks, but every one needs something fresh.` +
-            (top ? ` ${capitalise(top.item)} covers ${top.count} of them.` : ''),
-      actions: (
-        <>
-          <Link to={showFresh} className="browse-bar-empty-cta">
-            {fresh === 1 ? 'Show the drink that needs fresh items' : `Show the ${fresh} that need fresh items`}
-          </Link>
-          {openBar(false)}
-        </>
-      ),
-    }
-  } else if (can > 0) {
-    content = {
-      icon: <Shelf />,
-      title: 'Nothing needs only fresh items',
-      text: `No drink needs only fresh items right now. You can make ${drinksCount(can)} with what's in the bar.`,
-      actions: (
-        <>
-          {openBar(true)}
           {showAllLink}
         </>
       ),

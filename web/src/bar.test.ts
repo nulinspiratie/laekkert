@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   badge,
-  fresh,
   groupByKind,
   KIND_LABELS,
   KINDS,
@@ -9,17 +8,20 @@ import {
   nameList,
   normalise,
   shelf,
-  topFresh,
+  TRACKED_KINDS,
   unsorted,
+  untracked,
   usedText,
+  withBar,
 } from './bar'
-import type { BarItem, DrinkBar, RecipeSummary } from './types'
+import type { Bar, BarItem, DrinkBar, Recipe } from './types'
 
 function item(over: Partial<BarItem> & { name: string }): BarItem {
   return {
     aliases: [],
     kind: 'spirits',
-    fresh: false,
+    tracked: true,
+    untracked_because: null,
     state: 'have',
     used_in: [],
     recipe: null,
@@ -28,23 +30,7 @@ function item(over: Partial<BarItem> & { name: string }): BarItem {
 }
 
 function drinkBar(over: Partial<DrinkBar> = {}): DrinkBar {
-  return { status: 'can_make', missing: [], unsorted: [], fresh: [], ...over }
-}
-
-function drink(slug: string, bar?: DrinkBar): RecipeSummary {
-  return {
-    slug,
-    name: slug,
-    side: 'drinks',
-    category: 'cocktails',
-    time_minutes: null,
-    tags: [],
-    marks: [],
-    image: null,
-    rating: null,
-    last_made: null,
-    bar,
-  }
+  return { status: 'can_make', missing: [], unsorted: [], untracked: [], ...over }
 }
 
 describe('kinds', () => {
@@ -58,6 +44,12 @@ describe('kinds', () => {
       syrups: 'Syrups',
       other: 'Other',
     })
+  })
+})
+
+describe('tracked kinds', () => {
+  it('is the kinds without syrups', () => {
+    expect(TRACKED_KINDS).toEqual(['spirits', 'liqueurs', 'aperitifs', 'bitters', 'other'])
   })
 })
 
@@ -107,17 +99,18 @@ describe('usedText', () => {
   })
 })
 
-describe('shelf, fresh and unsorted', () => {
+describe('shelf, untracked and unsorted', () => {
   const items = [
     item({ name: 'Gin' }),
     item({ name: 'Rum', state: 'dont' }),
     item({ name: 'Mezcal', state: null }),
-    item({ name: 'Limes', fresh: true, state: null, kind: 'other' }),
+    item({ name: 'Limes', tracked: false, untracked_because: 'marked', state: null, kind: 'other' }),
+    item({ name: 'Simple syrup', tracked: false, untracked_because: 'syrups', state: null, kind: 'syrups' }),
   ]
 
   it('splits the items', () => {
     expect(shelf(items).map((i) => i.name)).toEqual(['Gin', 'Rum', 'Mezcal'])
-    expect(fresh(items).map((i) => i.name)).toEqual(['Limes'])
+    expect(untracked(items).map((i) => i.name)).toEqual(['Limes', 'Simple syrup'])
     expect(unsorted(items).map((i) => i.name)).toEqual(['Mezcal'])
   })
 })
@@ -135,6 +128,11 @@ describe('groupByKind', () => {
       ['liqueurs', ['Cointreau'], 1],
       ['other', ['Salt'], 0],
     ])
+  })
+
+  it('has no group for syrups', () => {
+    const items = [item({ name: 'Gin' }), item({ name: 'Grenadine', kind: 'syrups', tracked: false })]
+    expect(groupByKind(items).map((g) => g.kind)).toEqual(['spirits'])
   })
 
   it('is empty for no items', () => {
@@ -165,10 +163,12 @@ describe('badge', () => {
     expect(badge(drinkBar(), true)).toEqual({ kind: 'can_make', text: 'Can make now' })
   })
 
-  it('names what to buy fresh, shorter on a phone', () => {
-    const bar = drinkBar({ status: 'fresh_only', fresh: ['limes'] })
-    expect(badge(bar, false)).toEqual({ kind: 'fresh_only', text: 'Buy fresh: limes' })
-    expect(badge(bar, true)).toEqual({ kind: 'fresh_only', text: 'Buy: limes' })
+  it('says Also needs when untracked items are left', () => {
+    expect(badge(drinkBar({ untracked: ['lime juice', 'mint', 'soda'] }), false)).toEqual({
+      kind: 'also',
+      text: 'Also needs: lime juice, mint +1',
+    })
+    expect(badge(drinkBar({ untracked: ['limes'] }), true)).toEqual({ kind: 'also', text: 'Also needs: limes' })
   })
 
   it('names what is missing', () => {
@@ -181,35 +181,75 @@ describe('badge', () => {
     expect(badge(bar, true)).toEqual({ kind: 'unsorted', text: 'Not sorted: falernum' })
   })
 
-  it('says a drink can be made even when the lists are filled in', () => {
-    expect(badge(drinkBar({ status: 'can_make', fresh: ['limes'] }), false).text).toBe('Can make now')
+  it('keeps missing ahead of untracked items', () => {
+    const bar = drinkBar({ status: 'missing', missing: ['rum'], untracked: ['limes'] })
+    expect(badge(bar, false).kind).toBe('missing')
   })
 })
 
-describe('topFresh', () => {
-  const needing = (...fresh: string[]) => drink(`d${Math.random()}`, drinkBar({ status: 'fresh_only', fresh }))
+describe('withBar', () => {
+  const ing = (item: string, bar: Recipe['ingredients'][number]['bar']) => ({
+    amount: 30,
+    unit: 'ml' as const,
+    item,
+    note: '',
+    no_scale: false,
+    original: item,
+    g_per_tsp: null,
+    bar,
+  })
+  const recipe = (category: string, ingredients: Recipe['ingredients']): Recipe => ({
+    slug: 'x',
+    name: 'x',
+    side: 'drinks',
+    category,
+    time_minutes: null,
+    tags: [],
+    marks: [],
+    image: null,
+    rating: null,
+    last_made: null,
+    format_version: 1,
+    servings: 1,
+    ingredients,
+    steps: [],
+    source: null,
+    version: 1,
+    bar: null,
+  })
+  const bar: Bar = {
+    set_up: true,
+    counts: { can_make: 0, missing: 0, unsorted: 0, total: 0 },
+    items: [
+      item({ name: 'Rum', state: 'dont' }),
+      item({ name: 'Gin', state: null }),
+      item({ name: 'Limes', tracked: false, untracked_because: 'marked', state: null, kind: 'other' }),
+    ],
+  }
+  const rows = () => [
+    ing('rum', { item: 'Rum', state: 'have', tracked: true, recipe: null }),
+    ing('gin', { item: 'Gin', state: 'have', tracked: true, recipe: null }),
+    ing('limes', { item: 'Limes', state: null, tracked: true, recipe: null }),
+  ]
 
-  it('is null when no drink needs only fresh items', () => {
-    expect(topFresh([])).toBeNull()
-    expect(topFresh([drink('a', drinkBar()), drink('b', drinkBar({ status: 'missing', missing: ['x'] }))])).toBeNull()
-    expect(topFresh([drink('food')])).toBeNull()
+  it('recomputes the bar from the new items', () => {
+    const result = withBar(recipe('cocktails', rows()), bar)
+    expect(result.bar).toEqual({ status: 'missing', missing: ['Rum'], unsorted: ['Gin'], untracked: ['Limes'] })
+    expect(result.ingredients.map((i) => i.bar?.tracked)).toEqual([true, true, false])
   })
 
-  it('returns the fresh item most of the fresh-only drinks need', () => {
-    const list = [needing('limes'), needing('limes', 'mint'), needing('mint', 'limes'), needing('egg white')]
-    expect(topFresh(list)).toEqual({ item: 'limes', count: 3 })
+  it('can make once only untracked items are left', () => {
+    const only = [ing('limes', { item: 'Limes', state: null, tracked: true, recipe: null })]
+    expect(withBar(recipe('mocktails', only), bar).bar).toEqual({
+      status: 'can_make',
+      missing: [],
+      unsorted: [],
+      untracked: ['Limes'],
+    })
   })
 
-  it('ignores drinks that are not fresh-only', () => {
-    const list = [
-      needing('mint'),
-      drink('x', drinkBar({ status: 'missing', missing: ['rum'], fresh: ['limes'] })),
-      drink('y', drinkBar({ status: 'can_make', fresh: ['limes'] })),
-    ]
-    expect(topFresh(list)).toEqual({ item: 'mint', count: 1 })
-  })
-
-  it('breaks ties by the first name alphabetically', () => {
-    expect(topFresh([needing('mint'), needing('limes')])).toEqual({ item: 'limes', count: 1 })
+  it('leaves syrups and prep without a bar', () => {
+    expect(withBar(recipe('syrups', rows()), bar).bar).toBeNull()
+    expect(withBar(recipe('prep', rows()), bar).bar).toBeNull()
   })
 })

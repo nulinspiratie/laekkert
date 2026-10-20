@@ -64,7 +64,7 @@ const drinkBar = (over: Partial<DrinkBar> = {}): DrinkBar => ({
   status: 'can_make',
   missing: [],
   unsorted: [],
-  fresh: [],
+  untracked: [],
   ...over,
 })
 
@@ -73,32 +73,32 @@ function drink(slug: string, name: string, bar: DrinkBar, over: Partial<RecipeSu
 }
 
 const negroni = drink('negroni', 'Negroni', drinkBar(), { marks: ['favourite'] })
-const gimlet = drink('gimlet', 'Gimlet', drinkBar({ status: 'fresh_only', fresh: ['lime juice'] }), {
+const gimlet = drink('gimlet', 'Gimlet', drinkBar({ status: 'can_make', untracked: ['lime juice'] }), {
   marks: ['favourite'],
 })
 const paloma = drink(
   'paloma',
   'Paloma',
-  drinkBar({ status: 'fresh_only', fresh: ['grapefruit', 'lime juice', 'soda water'] }),
+  drinkBar({ status: 'can_make', untracked: ['grapefruit', 'lime juice', 'soda water'] }),
 )
-const maiTai = drink('mai-tai', 'Mai tai', drinkBar({ status: 'missing', missing: ['orgeat'], fresh: ['lime juice'] }))
+const maiTai = drink('mai-tai', 'Mai tai', drinkBar({ status: 'missing', missing: ['orgeat'], untracked: ['lime juice'] }))
 const cornNOil = drink('corn-n-oil', "Corn 'n' oil", drinkBar({ status: 'unsorted', unsorted: ['falernum'] }))
 const drinks = [negroni, gimlet, paloma, maiTai, cornNOil]
 
 function barItem(name: string, state: BarItem['state'], over: Partial<BarItem> = {}): BarItem {
-  return { name, aliases: [], kind: 'spirits', fresh: false, state, used_in: [], recipe: null, ...over }
+  return { name, aliases: [], kind: 'spirits', tracked: true, untracked_because: null, state, used_in: [], recipe: null, ...over }
 }
 
 function bar(items: BarItem[]): Bar {
   return {
     items,
     set_up: items.some((item) => item.state !== null),
-    counts: { can_make: 0, fresh_only: 0, missing: 0, unsorted: 0, total: 0 },
+    counts: { can_make: 0, missing: 0, unsorted: 0, total: 0 },
   }
 }
 
 /** Set up, everything sorted. */
-const SORTED_BAR = bar([barItem('gin', 'have'), barItem('orgeat', 'dont'), barItem('limes', null, { fresh: true })])
+const SORTED_BAR = bar([barItem('gin', 'have'), barItem('orgeat', 'dont'), barItem('limes', null, { tracked: false, untracked_because: 'marked' })])
 
 function listing(recipes: RecipeSummary[]) {
   return new Response(JSON.stringify({ recipes }), { status: 200 })
@@ -795,7 +795,7 @@ test('shows the set-up empty state', async () => {
 })
 
 test('shows the fresh-only empty state', async () => {
-  const sour = drink('whisky-sour', 'Whisky sour', drinkBar({ status: 'fresh_only', fresh: ['lemons'] }))
+  const sour = drink('whisky-sour', 'Whisky sour', drinkBar({ status: 'can_make', untracked: ['lemons'] }))
   stubFetch([gimlet, paloma, sour, maiTai])
   renderAt('/drinks?bar=can')
   expect(await screen.findByRole('heading', { name: 'Nothing without a trip to the shop' })).toBeInTheDocument()

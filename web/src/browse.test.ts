@@ -6,11 +6,15 @@ import {
   CATEGORIES,
   defaultQuery,
   describe,
+  DRINKS_VIEWS,
   facetCounts,
   haveKey,
+  hiddenMatches,
   MARK_LABELS,
   parseBrowse,
   removeTerm,
+  VIEW_CHIP_LABELS,
+  VIEW_LABELS,
   type BrowseState,
 } from './browse'
 import type { DrinkBar, DrinkStatus, RecipeSummary } from './types'
@@ -31,7 +35,7 @@ function recipe(over: Partial<RecipeSummary> & { slug: string }): RecipeSummary 
 }
 
 function state(over: Partial<BrowseState> = {}): BrowseState {
-  return { q: '', category: null, marks: [], tags: [], sort: 'name', bar: null, have: [], ...over }
+  return { q: '', category: null, marks: [], tags: [], sort: 'name', show: null, have: [], ...over }
 }
 
 const parse = (side: 'food' | 'drinks', query: string) =>
@@ -71,7 +75,7 @@ suite('parseBrowse', () => {
   it('drops a category that does not belong to the side', () => {
     expect(parse('food', 'cat=soups').category).toBeNull()
     expect(parse('food', 'cat=cocktails').category).toBeNull()
-    expect(parse('drinks', 'cat=cocktails').category).toBe('cocktails')
+    expect(parse('drinks', 'cat=cocktails').category).toBeNull()
   })
 
   it('drops unknown marks, including marks that are not filters', () => {
@@ -315,57 +319,123 @@ suite('facetCounts', () => {
   })
 })
 
-const status = (kind: DrinkStatus): DrinkBar => ({ status: kind, missing: [], unsorted: [], fresh: [] })
+const status = (kind: DrinkStatus): DrinkBar => ({ status: kind, missing: [], unsorted: [], untracked: [] })
 
 const drinks = (): RecipeSummary[] => [
-  recipe({ slug: 'a', side: 'drinks', category: 'cocktails', bar: status('can_make') }),
-  recipe({ slug: 'b', side: 'drinks', category: 'cocktails', bar: status('fresh_only') }),
-  recipe({ slug: 'c', side: 'drinks', category: 'mocktails', bar: status('fresh_only'), marks: ['favourite'] }),
-  recipe({ slug: 'd', side: 'drinks', category: 'cocktails', bar: status('missing') }),
-  recipe({ slug: 'e', side: 'drinks', category: 'syrups', bar: status('unsorted') }),
+  recipe({ slug: 'daiquiri', side: 'drinks', category: 'cocktails', bar: status('can_make') }),
+  recipe({ slug: 'negroni', side: 'drinks', category: 'cocktails', bar: status('missing'), marks: ['favourite'] }),
+  recipe({ slug: 'virgin mojito', side: 'drinks', category: 'mocktails', bar: status('can_make') }),
+  recipe({ slug: 'simple syrup', side: 'drinks', category: 'syrups', bar: null }),
+  recipe({ slug: 'oleo', side: 'drinks', category: 'prep', bar: null }),
 ]
 
-suite('the bar filter', () => {
-  it('reads bar on drinks', () => {
-    expect(parse('drinks', 'bar=can').bar).toBe('can')
-    expect(parse('drinks', 'bar=fresh').bar).toBe('fresh')
-    expect(parse('drinks', '').bar).toBeNull()
-    expect(parse('drinks', 'bar=other').bar).toBeNull()
+suite('drinks views', () => {
+  it('lists the views in order with desktop and phone labels', () => {
+    expect(DRINKS_VIEWS).toEqual(['can', 'all', 'mocktails', 'syrups'])
+    expect(VIEW_LABELS).toEqual({
+      can: 'Can make',
+      all: 'All drinks',
+      mocktails: 'Mocktails',
+      syrups: 'Syrups & prep',
+    })
+    expect(VIEW_CHIP_LABELS).toEqual({ can: 'Can make', all: 'All', mocktails: 'Mocktails', syrups: 'Syrups' })
   })
 
-  it('ignores bar on food and never writes it', () => {
-    expect(parse('food', 'bar=can').bar).toBeNull()
-    expect(browseQuery(state({ bar: 'can' }))).toBe('bar=can')
-    expect(browseQuery(parse('food', 'bar=can&cat=mains'))).toBe('cat=mains')
+  it.each([
+    ['', 'can'],
+    ['show=all', 'all'],
+    ['show=nope', 'can'],
+    ['bar=fresh', 'can'],
+    ['bar=can', 'can'],
+    ['cat=cocktails', 'all'],
+    ['cat=mocktails', 'mocktails'],
+    ['cat=prep', 'syrups'],
+    ['cat=syrups', 'syrups'],
+    ['bar=can&cat=mocktails', 'mocktails'],
+    ['show=all&cat=syrups', 'all'],
+  ])('parses %s as view %s', (query, view) => {
+    expect(parse('drinks', query).show).toBe(view)
+  })
+
+  it('never keeps a category on drinks', () => {
+    expect(parse('drinks', 'cat=mocktails').category).toBeNull()
+  })
+
+  it('writes old params back as show', () => {
+    const old = parse('drinks', 'bar=can&cat=mocktails')
+    expect(browseQuery(old)).toBe('show=mocktails')
+    expect(browseQuery({ ...old, show: 'can' })).toBe('')
   })
 
   it('round-trips through the query', () => {
-    const query = 'cat=cocktails&mark=favourite&tag=sour&sort=rating&bar=fresh'
+    const query = 'mark=favourite&tag=sour&sort=rating&show=syrups'
     expect(browseQuery(parse('drinks', query))).toBe(query)
   })
 
-  it('keeps only the drinks the bar filter names', () => {
-    const names = (bar: BrowseState['bar']) => applyBrowse(drinks(), state({ bar })).map((r) => r.slug)
-    expect(names(null)).toEqual(['a', 'b', 'c', 'd', 'e'])
-    expect(names('can')).toEqual(['a'])
-    expect(names('fresh')).toEqual(['b', 'c'])
+  it('has no view on food and never writes one', () => {
+    expect(parse('food', 'show=all').show).toBeNull()
+    expect(parse('food', 'show=all&cat=mains')).toEqual(state({ category: 'mains' }))
+    expect(browseQuery(state({ show: 'all' }))).toBe('show=all')
+    expect(browseQuery(parse('food', 'show=all&cat=mains'))).toBe('cat=mains')
+  })
+
+  it('filters by category and status', () => {
+    const names = (show: BrowseState['show']) => applyBrowse(drinks(), state({ show })).map((r) => r.slug)
+    expect(names('can')).toEqual(['daiquiri', 'virgin mojito'])
+    expect(names('all')).toEqual(['daiquiri', 'negroni', 'virgin mojito'])
+    expect(names('mocktails')).toEqual(['virgin mojito'])
+    expect(names('syrups')).toEqual(['oleo', 'simple syrup'])
   })
 
   it('combines with the other filters', () => {
-    const kept = applyBrowse(drinks(), state({ bar: 'fresh', category: 'cocktails' }))
-    expect(kept.map((r) => r.slug)).toEqual(['b'])
+    const kept = applyBrowse(drinks(), state({ show: 'all', marks: ['favourite'] }))
+    expect(kept.map((r) => r.slug)).toEqual(['negroni'])
   })
 
-  it('counts every drink, the makeable ones and the fresh-only ones', () => {
-    expect(facetCounts('drinks', drinks()).bar).toEqual({ all: 5, can: 1, fresh: 2 })
-    expect(facetCounts('drinks', []).bar).toEqual({ all: 0, can: 0, fresh: 0 })
+  it('counts each view with the other filters applied', () => {
+    expect(facetCounts('drinks', drinks(), state({ show: 'can' })).views).toEqual({
+      can: 2,
+      all: 3,
+      mocktails: 1,
+      syrups: 2,
+    })
+    expect(facetCounts('drinks', drinks()).views).toEqual({ can: 2, all: 3, mocktails: 1, syrups: 2 })
+    expect(facetCounts('drinks', []).views).toEqual({ can: 0, all: 0, mocktails: 0, syrups: 0 })
+    expect(facetCounts('drinks', drinks(), state({ marks: ['favourite'] })).views).toEqual({
+      can: 0,
+      all: 1,
+      mocktails: 0,
+      syrups: 0,
+    })
+  })
+})
+
+suite('hiddenMatches', () => {
+  const searching = (over: Partial<BrowseState>) => state({ q: 'x', show: 'can', ...over })
+
+  it('points at All drinks first', () => {
+    expect(hiddenMatches(drinks(), searching({ q: 'negroni' }))).toEqual({ view: 'all', count: 1 })
+    expect(hiddenMatches(drinks(), searching({ show: 'mocktails' }))).toEqual({ view: 'all', count: 2 })
+    expect(hiddenMatches(drinks(), searching({ show: 'syrups' }))).toEqual({ view: 'all', count: 3 })
   })
 
-  it('counts with the other filters applied but not the bar filter', () => {
-    const counts = (over: Partial<BrowseState>) => facetCounts('drinks', drinks(), state(over)).bar
-    expect(counts({ category: 'cocktails' })).toEqual({ all: 3, can: 1, fresh: 1 })
-    expect(counts({ marks: ['favourite'] })).toEqual({ all: 1, can: 0, fresh: 1 })
-    expect(counts({ bar: 'can' })).toEqual({ all: 5, can: 1, fresh: 2 })
+  it('then at Syrups & prep', () => {
+    const syrups = drinks().filter((r) => r.category === 'syrups')
+    expect(hiddenMatches(syrups, searching({ q: 'syrup' }))).toEqual({ view: 'syrups', count: 1 })
+    const cocktails = drinks().filter((r) => r.slug !== 'negroni')
+    expect(hiddenMatches(cocktails, searching({ show: 'all' }))).toEqual({ view: 'syrups', count: 2 })
+  })
+
+  it('applies the other filters', () => {
+    expect(hiddenMatches(drinks(), searching({ marks: ['try_next'] }))).toBeNull()
+    expect(hiddenMatches(drinks(), searching({ marks: ['favourite'] }))).toEqual({ view: 'all', count: 1 })
+  })
+
+  it('is null without a search, with nothing hidden, or on food', () => {
+    expect(hiddenMatches(drinks(), state({ show: 'can' }))).toBeNull()
+    expect(hiddenMatches(drinks().slice(0, 1), searching({}))).toBeNull()
+    expect(hiddenMatches([], searching({}))).toBeNull()
+    expect(hiddenMatches(drinks(), state({ q: 'x', show: null }))).toBeNull()
   })
 })
 

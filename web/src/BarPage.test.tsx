@@ -5,7 +5,7 @@ import App from './App'
 import type { Bar, BarChanges, BarItem } from './types'
 
 function item(over: Partial<BarItem> & { name: string }): BarItem {
-  return { aliases: [], kind: 'other', fresh: false, state: null, used_in: [], recipe: null, ...over }
+  return { aliases: [], kind: 'other', tracked: true, untracked_because: null, state: null, used_in: [], recipe: null, ...over }
 }
 
 const drink = (slug: string, name: string) => ({ slug, name })
@@ -14,9 +14,9 @@ const ITEMS: BarItem[] = [
   item({ name: 'absinthe', kind: 'liqueurs', state: 'have' }),
   item({ name: 'campari', kind: 'aperitifs', state: 'have', used_in: [drink('negroni', 'Negroni')] }),
   item({ name: 'crème de violette', kind: 'liqueurs', used_in: [drink('aviation', 'Aviation')] }),
-  item({ name: 'lime juice', fresh: true, used_in: [drink('daiquiri', 'Daiquiri')] }),
+  item({ name: 'lime juice', tracked: false, untracked_because: 'marked', used_in: [drink('daiquiri', 'Daiquiri')] }),
   item({ name: 'mezcal', kind: 'spirits', state: 'dont', used_in: [drink('naked-and-famous', 'Naked and famous')] }),
-  item({ name: 'mint', fresh: true, used_in: [drink('mojito', 'Mojito')] }),
+  item({ name: 'mint', tracked: false, untracked_because: 'marked', used_in: [drink('mojito', 'Mojito')] }),
   item({ name: 'orgeat', kind: 'syrups', used_in: [drink('mai-tai', 'Mai tai')] }),
   item({
     name: 'white rum',
@@ -30,13 +30,13 @@ const ITEMS: BarItem[] = [
 const everyday: Bar = {
   items: ITEMS,
   set_up: true,
-  counts: { can_make: 3, fresh_only: 2, missing: 1, unsorted: 2, total: 8 },
+  counts: { can_make: 3, missing: 1, unsorted: 2, total: 8 },
 }
 
 const firstVisit: Bar = {
   items: ITEMS.map((it) => ({ ...it, state: null })),
   set_up: false,
-  counts: { can_make: 0, fresh_only: 0, missing: 0, unsorted: 8, total: 8 },
+  counts: { can_make: 0, missing: 0, unsorted: 8, total: 8 },
 }
 
 /** The bar with one item changed, as the server would send it back. */
@@ -277,7 +277,7 @@ test('offers to add a bottle with no match', async () => {
 })
 
 test('adds a fresh item', async () => {
-  const added = { ...everyday, items: [...ITEMS, item({ name: 'egg white', fresh: true })] }
+  const added = { ...everyday, items: [...ITEMS, item({ name: 'egg white', tracked: false, untracked_because: 'marked' })] }
   const fetch = stubBar(everyday, () => json(added))
   await openBar()
   const search = screen.getByRole('searchbox', { name: 'Find a bottle' })
@@ -429,7 +429,9 @@ describe('the item sheet', () => {
   test('moves an item to fresh', async () => {
     let bar = everyday
     const { fetch, dialog } = await openSheet('White rum', everyday, (body) => {
-      bar = withItem(bar, 'white rum', body.fresh ? { fresh: true, state: null } : { fresh: false })
+      bar = withItem(bar, 'white rum', body.untrack
+          ? { tracked: false, untracked_because: 'marked', state: null }
+          : { tracked: true, untracked_because: null })
       return json(bar)
     })
     const fresh = within(dialog).getByRole('switch', { name: 'Fresh item' })
