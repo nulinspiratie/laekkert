@@ -574,7 +574,8 @@ describe('history', () => {
     stubApiWith({ recipes: [traybake], timeline: { entries, current_version: null } })
     renderAt(TRAYBAKE_PATH)
     await loaded()
-    const items = within(await screen.findByRole('list', { name: 'Timeline' })).getAllByRole('listitem')
+    // The list renders empty until the timeline arrives, so wait for its items, not the list.
+    const items = await within(await screen.findByRole('list', { name: 'Timeline' })).findAllByRole('listitem')
     expect(items[0]).toHaveTextContent('Made it')
     expect(items[0]).toHaveTextContent('With rice')
     expect(items[0].querySelector('[role="img"][aria-label="Rated 4.0 out of 5"]')).not.toBeNull()
