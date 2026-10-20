@@ -1,7 +1,7 @@
 # Lækkert
 
 Lækkert is a recipe app for food and drinks, kept as separate sides, that runs on Serwan's
-NAS and that Claude can read and (later) edit over MCP. The PoC plan is in
+NAS and that Claude can search, add and edit over MCP. The PoC plan is in
 [`docs/plan.md`](docs/plan.md); the rules an agent follows are in [`CLAUDE.md`](CLAUDE.md).
 
 Made from `nulinspiratie/nas-app-template`; the notes below on how such an app deploys

@@ -1,4 +1,4 @@
-"""MCP server, so Claude (claude.ai on the phone included) can read recipes."""
+"""MCP server, so Claude (on the phone too) can read, add and edit recipes."""
 
 import logging
 import re
