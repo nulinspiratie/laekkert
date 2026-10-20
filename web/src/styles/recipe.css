@@ -387,7 +387,8 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  --stack-gap: 14px;
+  gap: var(--stack-gap);
   padding: 18px 16px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -524,7 +525,8 @@
   --state-fresh: #6a460c;
   --state-unsorted: #6c7368;
   padding-bottom: 8px;
-  gap: 12px;
+  --stack-gap: 12px;
+  gap: var(--stack-gap);
 }
 
 .ingredients-bar {
@@ -694,7 +696,8 @@
 .method {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  --stack-gap: 18px;
+  gap: var(--stack-gap);
 }
 
 .method ol {
@@ -736,7 +739,9 @@
 /* ---- Group headings (ingredients and method) and the notes ---- */
 
 .group-heading {
-  margin: 20px 0 0;
+  /* 20px above the heading in all: the card's own flex gap (--stack-gap) is
+     already part of it. */
+  margin: calc(20px - var(--stack-gap, 0px)) 0 0;
   padding-bottom: 6px;
   border-bottom: 1px solid var(--border);
   color: var(--accent-ink);
@@ -757,7 +762,7 @@
 /* An ungrouped run after a group: the same rule, with no heading. */
 .group-rule {
   height: 0;
-  margin: 20px 0 0;
+  margin: calc(20px - var(--stack-gap, 0px)) 0 0;
   padding: 0;
   border: 0;
   border-bottom: 1px solid var(--border);
@@ -931,7 +936,8 @@
   .ingredients {
     flex: 1 1 360px;
     max-width: 440px;
-    gap: 18px;
+    --stack-gap: 18px;
+    gap: var(--stack-gap);
     padding: 24px;
   }
 
@@ -964,7 +970,8 @@
   .ingredients--drinks {
     flex-basis: 400px;
     max-width: 520px;
-    gap: 14px;
+    --stack-gap: 14px;
+    gap: var(--stack-gap);
     padding: 24px 22px 10px;
   }
 
@@ -1003,7 +1010,8 @@
   }
 
   .method {
-    gap: 20px;
+    --stack-gap: 20px;
+    gap: var(--stack-gap);
   }
 
   .method ol {
