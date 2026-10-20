@@ -653,6 +653,113 @@
   color: var(--muted);
 }
 
+/* ---- What you have ---- */
+
+.have-field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.have-input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 16px;
+}
+
+.have-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.have-hint {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.have-terms {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.have-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.have-chip {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding-left: 14px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-soft-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.have-chip-text {
+  overflow-wrap: anywhere;
+}
+
+.have-chip-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+}
+
+.have-clear {
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--accent-ink);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.have-panel {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.browse-head-btn[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.browse-empty h2 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 24px;
+  line-height: 1.15;
+  color: var(--text);
+}
+
 /* ---- Empty state ---- */
 
 .browse-empty {
@@ -1010,6 +1117,28 @@ a.browse-head-btn {
   border: 1.5px dashed #6c7368;
   background: #fbf8f0;
   color: #4b5248;
+}
+
+/* "What you have" badges: food colours from the theme, an icon and words. They sit where
+   the drinks badges sit and keep to one line, the full list being in the title. */
+
+.bar-badge--have_all {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.bar-badge--have_missing {
+  border: 1.5px dashed var(--text);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.bar-badge--have_all > span,
+.bar-badge--have_missing > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Why the bar filter leaves nothing (DrinksNoBar, DrinksFilterEmpty). */

@@ -1,9 +1,13 @@
 import type { Bar, BarChanges, Mark, NewEntry, Recipe, RecipeDraft, RecipeSummary, Side, TimelineEntry } from './types'
 
-/** All of a side's recipes, or only the matches for `q` (best match first). */
-export async function listRecipes(side: Side, q?: string): Promise<RecipeSummary[]> {
+/**
+ * All of a side's recipes, or only the matches for `q` (best match first). With `have` terms
+ * (food only) the recipes that use at least one, fewest missing first.
+ */
+export async function listRecipes(side: Side, q?: string, have: string[] = []): Promise<RecipeSummary[]> {
   const params = new URLSearchParams({ side })
   if (q) params.set('q', q)
+  for (const term of have) params.append('have', term)
   const response = await fetch(`/api/recipes?${params}`)
   if (!response.ok) throw new Error(`listing ${side} failed: ${response.status}`)
   const body: { recipes: RecipeSummary[] } = await response.json()

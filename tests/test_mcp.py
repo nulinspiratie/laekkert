@@ -33,6 +33,8 @@ def test_tools_listed(client):
         "list_recipes",
         "read_bar",
         "manage_inventory",
+        "list_ingredients",
+        "merge_ingredients",
         "read_recipe",
         "search_recipes",
         "add_recipe",
@@ -197,6 +199,43 @@ def test_search_unknown_category_is_empty_not_error(client):
     res = search(client, category="nonsense")
     assert res["isError"] is False
     assert slugs(res) == []
+
+
+def test_search_have(client):
+    res = search(client, have=["chicken", "leeks"], sort="name")
+    assert slugs(res) == ["chicken-leek-traybake"]
+    first = res["structuredContent"]["result"][0]
+    assert first["have"] == {
+        "matched": ["chicken thighs", "leeks"],
+        "missing": ["baby potatoes", "olive oil", "smoked paprika", "lemon"],
+    }
+
+
+def test_search_have_ranks_instead_of_sorting_then_limits(client):
+    res = search(client, have=["onion", "chicken"], sort="name", limit=1)
+    assert len(slugs(res)) == 1
+    assert slugs(search(client, have=["onion", "chicken"])) == slugs(
+        search(client, have=["onion", "chicken"], sort="time")
+    )
+
+
+def test_search_have_narrows_with_filters(client):
+    assert slugs(search(client, have=["onion"], query="traybake")) == []
+    assert slugs(search(client, have=["onion"], query="dal")) == ["red-lentil-dal"]
+
+
+def test_search_blank_have_is_no_terms(client):
+    res = search(client, have=["", "  "])
+    assert slugs(res) == slugs(search(client))
+    assert all("have" not in r for r in res["structuredContent"]["result"])
+
+
+def test_search_have_on_drinks_is_refused(client):
+    res = call(client, "search_recipes", {"side": "drinks", "have": ["lime"]})
+    assert res["isError"] is True
+    assert '"What you have" is for food only.' in res["content"][0]["text"]
+    blank = call(client, "search_recipes", {"side": "drinks", "have": [" "]})
+    assert blank["isError"] is False
 
 
 def test_search_rejects_unknown_side(client):

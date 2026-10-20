@@ -30,6 +30,12 @@ export interface Source {
   photo: string | null
 }
 
+/** Which of a recipe's ingredients the "what you have" terms cover, as the rows are written. */
+export interface HaveMatch {
+  matched: string[]
+  missing: string[]
+}
+
 export interface RecipeSummary {
   slug: string
   name: string
@@ -45,6 +51,8 @@ export interface RecipeSummary {
   last_made: string | null
   /** Drinks only: what the bar says about making this drink. */
   bar?: DrinkBar
+  /** Food only, and only when the request had `have` terms. */
+  have?: HaveMatch
 }
 
 export interface Recipe extends RecipeSummary {

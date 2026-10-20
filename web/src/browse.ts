@@ -1,5 +1,6 @@
 // Browse state: what the recipe list shows, kept in the URL query string.
 
+import { normalise } from './bar'
 import type { DrinkStatus, Mark, RecipeSummary, Side } from './types'
 
 export type FilterMark = Extract<Mark, 'favourite' | 'try_next'>
@@ -15,7 +16,12 @@ export interface BrowseState {
   sort: SortKey
   /** Drinks only; always null on food. */
   bar: BarFilter | null
+  /** "What you have": ingredient terms, in the order given. Food only; always [] on drinks. */
+  have: string[]
 }
+
+/** The server caps the list; the rest are ignored. */
+export const MAX_HAVE_TERMS = 20
 
 /** The sort choices the browse page offers, in display order. */
 export const SORT_OPTIONS: readonly { key: SortKey; label: string }[] = [
@@ -42,6 +48,40 @@ const BAR_PARAMS: readonly BarFilter[] = ['can', 'fresh']
 
 const BAR_STATUS: Record<BarFilter, DrinkStatus> = { can: 'can_make', fresh: 'fresh_only' }
 
+/** The client's copy of the server's `name_key`: terms with the same key are one term. */
+export function haveKey(term: string): string {
+  return normalise(term)
+}
+
+/** Trims, drops blanks, keeps the first of terms sharing a key, and stops at the cap. */
+function cleanTerms(terms: string[]): string[] {
+  const seen = new Set<string>()
+  const kept: string[] = []
+  for (const raw of terms) {
+    const term = raw.trim()
+    const key = haveKey(term)
+    if (key === '' || seen.has(key)) continue
+    seen.add(key)
+    kept.push(term)
+    if (kept.length === MAX_HAVE_TERMS) break
+  }
+  return kept
+}
+
+/** Adds a typed term; blank text, a repeat (by key) and a full list leave the state as it is. */
+export function addTerm(state: BrowseState, text: string): BrowseState {
+  const have = cleanTerms([...state.have, text])
+  const added = have.length === state.have.length + 1
+  return added ? { ...state, have } : state
+}
+
+/** Removes the term (matched by key); the state is returned as it was if it is not there. */
+export function removeTerm(state: BrowseState, term: string): BrowseState {
+  const key = haveKey(term)
+  const have = state.have.filter((other) => haveKey(other) !== key)
+  return have.length === state.have.length ? state : { ...state, have }
+}
+
 export function parseBrowse(side: Side, params: URLSearchParams): BrowseState {
   const cat = params.get('cat')
   const picked = params.getAll('mark')
@@ -52,6 +92,7 @@ export function parseBrowse(side: Side, params: URLSearchParams): BrowseState {
     tags: [...new Set(params.getAll('tag').filter((tag) => tag !== ''))],
     sort: SORT_OPTIONS.find(({ key }) => key === params.get('sort'))?.key ?? 'name',
     bar: side === 'drinks' ? BAR_PARAMS.find((value) => value === params.get('bar')) ?? null : null,
+    have: side === 'food' ? cleanTerms(params.getAll('have')) : [],
   }
 }
 
@@ -63,6 +104,7 @@ export function browseQuery(state: BrowseState): string {
   for (const tag of state.tags) params.append('tag', tag)
   if (state.sort !== 'name') params.append('sort', state.sort)
   if (state.bar) params.append('bar', state.bar)
+  for (const term of state.have) params.append('have', term)
   return params.toString()
 }
 
@@ -117,8 +159,8 @@ export function applyBrowse(recipes: RecipeSummary[], state: BrowseState): Recip
       matchesOtherFilters(recipe, state) &&
       (state.bar === null || recipe.bar?.status === BAR_STATUS[state.bar]),
   )
-  // A search keeps the API's relevance order.
-  if (state.q) return kept
+  // A search or a "what you have" list keeps the API's order (relevance, or fewest missing).
+  if (state.q || state.have.length > 0) return kept
   return kept.sort(SORTERS[state.sort])
 }
 
@@ -131,7 +173,8 @@ const SORT_DESCRIPTIONS: Record<SortKey, string> = {
 
 export function describe(state: BrowseState): string {
   const parts: string[] = state.marks.map((mark) => MARK_LABELS[mark])
-  if (state.q) parts.push('best match first')
+  if (state.have.length > 0) parts.push('fewest missing first')
+  else if (state.q) parts.push('best match first')
   else parts.push(SORT_DESCRIPTIONS[state.sort])
   return parts.join(', ')
 }

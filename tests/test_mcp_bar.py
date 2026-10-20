@@ -170,7 +170,7 @@ def test_instructions_mention_bar(client):
         },
     )
     instructions = r.json()["result"]["instructions"]
-    assert instructions.endswith(
+    assert (
         " Drinks have a bar of bottles the household has or doesn't have "
         "(read_bar, manage_inventory); fresh items such as limes are never tracked."
-    )
+    ) in instructions

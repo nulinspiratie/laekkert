@@ -1,6 +1,6 @@
 // One recipe in the browse page, three ways: a grid card, a phone list row and a
 // desktop table row. All are links to the recipe. Drinks also wear what the bar
-// says about them.
+// says about them; food wears what is missing for a "what you have" list.
 
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
@@ -8,6 +8,7 @@ import { badge } from './bar'
 import { MARK_LABELS, type FilterMark } from './browse'
 import { capitalise, formatTime } from './format'
 import { Basket, Bookmark, Check, Chevron, Clock, Heart, MinusCircle, Question, Star } from './icons'
+import { haveBadge } from './haveBadge'
 import { PhotoTile } from './PhotoTile'
 import type { DrinkStatus, RecipeSummary } from './types'
 import { useIsDesktop } from './useIsDesktop'
@@ -60,6 +61,23 @@ function BarBadge({ recipe }: { recipe: RecipeSummary }) {
   )
 }
 
+/** "Have everything" or "Missing: a, b +2" when the list came with "what you have" terms. */
+function HaveBadge({ recipe }: { recipe: RecipeSummary }) {
+  if (!recipe.have) return null
+  const { text, label, complete } = haveBadge(recipe.have)
+  return (
+    <span
+      className={`bar-badge bar-badge--${complete ? 'have_all' : 'have_missing'}`}
+      role="img"
+      aria-label={label}
+      title={label}
+    >
+      {complete ? <Check size={15} strokeWidth={2.5} /> : <MinusCircle size={15} />}
+      <span>{text}</span>
+    </span>
+  )
+}
+
 const href = (recipe: RecipeSummary) => `/${recipe.side}/${encodeURIComponent(recipe.slug)}`
 
 /** The recipe page's back link returns to the browse query the visitor came from. */
@@ -80,6 +98,7 @@ export function RecipeCard({ recipe }: { recipe: RecipeSummary }) {
           size="card"
         />
         <BarBadge recipe={recipe} />
+        <HaveBadge recipe={recipe} />
       </div>
       <div className="recipe-card-body">
         <div className="recipe-card-eyebrow">{capitalise(recipe.category)}</div>
@@ -120,6 +139,7 @@ export function RecipeRow({ recipe }: { recipe: RecipeSummary }) {
           <RatingBadge rating={recipe.rating} size={14} />
         </span>
         <BarBadge recipe={recipe} />
+        <HaveBadge recipe={recipe} />
       </div>
       <MarkIcons recipe={recipe} size={18} />
     </Link>
@@ -145,6 +165,7 @@ export function RecipeTableRow({ recipe }: { recipe: RecipeSummary }) {
           <RatingBadge rating={recipe.rating} size={14} />
         </span>
         <BarBadge recipe={recipe} />
+        <HaveBadge recipe={recipe} />
       </div>
       <span className="recipe-time">
         {recipe.time_minutes !== null && (

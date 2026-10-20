@@ -7,6 +7,7 @@ import {
   deleteRecipe,
   getBar,
   getTimeline,
+  listRecipes,
   restoreVersion,
   setMarks,
   updateRecipe,
@@ -175,4 +176,20 @@ test('changeBar throws ApiError carrying the refusal sentence', async () => {
     message: 'Only items no drink uses can be deleted.',
     status: 400,
   })
+})
+
+test('listRecipes sends each have term in order', async () => {
+  const fetch = stubFetch(() => json({ recipes: [] }))
+  await listRecipes('food', undefined, ['chicken', 'leeks'])
+  expect(fetch.mock.calls[0][0]).toBe('/api/recipes?side=food&have=chicken&have=leeks')
+})
+
+test('listRecipes sends q with have, and neither when absent', async () => {
+  const fetch = stubFetch(() => json({ recipes: [] }))
+  await listRecipes('food', 'soup', ['leeks'])
+  await listRecipes('food')
+  await listRecipes('food', undefined, [])
+  expect(fetch.mock.calls[0][0]).toBe('/api/recipes?side=food&q=soup&have=leeks')
+  expect(fetch.mock.calls[1][0]).toBe('/api/recipes?side=food')
+  expect(fetch.mock.calls[2][0]).toBe('/api/recipes?side=food')
 })

@@ -26,6 +26,7 @@ from starlette.routing import Route
 from app.recipes.bar import Bar, BarChanges, BarView, InventoryUnavailable
 from app.recipes.catalog import Catalog, CatalogUnavailable
 from app.recipes.drafts import parse_draft
+from app.recipes.have import HAVE_FOOD_ONLY, clean_terms, rank
 from app.recipes.model import SIDES, Mark, Recipe
 from app.recipes.search import search
 from app.recipes.store import RATING_RANGE, RecipeStore, SaveIncomplete, VersionConflict
@@ -220,13 +221,21 @@ def api_routes(
             body = with_bar(body, recipe, bar.view())
         return body
 
-    def summaries(side: str, query: str) -> list[dict]:
+    def summaries(side: str, query: str, terms: list[str]) -> list[dict]:
         everything = store.list(side)
         # The bar view takes the same read of every drink as the list.
         view = bar.view(everything) if side == "drinks" else None
+        searched = search(everything, query)
+        haves = {}
+        if terms:
+            ranked = rank(searched, terms, catalog)
+            searched = [r for r, _ in ranked]
+            haves = {r.slug: m.json() for r, m in ranked}
         found = []
-        for r in search(everything, query):
+        for r in searched:
             summary = {**r.summary(), **store.derived(side, r.slug)}
+            if r.slug in haves:
+                summary["have"] = haves[r.slug]
             found.append(summary if view is None else with_bar(summary, r, view))
         return found
 
@@ -235,8 +244,11 @@ def api_routes(
         if side not in SIDES:
             return error("side must be food or drinks", 400)
         query = request.query_params.get("q", "")
+        terms = clean_terms(request.query_params.getlist("have"))
+        if terms and side != "food":
+            return error(HAVE_FOOD_ONLY, 400)
         return JSONResponse(
-            {"recipes": await run_in_threadpool(summaries, side, query)}
+            {"recipes": await run_in_threadpool(summaries, side, query, terms)}
         )
 
     def read_detail(side: str, slug: str) -> dict | None:

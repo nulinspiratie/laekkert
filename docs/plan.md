@@ -195,10 +195,54 @@ Rulings made on the way:
   tsp / g-ml toggle stays; the syrup link is 44 px; undo restores the exact previous state
   and stays until it is used or replaced; a refusal shows at its row.
 
+### M5: Cook with what you have, and merging ingredients
+
+**Done** (2026-10-20). Spec: `docs/superpowers/specs/2026-10-20-m5-have-and-merge-design.md`.
+
+- **Cook with what you have (Food).** You list what's in the fridge ("chicken", "leeks").
+  The food list keeps the recipes that use at least one of them and ranks them by fewest
+  missing ingredients. Each card says "Have everything" or "Missing: …".
+  - A term matches a row when both resolve to the same catalog entry, or when every word of
+    the term matches a word of the row's names. Long words match fuzzily; short words must
+    match exactly or by a plural. Ingredients "to taste" and water are never missing.
+  - The list lives in the URL only (`have=`, repeatable), so Back keeps it and nothing else
+    stores it.
+  - `GET /api/recipes?side=food&have=…` ranks the list. Each summary carries `have` (what is
+    matched and what is missing). Drinks answer 400.
+  - `search_recipes` gains `have`.
+  - On desktop the filter aside has a What you have section. On a phone a basket button in
+    the header opens the same field.
+- **Merging ingredients (MCP).** `list_ingredients` lists each ingredient with its names,
+  recipe counts per side, kind and fresh. `merge_ingredients` folds one name into another and
+  `separate` takes a name back out (a conversion or fresh flag copied in the merge stays). Recipes keep their wording; only the catalog changes. A merge never
+  changes what is on the bar. The server instructions and the style guide tell Claude to use
+  the names already in use and to merge true duplicates.
+- Screenshots are in `docs/design/screenshots/m5/`.
+
+Rulings made on the way:
+
+- Merge names are stripped before use. A merge reads the inventory strictly but never
+  writes it.
+- A merge that would change any bar item's state is refused; only copying `fresh` onto the
+  target is allowed. The check runs after the merges and before the separates, so a
+  separated drink alias still becomes its own unsorted bar item.
+- Contradictions are compared by identity: a name whose identity was already merged
+  elsewhere is "merged twice", and one that resolves to an earlier target is a chain.
+- A new catalog entry for a name a drink uses takes the drink's spelling.
+- One `merge_ingredients` call takes at most 200 names, as the bar does.
+- `list_ingredients` reads a broken catalog leniently, like `read_bar`; only the merge
+  refuses.
+- The web list also stops at 20 terms. It doesn't cut long terms; the server does.
+- The phone panel has no visible heading. Its field and chip list have aria-labels ("Add an
+  ingredient", "Ingredients you have").
+- The fuzzy match for words of five letters or more needs a ratio of 85, not the spec's 80,
+  and plurals (`s`, `es`, `y`/`ies`) match at any length. At 80, "chicken" covered
+  chickpeas and "butter" covered butternut squash.
+
 ### After the PoC (rest of V1)
 
-Two users and authorship; throwaway ingredient filter; `merge_ingredients`; photo search
-with illustration fallback; offline PWA.
+Photo search with illustration fallback; offline PWA. Two users and authorship are dropped
+for now.
 
 Kitchen mode (screen awake, large text, step by step) moves to V2. It needs its own design.
 
