@@ -12,7 +12,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api import SAVE_FAILED, SAVE_INCOMPLETE, bar_changes, with_bar
-from app.recipes.bar import Bar, BarView, InventoryUnavailable
+from app.recipes.bar import MAX_NAMES, TOO_MANY, Bar, BarView, InventoryUnavailable
 from app.recipes.catalog import KINDS, Catalog, CatalogUnavailable
 from app.recipes.drafts import DraftIngredient, RecipeDraft, parse_draft
 from app.recipes.fetch import Fetcher, FetchError
@@ -34,6 +34,8 @@ INSTRUCTIONS = (
     "resource) and follow it. Amounts are metric (g, ml)."
     " Drinks have a bar of bottles the household has or doesn't have (read_bar, "
     "manage_inventory); fresh items such as limes are never tracked."
+    " You can list the ingredient names in use (list_ingredients) and merge names "
+    "that are the same ingredient (merge_ingredients); recipes keep their wording."
 )
 
 # Package data, so it is in the wheel and the image (the Dockerfile copies no docs/).
@@ -327,6 +329,49 @@ def build_mcp(
             )
             # Claude cannot delete: the tool has no delete, and the bar refuses too.
             return bar.apply(changes, allow_delete=False).json()
+
+    @server.tool()
+    def list_ingredients(
+        side: Literal["food", "drinks"] | None = None,
+    ) -> list[dict[str, Any]]:
+        """List every ingredient in use, sorted by name.
+
+        Each entry has name, other_names (its aliases and the other spellings
+        recipes use for it), recipes (how many food and drinks recipes use it),
+        in_catalog, g_per_tsp, fresh and kind. Give side to list only what that
+        side uses; without it, catalog entries no recipe uses are listed too.
+        Look for names that are the same ingredient (plurals, spellings,
+        synonyms) and merge them with merge_ingredients. Ingredients that are
+        only similar, such as chicken thighs and chicken breast, are not the
+        same: don't merge them.
+        """
+        with bar_refusals():
+            return bar.ingredients(side)
+
+    @server.tool()
+    def merge_ingredients(
+        merges: dict[str, str] = Field(default_factory=dict),  # noqa: B008
+        separate: list[str] = Field(default_factory=list),  # noqa: B008
+    ) -> dict[str, Any]:
+        """Merge names that are the same ingredient, all or nothing.
+
+        merges maps a name to the name it merges into, for example
+        {"leeks": "leek", "cilantro": "coriander"}: the first becomes another
+        name of the second, so a search or a what-you-have list for one finds
+        the other. separate lists names to make their own ingredient again.
+        Recipes are not changed and keep their wording. Both names must be
+        ingredients in use (list_ingredients). A name on the bar, such as a
+        bottle a drink uses, can't be merged here: fold it with
+        manage_inventory. Chains in one call, or a name merged and separated,
+        are refused. Returns {"ingredients": [...]}: the list_ingredients entry
+        for each name merged into and each name separated, in call order. If
+        any part is refused nothing is changed.
+        """
+        with bar_refusals():
+            # Counted here, as the bar counts a change, so a huge call is refused early.
+            if len(merges) * 2 + len(separate) > MAX_NAMES:
+                raise ToolError(TOO_MANY)
+            return {"ingredients": bar.merge_ingredients(merges, separate)}
 
     def saved(recipe: Recipe, ctx: Context, warnings: list[str]) -> dict[str, Any]:
         """The result of a write: where the recipe is, and anything left undone."""

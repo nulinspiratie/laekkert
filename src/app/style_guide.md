@@ -50,6 +50,8 @@ One row per ingredient, in the order they're used.
 - **item:** the ingredient's plain name, lowercase, without amounts or preparation:
   "red onion", "lime juice", "white rum", "garlic cloves". Use the same name as other
   recipes in the app when it's the same thing.
+  Before adding a recipe, prefer the ingredient names already in use (`list_ingredients`),
+  and merge true duplicates (`merge_ingredients`) rather than adding a third spelling.
 - **note:** preparation and choices: "finely chopped", "fresh", "bone-in, skin on",
   "1:1".
 - **no_scale:** true for things that don't grow with the servings: a pinch, salt to

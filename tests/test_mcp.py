@@ -33,6 +33,8 @@ def test_tools_listed(client):
         "list_recipes",
         "read_bar",
         "manage_inventory",
+        "list_ingredients",
+        "merge_ingredients",
         "read_recipe",
         "search_recipes",
         "add_recipe",
