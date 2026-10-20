@@ -153,7 +153,10 @@ Matches the mockup's Main artboard.
 - **Method.** Same runs and headings; one `ol` per run, numbered continuously through the
   method (`ol start`, or the existing number badge carrying the overall count).
 - **Notes.** A section after Method and before Source, headed "Notes", shown only when
-  `notes` is not empty, rendered as in "Notes formatting" below.
+  `notes` is not empty, rendered as in "Notes formatting" below. It is a tinted card
+  (`--accent-soft` mixed into `--surface`, `--card-rule` border) with a pencil icon in an
+  `--accent` circle before the heading, so it reads as an aside; the drinks side gets the
+  same card in its green tokens.
 
 ### Notes formatting
 

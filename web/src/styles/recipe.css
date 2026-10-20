@@ -768,12 +768,33 @@
   border-bottom: 1px solid var(--border);
 }
 
+/* A tinted card, so the notes read as an aside rather than another step. */
 .notes {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border);
+  gap: 14px;
+  padding: 18px 16px 20px;
+  background: color-mix(in srgb, var(--accent-soft) 60%, var(--surface));
+  border: 1px solid var(--card-rule);
+  border-radius: 18px;
+}
+
+.notes h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.notes-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
 }
 
 .notes p,
@@ -1038,6 +1059,7 @@
 
   .notes {
     gap: 20px;
+    padding: 24px;
   }
 
   .notes p,
