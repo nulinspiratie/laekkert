@@ -1,10 +1,15 @@
+from pathlib import Path
+
 import pytest
 from starlette.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
 
-INDEX = '<!doctype html><div id="root"></div>'
+INDEX = (
+    '<!doctype html><link rel="manifest" href="/manifest.webmanifest" '
+    'crossorigin="use-credentials"><div id="root"></div>'
+)
 
 
 @pytest.fixture
@@ -14,6 +19,7 @@ def dist(tmp_path):
     (root / "index.html").write_text(INDEX)
     (root / "assets" / "app.js").write_text("console.log('app')")
     (root / "favicon.svg").write_text("<svg/>")
+    (root / "manifest.webmanifest").write_text('{"name": "Lækkert"}')
     (tmp_path / "secret.txt").write_text("secret")
     return root
 
@@ -42,6 +48,19 @@ def test_asset_served(client):
 
 def test_top_level_file_served(client):
     assert client.get("/favicon.svg").text == "<svg/>"
+
+
+def test_manifest_served_as_manifest_json(client):
+    response = client.get("/manifest.webmanifest")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/manifest+json")
+
+
+def test_index_links_manifest_with_credentials():
+    # Cloudflare Access gates the manifest too, so the fetch must send the cookie.
+    index = (Path(__file__).parents[1] / "web" / "index.html").read_text()
+    link = '<link rel="manifest" href="/manifest.webmanifest" '
+    assert link + 'crossorigin="use-credentials"' in index
 
 
 @pytest.mark.parametrize(

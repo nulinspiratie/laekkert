@@ -4,12 +4,16 @@ Any GET path that is not a file in the build gets index.html, so deep links
 such as /drinks/daiquiri load the app and its router takes over.
 """
 
+import mimetypes
 from pathlib import Path
 
 from starlette.requests import Request
 from starlette.responses import FileResponse, PlainTextResponse
 from starlette.routing import BaseRoute, Mount, Route
 from starlette.staticfiles import StaticFiles
+
+# Browsers want this type for the manifest; the system's mime.types may say otherwise.
+mimetypes.add_type("application/manifest+json", ".webmanifest")
 
 
 def web_routes(static_dir: Path | None) -> list[BaseRoute]:

@@ -1,0 +1,338 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg, #f5efe3);
+  color: var(--text, #2a231e);
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 400;
+}
+
+a {
+  color: var(--accent-ink);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* The page area inside Shell: 16 px gutters on a phone, none on desktop
+   (the browse and recipe pages lay themselves out there). */
+.gutter {
+  padding-inline: 16px;
+}
+
+@media (min-width: 768px) {
+  .gutter {
+    padding-inline: 0;
+  }
+}
+
+/* ---- Shell ---- */
+
+.shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.shell-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.shell--bar .shell-main {
+  /* Breathing room above the bottom bar. The bar sticks to the bottom of the
+     screen but takes its own space in the page (see .shell-bar), so the page
+     never needs to guess its height. */
+  padding-bottom: 28px;
+}
+
+.shell-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 28px;
+  padding: 14px 32px;
+  background: var(--bar);
+  color: var(--bar-ink);
+  border-bottom: 1px solid var(--bar-border);
+}
+
+.shell-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.shell-brand svg {
+  color: var(--brand);
+}
+
+.shell-brand span {
+  font-family: var(--font-serif);
+  font-size: 22px;
+}
+
+.shell-spacer {
+  flex: 1;
+}
+
+.side-nav {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--track);
+  border-radius: 999px;
+}
+
+.side-nav a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: 999px;
+  color: var(--nav-ink);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.side-nav a[aria-current='page'] {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.view-toggle {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--seg-border);
+  border-radius: 12px;
+  background: var(--seg-bg);
+}
+
+.view-toggle button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--seg-ink);
+}
+
+.view-toggle button[aria-pressed='true'] {
+  background: var(--seg-on);
+  color: var(--seg-on-ink);
+}
+
+/* Phone bottom bar */
+
+.shell-bar {
+  /* Sticky, not fixed: it is the last thing in the shell column, so its real
+     height (76 px plus the notch's safe-area inset) is already reserved. */
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: var(--bar);
+  color: var(--bar-ink);
+  border-top: 1px solid var(--bar-border);
+  box-shadow: var(--bar-shadow);
+}
+
+.shell-bar .side-nav {
+  flex: 1;
+  min-width: 0;
+}
+
+.shell-bar .side-nav a {
+  flex: 1;
+  padding: 0;
+}
+
+.round-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 1px solid var(--btn-border);
+  border-radius: 50%;
+  background: var(--btn);
+  color: var(--btn-ink);
+  text-decoration: none;
+}
+
+/* Page heading (see PageHeading in Shell.tsx) */
+
+.page-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.page-heading-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px 24px;
+}
+
+.page-heading-text {
+  flex: 1 1 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.page-heading h1 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 34px;
+  line-height: 1.05;
+}
+
+.page-heading-sub {
+  margin: 0;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.page-heading-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--label);
+}
+
+.page-heading-rule {
+  display: none;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.page-heading-rule::before,
+.page-heading-rule::after {
+  content: '';
+  height: 1px;
+  background: var(--text);
+}
+
+.page-heading-rule::after {
+  opacity: 0.35;
+}
+
+/* Drinks on a phone: the dark masthead block, full width. */
+@media (max-width: 767.98px) {
+  .page-heading {
+    padding: 28px 16px 0;
+  }
+
+  .page-heading-row {
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .page-heading-text {
+    flex-basis: auto;
+  }
+
+  [data-side='drinks'] .page-heading {
+    padding-bottom: 16px;
+    background: var(--masthead);
+    color: var(--masthead-ink);
+  }
+
+  [data-side='drinks'] .page-heading-eyebrow {
+    color: var(--masthead-eyebrow);
+  }
+
+  [data-side='drinks'] .page-heading-sub {
+    color: var(--masthead-muted);
+  }
+
+  [data-side='drinks'] .page-heading h1 {
+    font-size: 36px;
+    line-height: 1;
+  }
+}
+
+@media (min-width: 768px) {
+  .page-heading h1 {
+    font-size: 44px;
+  }
+
+  [data-side='drinks'] .page-heading h1 {
+    font-size: 56px;
+    line-height: 1;
+  }
+
+  .page-heading-sub {
+    font-size: 16px;
+  }
+
+  .page-heading-eyebrow {
+    font-size: 12px;
+  }
+
+  [data-side='drinks'] .page-heading-rule {
+    display: flex;
+  }
+}

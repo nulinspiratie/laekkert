@@ -1,0 +1,100 @@
+/* Design tokens. :root is the Food theme; [data-side='drinks'] re-skins it.
+   Values come from docs/design/artboards (Main.dc.html for Food,
+   DrinksDesktop/DrinksPhone.dc.html for Drinks). The Food block also matches
+   [data-side='food'], so a Food shell inside a Drinks document gets Food colours. */
+
+:root,
+[data-side='food'] {
+  --font-serif: 'Young Serif', Georgia, serif;
+  --font-sans: 'Hanken Grotesk', system-ui, sans-serif;
+
+  --bg: #f5efe3;
+  --surface: #fffcf6;
+  --bar: #f9f4ea;
+  --border: #e2d6c1;
+  --border-strong: #d9cbb4;
+  --rule: #efe6d6;
+  --text: #2a231e;
+  --muted: #66594c;
+  --label: #6b5d4f;
+  --accent: #b0502c;
+  --accent-ink: #8e3e20;
+  --accent-soft: #f1ddd0;
+  --accent-soft-ink: #7a3419;
+  --on-accent: #fff8f1;
+  --track: #ebe0cd;
+  --tile: #b0502c;
+  --tile-ink: #f6e2d4;
+  --card-rule: #ebc6b3;
+
+  /* Chrome: the desktop header and the phone bottom bar. */
+  --bar-ink: var(--text);
+  --bar-border: var(--border);
+  --bar-shadow: 0 -8px 24px rgba(60, 40, 20, 0.08);
+  --brand: var(--accent);
+  --nav-ink: #5e5245;
+  --btn: var(--surface);
+  --btn-border: var(--border-strong);
+  --btn-ink: var(--text);
+  --seg-border: var(--border);
+  --seg-bg: var(--surface);
+  --seg-ink: var(--nav-ink);
+  --seg-on: var(--accent-soft);
+  --seg-on-ink: var(--accent-ink);
+  --cta: var(--accent);
+  --cta-ink: var(--on-accent);
+
+  /* Star rating colour. */
+  --star: #c98a2b;
+}
+
+[data-side='drinks'] {
+  --bg: #e8e3d5;
+  --surface: #f5f1e6;
+  --border: #d2cbb8;
+  --border-strong: #cfc7b2;
+  --rule: var(--border);
+  --text: #1e2621;
+  --muted: #474d44;
+  --label: #4e554b;
+  --accent: #3e7558;
+  --accent-ink: #234836;
+  --accent-soft: #d3e0d2;
+  --accent-soft-ink: #1f4231;
+  --on-accent: #ffffff;
+  --tile: #2e5a44;
+  --tile-ink: #d9e6d6;
+  --card-rule: #c9d6c6;
+
+  /* The dark masthead: header on desktop, title block and bottom bar on phone. */
+  --masthead: #1c2620;
+  --masthead-ink: #ede6d6;
+  --masthead-muted: #cfc9b8;
+  --masthead-eyebrow: #b9c4b4;
+  --masthead-border: #3a4740;
+  --masthead-raised: #26322b;
+  --masthead-track: #2c3832;
+  --masthead-pressed: #33433a;
+  --masthead-brand: #9cc2a8;
+  --masthead-cta: #e8dfc9;
+
+  --bar: var(--masthead);
+  --bar-ink: var(--masthead-ink);
+  --bar-border: transparent;
+  --bar-shadow: none;
+  --brand: var(--masthead-brand);
+  --nav-ink: var(--masthead-muted);
+  --track: var(--masthead-track);
+  --btn: var(--masthead-raised);
+  --btn-border: var(--masthead-border);
+  --btn-ink: var(--masthead-ink);
+  --seg-border: var(--masthead-border);
+  --seg-bg: transparent;
+  --seg-ink: var(--masthead-muted);
+  --seg-on: var(--masthead-pressed);
+  --seg-on-ink: var(--masthead-ink);
+  --cta: var(--masthead-cta);
+  --cta-ink: var(--masthead);
+
+  --star: #b07a22;
+}

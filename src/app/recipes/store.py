@@ -17,6 +17,11 @@ SEED_DIR = Path(__file__).resolve().parent.parent / "seed" / "recipes"
 
 log = logging.getLogger("app.recipes")
 
+# The recipe's own data; never served as a "file", whatever the recipe declares.
+DATA_FILES = {"recipe.json", "timeline.jsonl"}
+# Only raster images are served: an SVG or HTML file would run script on our origin.
+IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".heic"}
+
 
 class RecipeStore:
     def __init__(self, data_dir: Path):
@@ -36,6 +41,37 @@ class RecipeStore:
         if side not in SIDES or not is_valid_slug(slug):
             return None
         return self._load(side, slug)
+
+    def file_path(self, side: str, slug: str, name: str) -> Path | None:
+        """The image or source photo a recipe declares, if it is on disk.
+
+        Only the exact name the recipe declares is served, and only when it is a
+        plain raster image file name that resolves to a regular file inside the
+        recipe folder.
+        """
+        recipe = self.get(side, slug)
+        if recipe is None:
+            return None
+        declared = {recipe.image, recipe.source.photo if recipe.source else None}
+        if (
+            name not in declared
+            or not name
+            or name in DATA_FILES
+            or name.startswith(".")
+            or "/" in name
+            or "\\" in name
+            or Path(name).suffix.lower() not in IMAGE_SUFFIXES
+        ):
+            return None
+        folder = (self.recipes_dir / side / slug).resolve()
+        try:
+            path = (folder / name).resolve()
+        except (OSError, ValueError):
+            return None
+        # A symlink may not lead out of the folder or onto the recipe's data.
+        if path.parent != folder or path.name in DATA_FILES or not path.is_file():
+            return None
+        return self.recipes_dir / side / slug / name
 
     def seed_if_empty(self, source: Path = SEED_DIR) -> bool:
         """Copy the bundled recipes in when there are none; True if it did."""

@@ -121,3 +121,88 @@ def test_unsupported_old_format_is_skipped(store, caplog, version):
     with caplog.at_level(logging.WARNING, logger="app.recipes"):
         assert "ancient" not in [r.slug for r in store.list("drinks")]
     assert "ancient" in caplog.text
+
+
+def declare(store, side, slug, **fields):
+    path = store.recipes_dir / side / slug / "recipe.json"
+    data = json.loads(path.read_text())
+    data.update(fields)
+    path.write_text(json.dumps(data))
+    return path.parent
+
+
+def test_file_path_serves_declared_image(store):
+    folder = declare(store, "drinks", "daiquiri", image="photo.jpg")
+    (folder / "photo.jpg").write_bytes(b"jpeg")
+    assert store.file_path("drinks", "daiquiri", "photo.jpg") == folder / "photo.jpg"
+
+
+def test_file_path_serves_source_photo(store):
+    folder = declare(
+        store,
+        "drinks",
+        "daiquiri",
+        source={"url": "https://x.example", "photo": "card.png"},
+    )
+    (folder / "card.png").write_bytes(b"png")
+    assert store.file_path("drinks", "daiquiri", "card.png") == folder / "card.png"
+
+
+def test_file_path_refuses_undeclared_and_data_files(store):
+    folder = declare(store, "drinks", "daiquiri", image="photo.jpg")
+    (folder / "photo.jpg").write_bytes(b"jpeg")
+    (folder / "other.jpg").write_bytes(b"jpeg")
+    (folder / "timeline.jsonl").write_text("{}\n")
+    for name in ["recipe.json", "timeline.jsonl", "other.jpg", "missing.jpg"]:
+        assert store.file_path("drinks", "daiquiri", name) is None
+    # Declared but absent on disk.
+    declare(store, "drinks", "virgin-mojito", image="gone.jpg")
+    assert store.file_path("drinks", "virgin-mojito", "gone.jpg") is None
+
+
+def test_file_path_refuses_declared_data_file_names(store):
+    folder = declare(store, "drinks", "daiquiri", image="recipe.json")
+    assert (folder / "recipe.json").is_file()
+    assert store.file_path("drinks", "daiquiri", "recipe.json") is None
+
+
+def test_file_path_refuses_traversal(store):
+    for name in ["../daiquiri/recipe.json", "..\\x", "a/b.jpg", ".hidden", "..", ""]:
+        declare(store, "drinks", "daiquiri", image=name)
+        assert store.file_path("drinks", "daiquiri", name) is None
+    folder = declare(store, "drinks", "daiquiri", image=".hidden")
+    (folder / ".hidden").write_bytes(b"x")
+    assert store.file_path("drinks", "daiquiri", ".hidden") is None
+
+
+def test_file_path_refuses_symlink_out_of_folder(store, tmp_path):
+    outside = tmp_path / "secret.jpg"
+    outside.write_bytes(b"secret")
+    folder = declare(store, "drinks", "daiquiri", image="photo.jpg")
+    (folder / "photo.jpg").symlink_to(outside)
+    assert store.file_path("drinks", "daiquiri", "photo.jpg") is None
+
+
+@pytest.mark.parametrize("name", ["page.svg", "page.html", "notes.txt", "noext"])
+def test_file_path_refuses_non_raster_files(store, name):
+    folder = declare(store, "drinks", "daiquiri", image=name)
+    (folder / name).write_text("<script>alert(1)</script>")
+    assert store.file_path("drinks", "daiquiri", name) is None
+
+
+def test_file_path_extension_is_case_insensitive(store):
+    folder = declare(store, "drinks", "daiquiri", image="IMG_1.JPEG")
+    (folder / "IMG_1.JPEG").write_bytes(b"jpeg")
+    assert store.file_path("drinks", "daiquiri", "IMG_1.JPEG") == folder / "IMG_1.JPEG"
+
+
+def test_file_path_unknown_recipe_or_side(store):
+    assert store.file_path("drinks", "nope", "photo.jpg") is None
+    assert store.file_path("bar", "daiquiri", "photo.jpg") is None
+    assert store.file_path("drinks", "../food", "photo.jpg") is None
+
+
+def test_file_path_refuses_symlink_to_data_file(store):
+    folder = declare(store, "drinks", "daiquiri", image="photo.jpg")
+    (folder / "photo.jpg").symlink_to(folder / "recipe.json")
+    assert store.file_path("drinks", "daiquiri", "photo.jpg") is None
