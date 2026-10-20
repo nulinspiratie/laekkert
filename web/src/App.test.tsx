@@ -16,6 +16,8 @@ const daiquiri = {
   image: null,
 }
 
+const NO_COUNTS = { can_make: 0, fresh_only: 0, missing: 0, unsorted: 0, total: 0 }
+
 function stubFetch(status: number, body: unknown) {
   const fetch = vi.fn(async () => new Response(JSON.stringify(body), { status }))
   vi.stubGlobal('fetch', fetch)
@@ -38,7 +40,12 @@ function renderAt(path: string) {
 
 test('root redirects to the last side used', async () => {
   localStorage.setItem('laekkert.side', 'drinks')
-  const fetch = stubFetch(200, { recipes: [daiquiri] })
+  const fetch = vi.fn(async (url: string) =>
+    url === '/api/bar'
+      ? Response.json({ items: [], set_up: false, counts: NO_COUNTS })
+      : Response.json({ recipes: [daiquiri] }),
+  )
+  vi.stubGlobal('fetch', fetch)
   renderAt('/')
   await screen.findByRole('link', { name: /Daiquiri/ })
   expect(fetch).toHaveBeenCalledWith('/api/recipes?side=drinks')

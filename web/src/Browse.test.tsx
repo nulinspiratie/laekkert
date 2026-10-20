@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider, useLocation } from 'react-router'
 import { afterEach, expect, test, vi } from 'vitest'
 import App from './App'
-import type { RecipeSummary } from './types'
+import type { Bar, BarItem, DrinkBar, RecipeSummary } from './types'
 
 function recipe(over: Partial<RecipeSummary> & Pick<RecipeSummary, 'slug' | 'name'>): RecipeSummary {
   return {
@@ -60,12 +60,57 @@ const daiquiri = recipe({
 
 const DEFAULT_FOOD = '/food?sort=time'
 
+const drinkBar = (over: Partial<DrinkBar> = {}): DrinkBar => ({
+  status: 'can_make',
+  missing: [],
+  unsorted: [],
+  fresh: [],
+  ...over,
+})
+
+function drink(slug: string, name: string, bar: DrinkBar, over: Partial<RecipeSummary> = {}): RecipeSummary {
+  return recipe({ slug, name, side: 'drinks', category: 'cocktails', time_minutes: 5, bar, ...over })
+}
+
+const negroni = drink('negroni', 'Negroni', drinkBar(), { marks: ['favourite'] })
+const gimlet = drink('gimlet', 'Gimlet', drinkBar({ status: 'fresh_only', fresh: ['lime juice'] }), {
+  marks: ['favourite'],
+})
+const paloma = drink(
+  'paloma',
+  'Paloma',
+  drinkBar({ status: 'fresh_only', fresh: ['grapefruit', 'lime juice', 'soda water'] }),
+)
+const maiTai = drink('mai-tai', 'Mai tai', drinkBar({ status: 'missing', missing: ['orgeat'], fresh: ['lime juice'] }))
+const cornNOil = drink('corn-n-oil', "Corn 'n' oil", drinkBar({ status: 'unsorted', unsorted: ['falernum'] }))
+const drinks = [negroni, gimlet, paloma, maiTai, cornNOil]
+
+function barItem(name: string, state: BarItem['state'], over: Partial<BarItem> = {}): BarItem {
+  return { name, aliases: [], kind: 'spirits', fresh: false, state, used_in: [], recipe: null, ...over }
+}
+
+function bar(items: BarItem[]): Bar {
+  return {
+    items,
+    set_up: items.some((item) => item.state !== null),
+    counts: { can_make: 0, fresh_only: 0, missing: 0, unsorted: 0, total: 0 },
+  }
+}
+
+/** Set up, everything sorted. */
+const SORTED_BAR = bar([barItem('gin', 'have'), barItem('orgeat', 'dont'), barItem('limes', null, { fresh: true })])
+
 function listing(recipes: RecipeSummary[]) {
   return new Response(JSON.stringify({ recipes }), { status: 200 })
 }
 
-function stubFetch(recipes: RecipeSummary[] = food) {
-  const fetch = vi.fn(async (_url: string) => listing(recipes))
+/** The list for any recipes URL; `barBody` for /api/bar ('fail' answers 503). */
+function stubFetch(recipes: RecipeSummary[] = food, barBody: Bar | 'fail' = SORTED_BAR) {
+  const fetch = vi.fn(async (url: string) => {
+    if (url !== '/api/bar') return listing(recipes)
+    if (barBody === 'fail') return new Response(JSON.stringify({ error: 'The bar could not be read.' }), { status: 503 })
+    return new Response(JSON.stringify(barBody), { status: 200 })
+  })
   vi.stubGlobal('fetch', fetch)
   return fetch
 }
@@ -384,9 +429,9 @@ test('visiting a side remembers it', async () => {
 test('drinks has the bar heading, its own categories and the same two marks', async () => {
   const fetch = stubFetch([daiquiri])
   renderAt('/drinks')
-  expect(await screen.findByText('A to Z · 1 recipe')).toBeInTheDocument()
+  expect(await screen.findByText('1 drink · 0 you can make right now')).toBeInTheDocument()
   expect(fetch).toHaveBeenCalledWith('/api/recipes?side=drinks')
-  expect(screen.getByText('The bar')).toBeInTheDocument()
+  expect(document.querySelector('.page-heading-eyebrow')).toHaveTextContent('The bar')
   expect(screen.getByRole('searchbox', { name: 'Search drinks' })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Cocktails 1' })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Kid approved' })).not.toBeInTheDocument()
@@ -563,4 +608,256 @@ test('the phone drinks page puts the masthead heading and cards on the Drinks th
   expect(screen.getByText('The bar')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Search drinks' })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Filters' })).toBeInTheDocument()
+})
+
+// ---- the bar ----
+
+const radio = (name: string) => screen.getByRole('radio', { name })
+
+test('filters drinks by what the bar can make', async () => {
+  stubFetch(drinks)
+  renderAt('/drinks')
+  expect(await screen.findByText('5 drinks · 1 you can make right now')).toBeInTheDocument()
+  const group = screen.getByRole('radiogroup', { name: 'Inventory' })
+  expect(within(group).getAllByRole('radio').map((r) => r.textContent)).toEqual([
+    'Everything 5',
+    'Can make now 1',
+    'Only need fresh items 2',
+  ])
+  expect(radio('Everything 5')).toHaveAttribute('aria-checked', 'true')
+  expect(screen.getByRole('link', { name: 'Edit the bar' })).toHaveAttribute('href', '/bar')
+
+  fireEvent.click(radio('Can make now 1'))
+  expect(location()).toBe('/drinks?bar=can')
+  expect(await screen.findByText('Can make now · 1 drink')).toBeInTheDocument()
+  expect(recipeNames()).toEqual(['/drinks/negroni'])
+  expect(radio('Can make now 1')).toHaveAttribute('aria-checked', 'true')
+
+  fireEvent.click(radio('Only need fresh items 2'))
+  expect(location()).toBe('/drinks?bar=fresh')
+  expect(await screen.findByText('Only need fresh items · 2 drinks')).toBeInTheDocument()
+  expect(recipeNames()).toEqual(['/drinks/gimlet', '/drinks/paloma'])
+
+  fireEvent.click(radio('Everything 5'))
+  expect(location()).toBe('/drinks')
+})
+
+test('the bar counts follow the other filters', async () => {
+  stubFetch(drinks)
+  renderAt('/drinks?mark=favourite&bar=can')
+  expect(await screen.findByText('Can make now · 1 drink')).toBeInTheDocument()
+  expect(radio('Everything 2')).toHaveAttribute('aria-checked', 'false')
+  expect(radio('Can make now 1')).toHaveAttribute('aria-checked', 'true')
+  expect(radio('Only need fresh items 1')).toBeInTheDocument()
+})
+
+test('on a phone the bar filter is chips under the heading', async () => {
+  stubViewport(false)
+  stubFetch(drinks)
+  renderAt('/drinks')
+  await screen.findByRole('link', { name: /Negroni/ })
+  const group = screen.getByRole('radiogroup', { name: 'From your bar' })
+  expect(within(group).getAllByRole('radio').map((r) => r.textContent)).toEqual([
+    'All 5',
+    'Can make 1',
+    'Fresh only 2',
+  ])
+  expect(radio('All 5')).toHaveAttribute('aria-checked', 'true')
+  fireEvent.click(radio('Fresh only 2'))
+  expect(location()).toBe('/drinks?bar=fresh')
+  expect(radio('Fresh only 2')).toHaveAttribute('aria-checked', 'true')
+  expect(recipeNames()).toEqual(['/drinks/gimlet', '/drinks/paloma'])
+  // The chips are not filters the sheet counts.
+  expect(screen.getByRole('button', { name: 'Filters' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'The bar' })).toHaveAttribute('href', '/bar')
+})
+
+test('food has no bar filter', async () => {
+  const fetch = stubFetch()
+  renderAt('/food?bar=can')
+  expect(await screen.findByText('A to Z · 4 recipes')).toBeInTheDocument()
+  expect(screen.queryByRole('radiogroup', { name: 'Inventory' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: 'Edit the bar' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: 'The bar' })).not.toBeInTheDocument()
+  expect(fetch).not.toHaveBeenCalledWith('/api/bar', expect.anything())
+  expect(fetch).toHaveBeenCalledTimes(1)
+})
+
+test('food on a phone has no bar chips or bar button', async () => {
+  stubViewport(false)
+  stubFetch()
+  renderAt('/food')
+  await screen.findByText('A to Z · 4 recipes')
+  expect(screen.queryByRole('radiogroup', { name: 'From your bar' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: 'The bar' })).not.toBeInTheDocument()
+})
+
+const UNSORTED_BAR = bar([barItem('gin', 'have'), barItem('falernum', null), barItem('mezcal', null)])
+
+test('shows the unsorted banner', async () => {
+  stubFetch(drinks, UNSORTED_BAR)
+  const view = renderAt('/drinks')
+  const banner = await screen.findByRole('link', { name: /not sorted yet/ })
+  expect(banner).toHaveAccessibleName('2 bottles not sorted yet. Drinks that use them count as missing. Sort them')
+  expect(banner).toHaveAttribute('href', '/bar')
+  view.unmount()
+
+  stubViewport(false)
+  renderAt('/drinks')
+  const phone = await screen.findByRole('link', { name: /not sorted yet/ })
+  expect(phone).toHaveAccessibleName('2 new bottles not sorted yet Sort')
+  expect(phone).toHaveAttribute('href', '/bar')
+})
+
+test('the unsorted banner says one bottle in the singular', async () => {
+  stubFetch(drinks, bar([barItem('gin', 'have'), barItem('falernum', null)]))
+  renderAt('/drinks')
+  expect(await screen.findByRole('link', { name: /not sorted yet/ })).toHaveAccessibleName(
+    '1 bottle not sorted yet. Drinks that use it count as missing. Sort them',
+  )
+})
+
+test('no unsorted banner when everything is sorted or the bar is not set up', async () => {
+  stubFetch(drinks)
+  const view = renderAt('/drinks')
+  await screen.findByText('5 drinks · 1 you can make right now')
+  expect(screen.queryByRole('link', { name: /not sorted yet/ })).not.toBeInTheDocument()
+  view.unmount()
+
+  stubFetch(drinks, bar([barItem('gin', null), barItem('falernum', null)]))
+  renderAt('/drinks')
+  expect(await screen.findByRole('link', { name: 'Set up the bar' })).toHaveAttribute('href', '/bar')
+  expect(screen.queryByRole('link', { name: /not sorted yet/ })).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: 'Edit the bar' })).not.toBeInTheDocument()
+})
+
+test('shows card badges', async () => {
+  stubFetch(drinks)
+  const view = renderAt('/drinks')
+  await screen.findByText('5 drinks · 1 you can make right now')
+  const card = (name: RegExp) => screen.getByRole('link', { name })
+  expect(within(card(/Negroni/)).getByText('Can make now')).toBeInTheDocument()
+  expect(within(card(/Gimlet/)).getByText('Buy fresh: lime juice')).toBeInTheDocument()
+  expect(within(card(/Paloma/)).getByText('Buy fresh: grapefruit, lime juice +1')).toBeInTheDocument()
+  expect(within(card(/Mai tai/)).getByText('Missing: orgeat')).toBeInTheDocument()
+  expect(within(card(/Corn 'n' oil/)).getByText('Not sorted: falernum')).toBeInTheDocument()
+  view.unmount()
+
+  stubViewport(false)
+  renderAt('/drinks')
+  await screen.findByRole('link', { name: /Gimlet/ })
+  expect(within(card(/Gimlet/)).getByText('Buy: lime juice')).toBeInTheDocument()
+  expect(within(card(/Negroni/)).getByText('Can make now')).toBeInTheDocument()
+})
+
+test('list views show the badges too', async () => {
+  stubFetch(drinks)
+  localStorage.setItem('laekkert.view', 'list')
+  const view = renderAt('/drinks')
+  await screen.findByText('5 drinks · 1 you can make right now')
+  expect(within(screen.getByRole('link', { name: /Mai tai/ })).getByText('Missing: orgeat')).toBeInTheDocument()
+  view.unmount()
+
+  stubViewport(false)
+  renderAt('/drinks')
+  await screen.findByRole('link', { name: /Gimlet/ })
+  expect(within(screen.getByRole('link', { name: /Gimlet/ })).getByText('Buy: lime juice')).toBeInTheDocument()
+})
+
+const NEW_BAR = bar([barItem('gin', null), barItem('orgeat', null)])
+const unsortedDrinks = [
+  drink('negroni', 'Negroni', drinkBar({ status: 'unsorted', unsorted: ['gin'] })),
+  drink('mai-tai', 'Mai tai', drinkBar({ status: 'unsorted', unsorted: ['orgeat'] })),
+]
+
+test('shows the set-up empty state', async () => {
+  stubFetch(unsortedDrinks, NEW_BAR)
+  const view = renderAt('/drinks?bar=can')
+  expect(await screen.findByRole('heading', { name: 'Set up your bar first' })).toBeInTheDocument()
+  expect(screen.getByText(/Mark each bottle as have or don't have\./)).toHaveTextContent(
+    "Lækkert doesn't know what's in your cabinet yet, so nothing can show here. Mark each bottle as have or don't have. It takes about a minute.",
+  )
+  expect(screen.getByText('Can make now · 0 drinks')).toBeInTheDocument()
+  // One in the filter panel, one in the empty state.
+  for (const link of screen.getAllByRole('link', { name: 'Set up the bar' })) {
+    expect(link).toHaveAttribute('href', '/bar')
+  }
+  fireEvent.click(screen.getByRole('link', { name: 'Show all 2 drinks' }))
+  expect(location()).toBe('/drinks')
+  expect(await screen.findByText('2 drinks · 0 you can make right now')).toBeInTheDocument()
+  view.unmount()
+
+  stubViewport(false)
+  renderAt('/drinks?bar=fresh')
+  expect(await screen.findByRole('heading', { name: 'Set up your bar first' })).toBeInTheDocument()
+  expect(screen.getByText(/Tap Have for each bottle you own\./)).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Set up the bar' })).toHaveAttribute('href', '/bar')
+})
+
+test('shows the fresh-only empty state', async () => {
+  const sour = drink('whisky-sour', 'Whisky sour', drinkBar({ status: 'fresh_only', fresh: ['lemons'] }))
+  stubFetch([gimlet, paloma, sour, maiTai])
+  renderAt('/drinks?bar=can')
+  expect(await screen.findByRole('heading', { name: 'Nothing without a trip to the shop' })).toBeInTheDocument()
+  expect(
+    screen.getByText(
+      'You have the bottles for 3 drinks, but every one needs something fresh. Lime juice covers 2 of them.',
+    ),
+  ).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Open the bar' })).toHaveAttribute('href', '/bar')
+  fireEvent.click(screen.getByRole('link', { name: 'Show the 3 that need fresh items' }))
+  expect(location()).toBe('/drinks?bar=fresh')
+  expect(recipeNames()).toEqual(['/drinks/gimlet', '/drinks/paloma', '/drinks/whisky-sour'])
+})
+
+test('the fresh-only empty state for one drink', async () => {
+  stubFetch([gimlet, maiTai])
+  renderAt('/drinks?bar=can')
+  expect(
+    await screen.findByText('You have the bottles for 1 drink, but it needs something fresh: lime juice.'),
+  ).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('link', { name: 'Show the drink that needs fresh items' }))
+  expect(location()).toBe('/drinks?bar=fresh')
+})
+
+test('shows the generic empty state', async () => {
+  stubFetch([maiTai, cornNOil])
+  const view = renderAt('/drinks?bar=can')
+  expect(await screen.findByRole('heading', { name: 'Nothing to make yet' })).toBeInTheDocument()
+  expect(screen.getByText('Every drink is missing a bottle or uses one not sorted yet.')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Open the bar' })).toHaveAttribute('href', '/bar')
+  fireEvent.click(screen.getByRole('link', { name: 'Show all 2 drinks' }))
+  expect(location()).toBe('/drinks')
+  view.unmount()
+
+  renderAt('/drinks?bar=fresh&sort=rating')
+  expect(await screen.findByRole('heading', { name: 'Nothing to make yet' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Show all 2 drinks' })).toHaveAttribute('href', '/drinks?sort=rating')
+})
+
+test('other filters that leave nothing keep the plain empty state', async () => {
+  stubFetch(drinks)
+  renderAt('/drinks?bar=can&tag=nope')
+  expect(await screen.findByText('Nothing matches these filters.')).toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: 'Nothing to make yet' })).not.toBeInTheDocument()
+})
+
+test('browsing works when the bar fails to load', async () => {
+  stubFetch(drinks, 'fail')
+  const view = renderAt('/drinks')
+  expect(await screen.findByText('A to Z · 5 recipes')).toBeInTheDocument()
+  expect(recipeNames()).toHaveLength(5)
+  expect(screen.queryByRole('radiogroup', { name: 'Inventory' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: 'Edit the bar' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: /not sorted yet/ })).not.toBeInTheDocument()
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  expect(within(screen.getByRole('link', { name: /Mai tai/ })).getByText('Missing: orgeat')).toBeInTheDocument()
+  view.unmount()
+
+  stubViewport(false)
+  stubFetch(unsortedDrinks, 'fail')
+  renderAt('/drinks?bar=can')
+  expect(await screen.findByRole('heading', { name: 'Nothing to make yet' })).toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: 'Set up your bar first' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('radiogroup', { name: 'From your bar' })).not.toBeInTheDocument()
 })

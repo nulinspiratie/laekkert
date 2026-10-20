@@ -1,10 +1,12 @@
 // The browse page: a side's recipes as a grid or a list, with search, filters
 // and sort. What is shown is derived from the URL's query string (see browse.ts);
-// only the list from the API, the search box text and the view are state.
+// only the list from the API, the bar, the search box text and the view are state.
+// On drinks the bar filters the list ("From your bar") and explains an empty one.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { listRecipes } from './api'
+import { getBar, listRecipes } from './api'
+import { topFresh, unsorted } from './bar'
 import {
   MARK_LABELS,
   SORT_OPTIONS,
@@ -14,16 +16,17 @@ import {
   describe,
   facetCounts,
   parseBrowse,
+  type BarFilter,
   type BrowseState,
   type SortKey,
 } from './browse'
-import { FilterPanel, FilterSheet, SearchField } from './FilterPanel'
+import { FilterPanel, FilterSheet, SearchField, type BarSummary } from './FilterPanel'
 import { capitalise } from './format'
-import { Close, Filters, Grid, List, Plus, Search } from './icons'
+import { Bottle, Close, CoupeBasket, Filters, Grid, List, Plus, Question, Search, Shelf } from './icons'
 import { getView, setLastSide, setView, type View } from './prefs'
 import { RecipeCard, RecipeRow, RecipeTableRow } from './RecipeCard'
 import { PageHeading, Shell } from './Shell'
-import { SIDE_LABELS, type RecipeSummary, type Side } from './types'
+import { SIDE_LABELS, type Bar, type RecipeSummary, type Side } from './types'
 import { useIsDesktop } from './useIsDesktop'
 
 /** How long typing must pause before the search goes to the API. */
@@ -31,7 +34,18 @@ const SEARCH_DEBOUNCE_MS = 200
 
 const plural = (n: number) => `${n} ${n === 1 ? 'recipe' : 'recipes'}`
 
+const drinksCount = (n: number) => `${n} ${n === 1 ? 'drink' : 'drinks'}`
+
 const search = (query: string) => ({ search: query ? `?${query}` : '' })
+
+const BAR_LABELS: Record<BarFilter, string> = { can: 'Can make now', fresh: 'Only need fresh items' }
+
+/** The desktop drinks result line: "24 drinks · 15 you can make right now", or the bar filter and its count. */
+function barLine(state: BrowseState, recipes: RecipeSummary[]): string {
+  if (state.bar) return `${BAR_LABELS[state.bar]} · ${drinksCount(recipes.length)}`
+  const can = recipes.filter((recipe) => recipe.bar?.status === 'can_make').length
+  return `${drinksCount(recipes.length)} · ${can} you can make right now`
+}
 
 export default function Browse({ side }: { side: Side }) {
   const desktop = useIsDesktop()
@@ -46,6 +60,8 @@ export default function Browse({ side }: { side: Side }) {
   const [fetchQ, setFetchQ] = useState(state.q)
   const [loaded, setLoaded] = useState<{ q: string; recipes: RecipeSummary[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Drinks only: null while loading; 'failed' hides the bar's filter, banner and set-up state.
+  const [bar, setBar] = useState<Bar | 'failed' | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(state.q !== '')
   const searchInput = useRef<HTMLInputElement>(null)
@@ -85,6 +101,18 @@ export default function Browse({ side }: { side: Side }) {
   }, [side, fetchQ])
 
   useEffect(() => {
+    if (side !== 'drinks') return
+    let current = true
+    getBar().then(
+      (loadedBar) => current && setBar(loadedBar),
+      () => current && setBar('failed'),
+    )
+    return () => {
+      current = false
+    }
+  }, [side])
+
+  useEffect(() => {
     if (searchOpen && focusSearch.current) searchInput.current?.focus()
     focusSearch.current = false
   }, [searchOpen])
@@ -93,10 +121,42 @@ export default function Browse({ side }: { side: Side }) {
     () => (loaded ? applyBrowse(loaded.recipes, { ...state, q: loaded.q }) : null),
     [loaded, state],
   )
-  const counts = useMemo(() => facetCounts(side, loaded?.recipes ?? []), [side, loaded])
+  const counts = useMemo(() => facetCounts(side, loaded?.recipes ?? [], state), [side, loaded, state])
+  const barSummary: BarSummary | undefined =
+    bar && bar !== 'failed' ? { setUp: bar.set_up, unsorted: unsorted(bar.items).length } : undefined
 
   const title = SIDE_LABELS[side]
-  const subtitle = recipes ? `${describe(state)} · ${plural(recipes.length)}` : describe(state)
+  let subtitle = recipes ? `${describe(state)} · ${plural(recipes.length)}` : describe(state)
+  if (desktop && barSummary && recipes) subtitle = barLine(state, recipes)
+
+  // The bar filter left nothing, though the other filters leave some drinks.
+  let empty: ReactNode | undefined
+  if (loaded && recipes?.length === 0 && state.bar && counts.bar.all > 0) {
+    const link = (patch: Partial<BrowseState>) => {
+      const query = browseQuery({ ...state, ...patch })
+      return `/${side}${query ? `?${query}` : ''}`
+    }
+    const kind =
+      barSummary && !barSummary.setUp
+        ? 'setup'
+        : state.bar === 'can' && counts.bar.fresh > 0
+          ? 'fresh'
+          : 'nothing'
+    const others = applyBrowse(loaded.recipes, { ...state, q: loaded.q, bar: null })
+    // Until the bar has loaded it is not known whether it is set up.
+    empty =
+      bar === null ? null : (
+        <BarEmpty
+          kind={kind}
+          desktop={desktop}
+          all={counts.bar.all}
+          fresh={counts.bar.fresh}
+          top={topFresh(others)}
+          showAll={link({ bar: null })}
+          showFresh={link({ bar: 'fresh' })}
+        />
+      )
+  }
 
   const onChange = (patch: Partial<BrowseState>) => navigate(search(browseQuery({ ...state, ...patch })))
   const onSearch = (value: string) => {
@@ -117,6 +177,7 @@ export default function Browse({ side }: { side: Side }) {
       view={view}
       desktop={desktop}
       error={error}
+      empty={empty}
       onClear={() => navigate(`/${side}`)}
     />
   )
@@ -132,6 +193,7 @@ export default function Browse({ side }: { side: Side }) {
               counts={counts}
               onChange={onChange}
               search={{ value: text, onChange: onSearch }}
+              bar={barSummary}
             />
           </aside>
           <div className="browse-main">
@@ -204,10 +266,20 @@ export default function Browse({ side }: { side: Side }) {
   return (
     <Shell side={side} view={view} onView={changeView} phoneActions={phoneActions}>
       <div className="browse browse--phone">
-        <PageHeading side={side} title={title} subtitle={subtitle}>
+        <PageHeading
+          side={side}
+          title={title}
+          subtitle={subtitle}
+          below={barSummary && <BarChips bar={barSummary} state={state} counts={counts} onChange={onChange} />}
+        >
+          {side === 'drinks' && (
+            <Link to="/bar" className="browse-head-btn" aria-label="The bar">
+              <Bottle size={22} strokeWidth={1.6} />
+            </Link>
+          )}
           <button
             type="button"
-            className="browse-search-btn"
+            className="browse-head-btn"
             aria-label={`Search ${title.toLowerCase()}`}
             aria-expanded={searchOpen}
             onClick={toggleSearch}
@@ -231,6 +303,135 @@ export default function Browse({ side }: { side: Side }) {
         />
       </div>
     </Shell>
+  )
+}
+
+/** The phone's "From your bar" filter and unsorted banner, in the Drinks masthead. */
+function BarChips({
+  bar,
+  state,
+  counts,
+  onChange,
+}: {
+  bar: BarSummary
+  state: BrowseState
+  counts: ReturnType<typeof facetCounts>
+  onChange: (patch: Partial<BrowseState>) => void
+}) {
+  const chips: { value: BarFilter | null; label: string }[] = [
+    { value: null, label: `All ${counts.bar.all}` },
+    { value: 'can', label: `Can make ${counts.bar.can}` },
+    { value: 'fresh', label: `Fresh only ${counts.bar.fresh}` },
+  ]
+  return (
+    <>
+      <div role="radiogroup" aria-label="From your bar" className="browse-bar-chips">
+        {chips.map(({ value, label }) => (
+          <button
+            key={label}
+            type="button"
+            role="radio"
+            aria-checked={state.bar === value}
+            onClick={() => onChange({ bar: value })}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {bar.setUp && bar.unsorted > 0 && (
+        <Link to="/bar" className="browse-bar-banner">
+          <Question size={18} />
+          <span className="filter-grow">
+            {bar.unsorted} new {bar.unsorted === 1 ? 'bottle' : 'bottles'} not sorted yet
+          </span>{' '}
+          <span className="browse-bar-sort">Sort</span>
+        </Link>
+      )}
+    </>
+  )
+}
+
+interface BarEmptyProps {
+  kind: 'setup' | 'fresh' | 'nothing'
+  desktop: boolean
+  /** Drinks the other filters leave, and of those, the ones that need only fresh items. */
+  all: number
+  fresh: number
+  /** The fresh item most of the fresh-only drinks need. */
+  top: { item: string; count: number } | null
+  showAll: string
+  showFresh: string
+}
+
+/** Why the bar filter leaves nothing, and what to do about it. */
+function BarEmpty({ kind, desktop, all, fresh, top, showAll, showFresh }: BarEmptyProps) {
+  const showAllLink = (
+    <Link to={showAll} className="browse-bar-empty-alt">
+      {all === 1 ? 'Show 1 drink' : `Show all ${all} drinks`}
+    </Link>
+  )
+  const openBar = (primary: boolean) => (
+    <Link to="/bar" className={primary ? 'browse-bar-empty-cta' : 'browse-bar-empty-alt'}>
+      Open the bar
+    </Link>
+  )
+  let content: { icon: ReactNode; title: string; text: string; actions: ReactNode }
+  if (kind === 'setup') {
+    const how = desktop ? "Mark each bottle as have or don't have." : 'Tap Have for each bottle you own.'
+    content = {
+      icon: <Shelf />,
+      title: 'Set up your bar first',
+      text: `Lækkert doesn't know what's in your cabinet yet, so nothing can show here. ${how} It takes about a minute.`,
+      actions: (
+        <>
+          <Link to="/bar" className="browse-bar-empty-cta">
+            Set up the bar
+          </Link>
+          {showAllLink}
+        </>
+      ),
+    }
+  } else if (kind === 'fresh') {
+    const item = top?.item ?? 'something fresh'
+    content = {
+      icon: <CoupeBasket />,
+      title: 'Nothing without a trip to the shop',
+      text:
+        fresh === 1
+          ? `You have the bottles for 1 drink, but it needs something fresh: ${item}.`
+          : `You have the bottles for ${fresh} drinks, but every one needs something fresh.` +
+            (top ? ` ${capitalise(top.item)} covers ${top.count} of them.` : ''),
+      actions: (
+        <>
+          <Link to={showFresh} className="browse-bar-empty-cta">
+            {fresh === 1 ? 'Show the drink that needs fresh items' : `Show the ${fresh} that need fresh items`}
+          </Link>
+          {openBar(false)}
+        </>
+      ),
+    }
+  } else {
+    content = {
+      icon: <Shelf />,
+      title: 'Nothing to make yet',
+      text: 'Every drink is missing a bottle or uses one not sorted yet.',
+      actions: (
+        <>
+          {openBar(true)}
+          {showAllLink}
+        </>
+      ),
+    }
+  }
+  return (
+    <section className="browse-bar-empty">
+      {content.icon}
+      <div className="browse-bar-empty-text">
+        <h2>{content.title}</h2>
+        <p>{content.text}</p>
+        <div className="browse-bar-empty-actions">{content.actions}</div>
+      </div>
+    </section>
   )
 }
 
@@ -273,15 +474,19 @@ interface ResultsProps {
   view: View
   desktop: boolean
   error: string | null
+  /** Shown instead of the plain empty state when given (null shows nothing yet). */
+  empty?: ReactNode
   onClear: () => void
 }
 
-function Results({ recipes, unfilteredEmpty, view, desktop, error, onClear }: ResultsProps) {
+function Results({ recipes, unfilteredEmpty, view, desktop, error, empty, onClear }: ResultsProps) {
   return (
     <>
       {error && <p role="alert">{error}</p>}
       {recipes?.length === 0 &&
-        (unfilteredEmpty ? (
+        (empty !== undefined ? (
+          empty
+        ) : unfilteredEmpty ? (
           <p className="browse-empty">No recipes yet.</p>
         ) : (
           <div className="browse-empty">

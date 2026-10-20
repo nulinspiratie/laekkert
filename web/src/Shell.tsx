@@ -1,11 +1,11 @@
-// The app shell: the desktop header (brand, Food/Drinks nav, grid/list toggle)
-// or the phone bottom bar, around the page. `side` picks the theme through
-// `data-side` (see styles/tokens.css).
+// The app shell: the desktop header (brand, Food/Drinks nav, the bar on the
+// drinks side, grid/list toggle) or the phone bottom bar, around the page.
+// `side` picks the theme through `data-side` (see styles/tokens.css).
 
 import { useLayoutEffect, type ReactNode } from 'react'
-import { Link } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { defaultQuery } from './browse'
-import { DrinksTab, FoodTab, Grid, List, Logo } from './icons'
+import { Bottle, DrinksTab, FoodTab, Grid, List, Logo } from './icons'
 import type { View } from './prefs'
 import { SIDE_LABELS, SIDES, type Side } from './types'
 import { useIsDesktop } from './useIsDesktop'
@@ -24,6 +24,7 @@ export interface ShellProps {
 
 export function Shell({ side, view, onView, phoneActions, phoneBar = true, children }: ShellProps) {
   const desktop = useIsDesktop()
+  const onBar = useLocation().pathname === '/bar'
 
   // The page background lives on <body>, outside this element, so it needs the side too.
   useLayoutEffect(() => {
@@ -41,6 +42,12 @@ export function Shell({ side, view, onView, phoneActions, phoneBar = true, child
           </Link>
           <SideNav current={side} icons />
           <div className="shell-spacer" />
+          {side === 'drinks' && (
+            <Link to="/bar" className="shell-link" aria-current={onBar ? 'page' : undefined}>
+              <Bottle size={18} strokeWidth={1.75} />
+              The bar
+            </Link>
+          )}
           {view && onView && <ViewToggle view={view} onView={onView} />}
         </header>
       )}
@@ -95,6 +102,8 @@ export interface PageHeadingProps {
   subtitle?: string
   /** Beside the title: the sort select on desktop, the search button on a phone. */
   children?: ReactNode
+  /** Under the title row, inside the block (on a phone, inside the Drinks masthead). */
+  below?: ReactNode
 }
 
 /**
@@ -103,7 +112,7 @@ export interface PageHeadingProps {
  * first in the page, outside any gutter. On desktop put it inside the page's own
  * padded column.
  */
-export function PageHeading({ side, title, subtitle, children }: PageHeadingProps) {
+export function PageHeading({ side, title, subtitle, children, below }: PageHeadingProps) {
   return (
     <div className="page-heading">
       <div className="page-heading-row">
@@ -114,6 +123,7 @@ export function PageHeading({ side, title, subtitle, children }: PageHeadingProp
         </div>
         {children}
       </div>
+      {below}
       <div className="page-heading-rule" aria-hidden="true" />
     </div>
   )

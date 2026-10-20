@@ -1,18 +1,21 @@
-// The browse filters: search (desktop only), marks, category and tags. `aside` is
-// the desktop side panel; `sheet` is the same controls bigger, inside the phone's
-// filter sheet (FilterSheet below).
+// The browse filters: search (desktop only), the bar (desktop drinks only), marks,
+// category and tags. `aside` is the desktop side panel; `sheet` is the same
+// controls bigger, inside the phone's filter sheet (FilterSheet below). On a
+// phone the bar filter is chips under the heading instead (BarChips in Browse).
 
 import { useEffect, useRef, type ReactNode, type Ref } from 'react'
+import { Link } from 'react-router'
 import {
   FILTER_MARKS,
   MARK_LABELS,
   SORT_OPTIONS,
+  type BarFilter,
   type BrowseState,
   type FilterMark,
   type facetCounts,
 } from './browse'
 import { capitalise } from './format'
-import { Bookmark, Check, Heart, Search } from './icons'
+import { Bookmark, Bottle, Check, Heart, Question, Search } from './icons'
 import { SIDE_LABELS, type Side } from './types'
 
 const MARK_ICONS: Record<FilterMark, () => ReactNode> = {
@@ -29,9 +32,18 @@ export interface FilterPanelProps {
   variant?: 'aside' | 'sheet'
   /** The search field, shown when given (the phone has a search button instead). */
   search?: { value: string; onChange: (value: string) => void }
+  /** The "From your bar" section, shown when given (drinks, once the bar has loaded). */
+  bar?: BarSummary
 }
 
-export function FilterPanel({ side, state, counts, onChange, variant = 'aside', search }: FilterPanelProps) {
+/** What the browse page knows about the bar. */
+export interface BarSummary {
+  setUp: boolean
+  /** Bottles not sorted yet. */
+  unsorted: number
+}
+
+export function FilterPanel({ side, state, counts, onChange, variant = 'aside', search, bar }: FilterPanelProps) {
   const sheet = variant === 'sheet'
   const Heading = sheet ? 'h3' : 'h2'
 
@@ -46,6 +58,8 @@ export function FilterPanel({ side, state, counts, onChange, variant = 'aside', 
   return (
     <div className={`filters filters--${variant}`}>
       {search && <SearchField side={side} value={search.value} onChange={search.onChange} />}
+
+      {bar && <BarSection bar={bar} state={state} counts={counts} onChange={onChange} />}
 
       <section className="filter-section">
         <Heading>Marks</Heading>
@@ -125,6 +139,64 @@ export function FilterPanel({ side, state, counts, onChange, variant = 'aside', 
   )
 }
 
+type BarCount = keyof ReturnType<typeof facetCounts>['bar']
+
+const BAR_OPTIONS: readonly { value: BarFilter | null; label: string; count: BarCount }[] = [
+  { value: null, label: 'Everything', count: 'all' },
+  { value: 'can', label: 'Can make now', count: 'can' },
+  { value: 'fresh', label: 'Only need fresh items', count: 'fresh' },
+]
+
+function BarSection({
+  bar,
+  state,
+  counts,
+  onChange,
+}: {
+  bar: BarSummary
+  state: BrowseState
+  counts: ReturnType<typeof facetCounts>
+  onChange: (patch: Partial<BrowseState>) => void
+}) {
+  return (
+    <section className="filter-section">
+      <h2>From your bar</h2>
+      <div role="radiogroup" aria-label="Inventory" className="filter-bar">
+        {BAR_OPTIONS.map(({ value, label, count }) => (
+          <button
+            key={label}
+            type="button"
+            role="radio"
+            aria-checked={state.bar === value}
+            className="filter-bar-option"
+            onClick={() => onChange({ bar: value })}
+          >
+            <span className="filter-radio" aria-hidden="true" />
+            <span className="filter-grow">{label}</span>{' '}
+            <span className="filter-count">{counts.bar[count]}</span>
+          </button>
+        ))}
+      </div>
+      <Link to="/bar" className="filter-bar-edit">
+        <Bottle size={18} strokeWidth={1.75} />
+        {bar.setUp ? 'Edit the bar' : 'Set up the bar'}
+      </Link>
+      {bar.setUp && bar.unsorted > 0 && (
+        <Link to="/bar" className="filter-bar-unsorted">
+          <Question size={20} />
+          <span>
+            <strong>
+              {bar.unsorted} {bar.unsorted === 1 ? 'bottle' : 'bottles'} not sorted yet.
+            </strong>{' '}
+            Drinks that use {bar.unsorted === 1 ? 'it' : 'them'} count as missing.{' '}
+            <span className="filter-bar-sort">Sort them</span>
+          </span>
+        </Link>
+      )}
+    </section>
+  )
+}
+
 /** The search box: in the desktop panel, and under the title on a phone. */
 export function SearchField({
   side,
@@ -170,7 +242,7 @@ function CategoryPill({ name, on, onPick }: { name: string; on: boolean; onPick:
   )
 }
 
-export interface FilterSheetProps extends Omit<FilterPanelProps, 'variant' | 'search'> {
+export interface FilterSheetProps extends Omit<FilterPanelProps, 'variant' | 'search' | 'bar'> {
   open: boolean
   /** How many recipes the filters leave, for the "Show N recipes" button. */
   count: number

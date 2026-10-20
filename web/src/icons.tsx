@@ -362,3 +362,29 @@ export function Fold(props: IconProps) {
     </Svg>
   )
 }
+
+// Drinks browse empty states (DrinksNoBarDesktop, DrinksNoBarPhone).
+
+/** Three bottles on a dashed shelf: the bar is not set up, or nothing to make. */
+export function Shelf(props: IconProps) {
+  return (
+    <Svg width={144} height={96} viewBox="0 0 72 48" strokeWidth={1.4} {...props}>
+      <path d="M14 6h6v8l3 5v24a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V19l3-5z" />
+      <path d="M33 2h6v12l3 5v24a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V19l3-5z" />
+      <path d="M52 10h6v6l3 4v23a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V20l3-4z" />
+      <path d="M4 45h64" strokeDasharray="2 4" />
+    </Svg>
+  )
+}
+
+/** A coupe and a basket: every drink needs something fresh. */
+export function CoupeBasket(props: IconProps) {
+  return (
+    <Svg width={72} height={64} viewBox="0 0 48 44" strokeWidth={1.5} {...props}>
+      <path d="M8 6h22c0 8-5 13-11 13S8 14 8 6z" />
+      <path d="M19 19v12M13 31h12" />
+      <path d="M26 28h18l-2 12H28z" />
+      <path d="m31 28 3-5M39 28l-3-5" />
+    </Svg>
+  )
+}

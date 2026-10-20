@@ -125,3 +125,32 @@ test('the Drinks heading carries the bar eyebrow, Food does not', () => {
   expect(screen.getByText('Favourite, quickest first')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Sort' })).toBeInTheDocument()
 })
+
+test('links to the bar on the drinks side of the desktop header only', () => {
+  stubViewport(true)
+  const { rerender } = renderShell(<Shell side="drinks">{null}</Shell>)
+  expect(screen.getByRole('link', { name: 'The bar' })).toHaveAttribute('href', '/bar')
+  expect(screen.getByRole('link', { name: 'The bar' })).not.toHaveAttribute('aria-current')
+  rerender(
+    <MemoryRouter>
+      <Shell side="food">{null}</Shell>
+    </MemoryRouter>,
+  )
+  expect(screen.queryByRole('link', { name: 'The bar' })).not.toBeInTheDocument()
+})
+
+test('the bar link is the current page on /bar', () => {
+  stubViewport(true)
+  render(
+    <MemoryRouter initialEntries={['/bar']}>
+      <Shell side="drinks">{null}</Shell>
+    </MemoryRouter>,
+  )
+  expect(screen.getByRole('link', { name: 'The bar' })).toHaveAttribute('aria-current', 'page')
+})
+
+test('a phone has no bar link in the shell (the drinks masthead has it)', () => {
+  stubViewport(false)
+  renderShell(<Shell side="drinks">{null}</Shell>)
+  expect(screen.queryByRole('link', { name: 'The bar' })).not.toBeInTheDocument()
+})
