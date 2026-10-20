@@ -58,9 +58,11 @@ A term **covers** an ingredient row of a recipe when either:
 1. the term and the row's `item` resolve to the same catalog entry (by name or alias), or
 2. every word of the term matches a word of one of the row's names. The row's names are its
    `item` and, if it resolves to a catalog entry, that entry's name and aliases. Words are
-   `search.words()`. A term word of five letters or more matches a name word when they are
-   equal or `fuzz.ratio >= 80`. A shorter term word must equal the name word, or the name
-   word must be it plus `s` or `es` (or the term word it plus `s`/`es`), because
+   `search.words()`. Any term word matches a name word that is equal to it or differs by a
+   plural (`s`, `es`, or `y` for `ies`, either way round). A term word of five letters or
+   more also matches when `fuzz.ratio >= 85` (changed from 80 at the final review: at 80,
+   "chicken" covered `chickpea`, "butter" `butternut`, "pasta" `paste`). A shorter term
+   word gets no fuzzy match, because
    `fuzz.ratio` is too forgiving for short words ("pea" vs "pear", "rice" vs "rise"). There
    is no prefix rule: a term is a whole word, so "pea" must not cover "peanuts". So "leeks"
    covers `leek`, "egg" covers `eggs`, "potato" covers `baby potatoes`, "chicken" covers

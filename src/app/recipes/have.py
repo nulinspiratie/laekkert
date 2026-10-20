@@ -19,7 +19,7 @@ from app.recipes.search import words
 MAX_TERMS = 20
 MAX_TERM_LENGTH = 60
 MIN_FUZZY_LENGTH = 5
-MIN_RATIO = 80
+MIN_RATIO = 85
 HAVE_FOOD_ONLY = '"What you have" is for food only.'
 
 
@@ -42,19 +42,27 @@ def clean_terms(raw: list[str]) -> list[str]:
 def word_matches(term_word: str, name_word: str) -> bool:
     """Whether a term word hits a name word.
 
-    Long words forgive a typo or a plural. Short ones only differ by an `s` or
-    `es`, because the fuzzy ratio is too forgiving for "pea" vs "pear" and "rice"
-    vs "rise". There is no prefix rule: "pea" must not cover "peanuts".
+    Any word may differ by a plural (`s`, `es`, or `y` for `ies`). Long words
+    also forgive a typo, at a ratio strict enough that "chicken" misses
+    "chickpea" and "butter" misses "butternut". Short ones don't, because the
+    ratio is too forgiving for "pea" vs "pear" and "rice" vs "rise". There is no
+    prefix rule: "pea" must not cover "peanuts".
     """
-    if term_word == name_word:
+    if term_word == name_word or _is_plural(term_word, name_word):
         return True
-    if len(term_word) >= MIN_FUZZY_LENGTH:
-        return fuzz.ratio(term_word, name_word) >= MIN_RATIO
-    return any(
-        a == b + suffix
-        for a, b in ((term_word, name_word), (name_word, term_word))
-        for suffix in ("s", "es")
+    return (
+        len(term_word) >= MIN_FUZZY_LENGTH
+        and fuzz.ratio(term_word, name_word) >= MIN_RATIO
     )
+
+
+def _is_plural(a: str, b: str) -> bool:
+    for one, many in ((a, b), (b, a)):
+        if many in (one + "s", one + "es"):
+            return True
+        if one.endswith("y") and many == one[:-1] + "ies":
+            return True
+    return False
 
 
 @dataclass

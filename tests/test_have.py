@@ -55,6 +55,12 @@ def test_word_matches():
         ("eggs", "egg"),
         ("tomatoes", "tomato"),
         ("pea", "peas"),
+        ("anchovy", "anchovies"),
+        ("berries", "berry"),
+        ("mango", "mangoes"),
+        ("chiken", "chicken"),
+        ("tumeric", "turmeric"),
+        ("yoghurt", "yogurt"),
     ]:
         assert word_matches(term, name), (term, name)
     for term, name in [
@@ -62,6 +68,12 @@ def test_word_matches():
         ("rice", "rise"),
         ("pea", "peanuts"),
         ("chicken", "chickpeas"),
+        # Each of these is exactly 80 on the fuzzy ratio.
+        ("chicken", "chickpea"),
+        ("butter", "butternut"),
+        ("apple", "maple"),
+        ("pasta", "paste"),
+        ("stock", "stick"),
     ]:
         assert not word_matches(term, name), (term, name)
 

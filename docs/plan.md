@@ -213,8 +213,8 @@ Rulings made on the way:
   - On desktop the filter aside has a What you have section. On a phone a basket button in
     the header opens the same field.
 - **Merging ingredients (MCP).** `list_ingredients` lists each ingredient with its names,
-  recipe counts per side and bar state. `merge_ingredients` folds one name into another and
-  `separate` undoes it. Recipes keep their wording; only the catalog changes. A merge never
+  recipe counts per side, kind and fresh. `merge_ingredients` folds one name into another and
+  `separate` takes a name back out (a conversion or fresh flag copied in the merge stays). Recipes keep their wording; only the catalog changes. A merge never
   changes what is on the bar. The server instructions and the style guide tell Claude to use
   the names already in use and to merge true duplicates.
 - Screenshots are in `docs/design/screenshots/m5/`.
@@ -235,6 +235,9 @@ Rulings made on the way:
 - The web list also stops at 20 terms. It doesn't cut long terms; the server does.
 - The phone panel has no visible heading. Its field and chip list have aria-labels ("Add an
   ingredient", "Ingredients you have").
+- The fuzzy match for words of five letters or more needs a ratio of 85, not the spec's 80,
+  and plurals (`s`, `es`, `y`/`ies`) match at any length. At 80, "chicken" covered
+  chickpeas and "butter" covered butternut squash.
 
 ### After the PoC (rest of V1)
 
