@@ -398,7 +398,7 @@ def test_edit_recipe_replaces_whole_lists_and_renames_without_moving(client, dal
     after = read(client, "food", dal)
     assert after["name"] == "Better dal"
     assert after["tags"] == ["quick"]
-    assert after["steps"] == ["Rinse.", "Simmer."]
+    assert [step["text"] for step in after["steps"]] == ["Rinse.", "Simmer."]
     assert [(i["amount"], i["unit"]) for i in after["ingredients"]] == [(6, "g")]
 
 
@@ -460,6 +460,8 @@ def test_edit_recipe_stale_version_refused(client, dal):
             "image",
         )
     }
+    # Requests still send steps as plain strings.
+    body["steps"] = [step["text"] for step in shown["steps"]]
     api = client.put(
         "/api/recipes/food/quick-dal", json={**body, "name": "Dal!", "base_version": 1}
     )

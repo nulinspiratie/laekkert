@@ -1,5 +1,5 @@
 {
-  "format_version": 2,
+  "format_version": 3,
   "slug": "virgin-mojito",
   "side": "drinks",
   "name": "Virgin mojito",
@@ -13,9 +13,9 @@
     {"amount": 100, "unit": "ml", "item": "soda water"}
   ],
   "steps": [
-    "Gently press the mint with the syrup in a highball.",
-    "Add the lime juice, fill with crushed ice and top with soda.",
-    "Stir once and garnish with a mint sprig."
+    {"text": "Gently press the mint with the syrup in a highball."},
+    {"text": "Add the lime juice, fill with crushed ice and top with soda."},
+    {"text": "Stir once and garnish with a mint sprig."}
   ],
   "tags": ["mocktail"]
 }

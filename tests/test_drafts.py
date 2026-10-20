@@ -131,7 +131,7 @@ def test_blank_rows_and_steps_are_dropped(catalog):
         catalog,
     )
     assert [i.item for i in recipe.ingredients] == ["red lentils"]
-    assert recipe.steps == ["Simmer"]
+    assert [s.text for s in recipe.steps] == ["Simmer"]
     assert recipe.name == "Dal"
 
 

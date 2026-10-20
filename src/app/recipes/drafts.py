@@ -20,6 +20,7 @@ from app.recipes.model import (
     Recipe,
     Side,
     Source,
+    Step,
     Unit,
 )
 
@@ -221,7 +222,7 @@ def to_recipe(
             servings=draft.servings,
             time_minutes=draft.time_minutes,
             ingredients=ingredients,
-            steps=[s for s in (s.strip() for s in draft.steps) if s],
+            steps=[Step(text=s) for s in (s.strip() for s in draft.steps) if s],
             source=source,
             tags=_normal_tags(draft.tags),
             marks=marks,

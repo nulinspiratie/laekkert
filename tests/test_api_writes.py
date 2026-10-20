@@ -88,7 +88,10 @@ def test_update_and_timeline_newest_first(client):
     changed = {**DRAFT, "steps": ["Shake hard.", "Strain."]}
     response = post_json(client, "/api/recipes/drinks/margarita", changed, "put")
     assert response.status_code == 200
-    assert response.json()["steps"] == ["Shake hard.", "Strain."]
+    assert response.json()["steps"] == [
+        {"text": "Shake hard.", "group": ""},
+        {"text": "Strain.", "group": ""},
+    ]
     body = client.get("/api/recipes/drinks/margarita/timeline").json()
     assert [e["kind"] for e in body["entries"]] == ["edit", "created"]
     assert body["entries"][0]["changes"]
@@ -179,7 +182,7 @@ def test_restore(client):
         client, "/api/recipes/drinks/margarita/restore", {"version": 1}
     )
     assert response.status_code == 200
-    assert response.json()["steps"] == ["Shake."]
+    assert response.json()["steps"] == [{"text": "Shake.", "group": ""}]
     entries = client.get("/api/recipes/drinks/margarita/timeline").json()["entries"]
     assert entries[0]["restored_from"] == 1
     missing = post_json(client, "/api/recipes/drinks/margarita/restore", {"version": 9})

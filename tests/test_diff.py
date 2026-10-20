@@ -3,6 +3,10 @@ from app.recipes.model import FORMAT_VERSION, Recipe
 from app.recipes.timeline import Change
 
 
+def steps(*texts: str) -> list[dict]:
+    return [{"text": t} for t in texts]
+
+
 def make(**overrides) -> Recipe:
     data = {
         "format_version": FORMAT_VERSION,
@@ -16,7 +20,7 @@ def make(**overrides) -> Recipe:
             {"amount": 25, "unit": "ml", "item": "lime juice"},
             {"amount": 60, "unit": "ml", "item": "gin"},
         ],
-        "steps": ["Shake", "Strain", "Garnish"],
+        "steps": steps("Shake", "Strain", "Garnish"),
         "tags": [],
         "marks": [],
     }
@@ -170,23 +174,25 @@ def test_repeated_items_pair_in_order():
 
 
 def test_step_added_changed_removed():
-    old = make(steps=["Shake", "Strain", "Garnish"])
-    added = make(steps=["Shake", "Strain", "Garnish", "Serve"])
+    old = make(steps=steps("Shake", "Strain", "Garnish"))
+    added = make(steps=steps("Shake", "Strain", "Garnish", "Serve"))
     assert changes(old, added) == [("method", "added", "step 4: Serve")]
-    changed = make(steps=["Shake", "Double strain", "Garnish"])
+    changed = make(steps=steps("Shake", "Double strain", "Garnish"))
     assert changes(old, changed) == [("method", "changed", "step 2: Double strain")]
-    removed = make(steps=["Shake", "Garnish"])
+    removed = make(steps=steps("Shake", "Garnish"))
     assert changes(old, removed) == [("method", "removed", "step 2: Strain")]
 
 
 def test_removed_step_uses_the_old_number():
-    old = make(steps=["a", "b", "c"])
-    assert changes(old, make(steps=["a", "b"])) == [("method", "removed", "step 3: c")]
+    old = make(steps=steps("a", "b", "c"))
+    assert changes(old, make(steps=steps("a", "b"))) == [
+        ("method", "removed", "step 3: c")
+    ]
 
 
 def test_long_step_is_cut():
-    new = make(steps=["Shake", "Strain", "x" * 200])
-    [(_, kind, text)] = changes(make(steps=["Shake", "Strain"]), new)
+    new = make(steps=steps("Shake", "Strain", "x" * 200))
+    [(_, kind, text)] = changes(make(steps=steps("Shake", "Strain")), new)
     assert kind == "added"
     assert text == "step 3: " + "x" * 80 + "…"
 
@@ -233,7 +239,7 @@ def test_changes_come_in_section_order():
     new = make(
         name="Gin sour",
         ingredients=[ing("lime juice", 20), ing("gin", 60)],
-        steps=["Shake"],
+        steps=steps("Shake"),
         source={"url": "https://a.example"},
         tags=["quick"],
         image="photo/a.jpg",

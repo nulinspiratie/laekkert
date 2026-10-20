@@ -2,7 +2,7 @@
 
 from difflib import SequenceMatcher
 
-from app.recipes.model import Ingredient, Recipe
+from app.recipes.model import Ingredient, Recipe, Step
 from app.recipes.timeline import Change
 
 STEP_PREVIEW = 80
@@ -126,7 +126,8 @@ def _ingredients(old: Recipe, new: Recipe) -> list[Change]:
     return changes
 
 
-def _step(number: int, text: str) -> str:
+def _step(number: int, step: Step) -> str:
+    text = step.text
     if len(text) > STEP_PREVIEW:
         text = text[:STEP_PREVIEW] + "…"
     return f"step {number}: {text}"
@@ -134,7 +135,12 @@ def _step(number: int, text: str) -> str:
 
 def _method(old: Recipe, new: Recipe) -> list[Change]:
     changes: list[Change] = []
-    matcher = SequenceMatcher(None, old.steps, new.steps, autojunk=False)
+    matcher = SequenceMatcher(
+        None,
+        [s.text for s in old.steps],
+        [s.text for s in new.steps],
+        autojunk=False,
+    )
     for op, i1, i2, j1, j2 in matcher.get_opcodes():
         if op == "equal":
             continue
