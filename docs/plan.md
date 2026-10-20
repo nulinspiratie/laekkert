@@ -148,11 +148,20 @@ from either side is refused instead of overwriting the other. Claude's writes sh
 `via: "claude"` in the timeline. Claude can't set marks or ratings, add notes, delete or
 restore.
 
+### M4: Drinks inventory
+
+Requirement 20 and the `manage_inventory` tool from requirement 24: shelf-stable items are
+tracked as have / don't have, fresh items are marked fresh and never tracked, and drinks
+show "Can make now" and "Only need fresh items". Design first: the brief for the Claude
+Design session is [design/m4-inventory-brief.md](design/m4-inventory-brief.md). The spec
+and plan follow from its artboards.
+
 ### After the PoC (rest of V1)
 
-Two users and authorship; drinks inventory with "can make now" / "just buy fresh";
-throwaway ingredient filter; `merge_ingredients` and `manage_inventory`; photo search
+Two users and authorship; throwaway ingredient filter; `merge_ingredients`; photo search
 with illustration fallback; offline PWA.
+
+Kitchen mode (screen awake, large text, step by step) moves to V2. It needs its own design.
 
 ## Open questions
 
