@@ -15,6 +15,7 @@ from app.config import Settings, load_settings
 from app.mcp_server import build_mcp
 from app.recipes.catalog import Catalog
 from app.recipes.store import RecipeStore
+from app.recipes.uploads import UploadStore
 from app.web import web_routes
 
 # Fixed by the runtime conventions; see CLAUDE.md.
@@ -34,8 +35,9 @@ def create_app(
         data_dir = Path(os.environ.get("APP_DATA_DIR", "/data"))
     if static_dir is None and os.environ.get("STATIC_DIR"):
         static_dir = Path(os.environ["STATIC_DIR"])
-    store = RecipeStore(data_dir)
     catalog = Catalog(data_dir)
+    uploads = UploadStore(data_dir)
+    store = RecipeStore(data_dir, catalog, uploads)
     server = build_mcp(store)
     mcp_app = server.streamable_http_app(
         streamable_http_path="/mcp",

@@ -4,13 +4,19 @@ import shutil
 
 import pytest
 
+from app.recipes.catalog import Catalog
 from app.recipes.model import SIDES, parse_recipe
 from app.recipes.store import SEED_DIR, RecipeStore
+from app.recipes.uploads import UploadStore
+
+
+def make_store(data_dir):
+    return RecipeStore(data_dir, Catalog(data_dir), UploadStore(data_dir))
 
 
 @pytest.fixture
 def store(tmp_path):
-    s = RecipeStore(tmp_path)
+    s = make_store(tmp_path)
     assert s.seed_if_empty()
     return s
 
@@ -93,7 +99,7 @@ def test_folder_slug_mismatch_is_skipped(store, caplog):
 
 
 def test_seed_if_empty_copies_once(tmp_path):
-    s = RecipeStore(tmp_path)
+    s = make_store(tmp_path)
     assert s.seed_if_empty() is True
     path = tmp_path / "recipes/drinks/daiquiri/recipe.json"
     path.write_text(path.read_text().replace("Daiquiri", "Edited"))
@@ -102,7 +108,7 @@ def test_seed_if_empty_copies_once(tmp_path):
 
 
 def test_seed_skipped_when_any_recipe_exists(tmp_path):
-    s = RecipeStore(tmp_path)
+    s = make_store(tmp_path)
     src = SEED_DIR / "drinks/daiquiri/recipe.json"
     write(s, "drinks", "daiquiri", src.read_text())
     assert s.seed_if_empty() is False
@@ -110,7 +116,7 @@ def test_seed_skipped_when_any_recipe_exists(tmp_path):
 
 
 def test_missing_data_dir_lists_empty(tmp_path):
-    assert RecipeStore(tmp_path / "nope").list("food") == []
+    assert make_store(tmp_path / "nope").list("food") == []
 
 
 def test_seed_failure_is_logged_not_raised(tmp_path, monkeypatch, caplog):
@@ -119,7 +125,7 @@ def test_seed_failure_is_logged_not_raised(tmp_path, monkeypatch, caplog):
 
     monkeypatch.setattr(shutil, "copytree", deny)
     with caplog.at_level(logging.WARNING, logger="app.recipes"):
-        assert RecipeStore(tmp_path).seed_if_empty() is False
+        assert make_store(tmp_path).seed_if_empty() is False
     assert "read-only" in caplog.text
 
 
