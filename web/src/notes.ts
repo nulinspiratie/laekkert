@@ -13,6 +13,9 @@ export type Block = { kind: 'paragraph'; lines: Span[][] } | { kind: 'list'; ite
 // space or a star, so "2 * 3 * 4" and a lone "*" stay as written.
 const INLINE = /(\*\*\*|\*\*|\*)(?![\s*])(.+?)(?<![\s*])\1/g
 
+// The italics alone, for the text inside a bold span.
+const ITALIC = /(\*)(?![\s*])(.+?)(?<![\s*])\1/g
+
 // A marker followed by whitespace; "**bold**" and "*soft*" are text.
 const BULLET = /^\s*[-*•]\s+(.*)$/
 
@@ -20,18 +23,27 @@ function plain(text: string): Span {
   return { text, bold: false, italic: false }
 }
 
-/** One line split into plain, bold and italic spans; an unmatched marker stays as written. */
-export function parseInline(line: string): Span[] {
+/** Splits `line` on the matches of `pattern`; `inside` styles what a match holds. */
+function split(line: string, pattern: RegExp, inside: (match: RegExpMatchArray) => Span[]): Span[] {
   const spans: Span[] = []
   let last = 0
-  for (const match of line.matchAll(INLINE)) {
+  for (const match of line.matchAll(pattern)) {
     if (match.index > last) spans.push(plain(line.slice(last, match.index)))
-    const marker = match[1]
-    spans.push({ text: match[2], bold: marker.length >= 2, italic: marker.length !== 2 })
+    spans.push(...inside(match))
     last = match.index + match[0].length
   }
   if (last < line.length) spans.push(plain(line.slice(last)))
   return spans
+}
+
+/** One line split into plain, bold and italic spans; an unmatched marker stays as written. */
+export function parseInline(line: string): Span[] {
+  return split(line, INLINE, ([, marker, text]) => {
+    if (marker !== '**') return [{ text, bold: marker.length === 3, italic: true }]
+    // Italics inside bold: "**use *fresh* basil**".
+    const inner = split(text, ITALIC, ([, , soft]) => [{ text: soft, bold: false, italic: true }])
+    return inner.map((span) => ({ ...span, bold: true }))
+  })
 }
 
 /** Notes text as paragraphs and bullet lists. Blank text has no blocks. */

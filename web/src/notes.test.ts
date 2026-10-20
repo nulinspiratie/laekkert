@@ -16,6 +16,14 @@ describe('parseInline', () => {
     expect(parseInline('***both***')).toEqual([{ text: 'both', bold: true, italic: true }])
   })
 
+  test('italics inside bold', () => {
+    expect(parseInline('**Tip: use *fresh* basil**')).toEqual([
+      { text: 'Tip: use ', bold: true, italic: false },
+      { text: 'fresh', bold: true, italic: true },
+      { text: ' basil', bold: true, italic: false },
+    ])
+  })
+
   test.each(['2 * 3 * 4', '5*', '** a**', '**open', '*', ''])('%j stays as written', (line) => {
     expect(parseInline(line)).toEqual(line === '' ? [] : [plain(line)])
   })
