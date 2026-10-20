@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Lækkert: food and drinks recipes"
 requires-python = ">=3.12"
 dependencies = [
+    "httpx2>=2.13",
     "mcp>=2.3",
     "pydantic>=2.14",
     "rapidfuzz>=3.14",
@@ -16,7 +17,6 @@ app = "app.main:main"
 
 [dependency-groups]
 dev = [
-    "httpx2>=2.13",
     "pytest>=8",
     "ruff>=0.17",
 ]

@@ -112,3 +112,33 @@ def test_old_uploads_are_removed(store):
 )
 def test_path_refuses_other_names(store, name):
     assert store.path(name) is None
+
+
+def test_save_detected_png(store, tmp_path):
+    name = store.save_detected(PNG)
+    assert name.startswith("img-") and name.endswith(".png")
+    assert (tmp_path / "uploads" / name).read_bytes() == PNG
+    assert store.save_detected(JPEG).endswith(".jpg")
+    assert store.save_detected(HEIC).endswith(".heic")
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        b"<svg xmlns='http://www.w3.org/2000/svg'/>",
+        b"<?xml version='1.0'?><svg/>",
+        b"<!doctype html><html><script>alert(1)</script></html>",
+        b"",
+    ],
+)
+def test_save_detected_refuses_svg_and_html(store, body):
+    with pytest.raises(UnsupportedImage, match="^That link isn't a supported photo$"):
+        store.save_detected(body)
+    assert not store.dir.exists() or not list(store.dir.iterdir())
+
+
+def test_save_detected_too_big(store, monkeypatch):
+    monkeypatch.setattr(uploads, "MAX_UPLOAD_BYTES", 100)
+    with pytest.raises(ImageTooLarge, match="^That photo is over 20 MB$"):
+        store.save_detected(PNG + b"\x00" * 100)
+    assert store.save_detected(PNG)  # at the limit is fine
