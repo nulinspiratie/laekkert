@@ -298,3 +298,67 @@ export function Coupe(props: IconProps) {
     </Glyph>
   )
 }
+
+// The bar (BarPhone, BarDesktop, BarItemSheetPhone).
+
+/** "Don't have": a circle with a bar through it. */
+export function MinusCircle({ strokeWidth = 2.25, ...props }: IconProps) {
+  return (
+    <Svg size={16} strokeWidth={strokeWidth} {...props}>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M8.5 12h7" />
+    </Svg>
+  )
+}
+
+/** Fresh items: bought when needed. */
+export function Basket({ strokeWidth = 1.9, ...props }: IconProps) {
+  return (
+    <Svg strokeWidth={strokeWidth} {...props}>
+      <path d="M4 10h16l-1.5 9h-13z" />
+      <path d="m8 10 3-5M16 10l-3-5" />
+    </Svg>
+  )
+}
+
+/** The "⋯" button. */
+export function More(props: IconProps) {
+  return (
+    <Svg fill="currentColor" stroke="none" {...props}>
+      <circle cx="5" cy="12" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="19" cy="12" r="1.6" />
+    </Svg>
+  )
+}
+
+/** Not sorted yet. */
+export function Question({ strokeWidth = 1.9, ...props }: IconProps) {
+  return (
+    <Svg size={22} strokeWidth={strokeWidth} {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.4" />
+      <circle cx="12" cy="17" r=".9" fill="currentColor" stroke="none" />
+    </Svg>
+  )
+}
+
+/** No bottle by that name. */
+export function Bottle({ strokeWidth = 1.25, ...props }: IconProps) {
+  return (
+    <Svg size={56} strokeWidth={strokeWidth} {...props}>
+      <path d="M10 3h4v4l1.5 2.5V20a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1V9.5L10 7z" />
+      <path d="M8.5 13h7" />
+    </Svg>
+  )
+}
+
+/** Fold one item into another. */
+export function Fold(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M5 5v4a4 4 0 0 0 4 4h10" />
+      <path d="m15 9 4 4-4 4" />
+    </Svg>
+  )
+}
