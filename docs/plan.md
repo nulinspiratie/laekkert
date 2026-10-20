@@ -123,7 +123,7 @@ Drag handles and avatars are not built. Screenshots are in `docs/design/screensh
 ### M3: Claude integration
 
 `search_recipes`, `add_recipe`, `edit_recipe` on top of M0's read tools; style guide in
-`docs/style-guide.md`, also served as an MCP resource/prompt; URL import (Claude fetches
+`src/app/style_guide.md`, also served as an MCP resource/prompt; URL import (Claude fetches
 and converts, the server stores `source_url` and grabs `og:image`).
 
 ### After the PoC (rest of V1)
