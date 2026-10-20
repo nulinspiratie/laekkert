@@ -11,11 +11,15 @@ const recipe: Recipe = {
   servings: 4,
   time_minutes: 35,
   ingredients: [
-    { amount: 250, unit: 'g', item: 'red lentils', note: 'rinsed', no_scale: false, original: '', g_per_tsp: null },
-    { amount: null, unit: 'g', item: 'flour', note: '', no_scale: false, original: '1 cup', g_per_tsp: null },
-    { amount: 0.5, unit: 'piece', item: 'lime', note: '', no_scale: true, original: '', g_per_tsp: null },
+    { amount: 250, unit: 'g', item: 'red lentils', note: 'rinsed', no_scale: false, original: '', group: '', g_per_tsp: null },
+    { amount: null, unit: 'g', item: 'flour', note: '', no_scale: false, original: '1 cup', group: '', g_per_tsp: null },
+    { amount: 0.5, unit: 'piece', item: 'lime', note: '', no_scale: true, original: '', group: '', g_per_tsp: null },
   ],
-  steps: ['Cook.', 'Serve.'],
+  steps: [
+    { text: 'Cook.', group: '' },
+    { text: 'Serve.', group: '' },
+  ],
+  notes: '',
   source: { url: 'https://example.com/dal', photo: null },
   tags: ['weeknight'],
   marks: [],
@@ -199,11 +203,15 @@ describe('toDraft', () => {
       servings: 4,
       time_minutes: 35,
       ingredients: [
-        { amount: 250, unit: 'g', item: 'red lentils', note: 'rinsed', no_scale: false, original: '' },
-        { amount: null, unit: 'g', item: 'flour', note: '', no_scale: false, original: '1 cup' },
-        { amount: 0.5, unit: 'piece', item: 'lime', note: '', no_scale: true, original: '' },
+        { amount: 250, unit: 'g', item: 'red lentils', note: 'rinsed', no_scale: false, original: '', group: '' },
+        { amount: null, unit: 'g', item: 'flour', note: '', no_scale: false, original: '1 cup', group: '' },
+        { amount: 0.5, unit: 'piece', item: 'lime', note: '', no_scale: true, original: '', group: '' },
       ],
-      steps: ['Cook.', 'Serve.'],
+      steps: [
+        { text: 'Cook.', group: '' },
+        { text: 'Serve.', group: '' },
+      ],
+      notes: '',
       source: { url: 'https://example.com/dal', photo: null },
       tags: ['weeknight'],
       image: 'dal.jpg',
@@ -223,7 +231,7 @@ describe('toDraft', () => {
     expect(draft.name).toBe('Soup')
     expect(draft.time_minutes).toBeNull()
     expect(draft.ingredients).toHaveLength(1)
-    expect(draft.steps).toEqual(['Stir.'])
+    expect(draft.steps).toEqual([{ text: 'Stir.', group: '' }])
   })
 
   test('typing an amount clears the original; leaving it blank keeps it', () => {

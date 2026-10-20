@@ -11,6 +11,7 @@ function ing(over: Partial<RecipeIngredient> & Pick<RecipeIngredient, 'item'>): 
     note: '',
     no_scale: false,
     original: '',
+    group: '',
     g_per_tsp: null,
     ...over,
   }

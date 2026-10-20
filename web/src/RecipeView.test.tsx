@@ -13,13 +13,17 @@ const traybake: Recipe = {
   servings: 4,
   time_minutes: 45,
   ingredients: [
-    { amount: 800, unit: 'g', item: 'chicken thighs', note: '', no_scale: false, original: '', g_per_tsp: null },
-    { amount: 30, unit: 'ml', item: 'olive oil', note: '', no_scale: false, original: '', g_per_tsp: null },
-    { amount: null, unit: 'g', item: 'smoked paprika', note: '', no_scale: false, original: '1 tsp', g_per_tsp: 2.3 },
-    { amount: 1, unit: 'piece', item: 'lemon', note: '', no_scale: true, original: '', g_per_tsp: null },
-    { amount: null, unit: 'to taste', item: 'salt', note: '', no_scale: true, original: '', g_per_tsp: null },
+    { amount: 800, unit: 'g', item: 'chicken thighs', note: '', no_scale: false, original: '', group: '', g_per_tsp: null },
+    { amount: 30, unit: 'ml', item: 'olive oil', note: '', no_scale: false, original: '', group: '', g_per_tsp: null },
+    { amount: null, unit: 'g', item: 'smoked paprika', note: '', no_scale: false, original: '1 tsp', group: '', g_per_tsp: 2.3 },
+    { amount: 1, unit: 'piece', item: 'lemon', note: '', no_scale: true, original: '', group: '', g_per_tsp: null },
+    { amount: null, unit: 'to taste', item: 'salt', note: '', no_scale: true, original: '', group: '', g_per_tsp: null },
   ],
-  steps: ['Heat the oven.', 'Roast everything.'],
+  steps: [
+    { text: 'Heat the oven.', group: '' },
+    { text: 'Roast everything.', group: '' },
+  ],
+  notes: '',
   source: null,
   tags: ['batch cook', 'kid approved'],
   marks: ['tried'],
@@ -668,6 +672,7 @@ describe('a drink and the bar', () => {
     note,
     no_scale: false,
     original: '',
+    group: '',
     g_per_tsp: null,
   })
   const syrupLink = { slug: 'simple-syrup', name: 'Simple syrup' }

@@ -20,6 +20,7 @@ import {
   type NewEntry,
   type Recipe,
   type Side,
+  type Step,
   type TimelineEntry,
 } from './types'
 import { useIsDesktop } from './useIsDesktop'
@@ -384,7 +385,7 @@ function MadeIt({ busy, onSave }: { busy: boolean; onSave: (entry: NewEntry) => 
   )
 }
 
-function Method({ steps }: { steps: string[] }) {
+function Method({ steps }: { steps: Step[] }) {
   const headingId = useId()
   if (steps.length === 0) return null
   return (
@@ -396,7 +397,7 @@ function Method({ steps }: { steps: string[] }) {
             <span className="method-number" aria-hidden="true">
               {i + 1}
             </span>
-            <p>{step}</p>
+            <p>{step.text}</p>
           </li>
         ))}
       </ol>

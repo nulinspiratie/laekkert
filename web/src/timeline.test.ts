@@ -43,6 +43,14 @@ describe('entryTitle', () => {
     )
   })
 
+  test('an edit of the method and the notes names both', () => {
+    const changes = [
+      { section: 'notes' as const, kind: 'changed' as const, text: 'notes' },
+      { section: 'method' as const, kind: 'changed' as const, text: 'step 1' },
+    ]
+    expect(entryTitle({ ...edit, changes }, all)).toBe('Edited method and notes')
+  })
+
   test('an edit with no listed changes still reads as an edit', () => {
     expect(entryTitle({ ...edit, changes: [] }, all)).toBe('Edited this recipe')
   })

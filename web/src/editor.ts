@@ -31,6 +31,8 @@ export interface EditorState {
   servings: string
   rows: EditorRow[]
   steps: EditorStep[]
+  /** The recipe's notes, carried through unchanged until the editor has a notes box. */
+  notes: string
   sourceMode: SourceMode
   sourceUrl: string
   /** The name of an uploaded or stored source photo. */
@@ -73,6 +75,7 @@ export function emptyState(side: Side): EditorState {
     servings: side === 'drinks' ? '1' : '4',
     rows: [blankRow()],
     steps: [blankStep()],
+    notes: '',
     sourceMode: 'none',
     sourceUrl: '',
     sourcePhoto: null,
@@ -97,7 +100,8 @@ export function stateFromRecipe(recipe: Recipe): EditorState {
       no_scale: ing.no_scale,
       original: ing.original,
     })),
-    steps: recipe.steps.map((text) => ({ key: newKey(), text })),
+    steps: recipe.steps.map((step) => ({ key: newKey(), text: step.text })),
+    notes: recipe.notes,
     // A hand-edited recipe could have both; the link wins and the photo is kept in the
     // state so switching to Photo shows it again.
     sourceMode: source?.url ? 'link' : source?.photo ? 'photo' : 'none',
@@ -220,6 +224,7 @@ function draftRow(row: EditorRow): DraftIngredient {
     no_scale: row.no_scale,
     // Typing an amount replaces what was written.
     original: number === null ? row.original.trim() : '',
+    group: '',
   }
 }
 
@@ -236,7 +241,11 @@ export function toDraft(state: EditorState): RecipeDraft {
     servings: Number(state.servings),
     time_minutes: time === '' ? null : Number(time),
     ingredients: state.rows.filter((row) => !isBlank(row)).map(draftRow),
-    steps: state.steps.map((step) => step.text.trim()).filter(Boolean),
+    steps: state.steps
+      .map((step) => step.text.trim())
+      .filter(Boolean)
+      .map((text) => ({ text, group: '' })),
+    notes: state.notes,
     source,
     tags: state.tags,
     image: state.image,

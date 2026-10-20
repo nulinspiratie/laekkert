@@ -13,11 +13,15 @@ const dal: Recipe = {
   servings: 4,
   time_minutes: 35,
   ingredients: [
-    { amount: 250, unit: 'g', item: 'red lentils', note: 'rinsed', no_scale: false, original: '', g_per_tsp: null },
-    { amount: null, unit: 'g', item: 'flour', note: '', no_scale: false, original: '1 cup', g_per_tsp: null },
-    { amount: 1, unit: 'piece', item: 'onion', note: '', no_scale: true, original: '', g_per_tsp: null },
+    { amount: 250, unit: 'g', item: 'red lentils', note: 'rinsed', no_scale: false, original: '', group: '', g_per_tsp: null },
+    { amount: null, unit: 'g', item: 'flour', note: '', no_scale: false, original: '1 cup', group: '', g_per_tsp: null },
+    { amount: 1, unit: 'piece', item: 'onion', note: '', no_scale: true, original: '', group: '', g_per_tsp: null },
   ],
-  steps: ['Cook the lentils.', 'Serve.'],
+  steps: [
+    { text: 'Cook the lentils.', group: '' },
+    { text: 'Serve.', group: '' },
+  ],
+  notes: '',
   source: null,
   tags: ['weeknight'],
   marks: [],
@@ -171,8 +175,9 @@ test('new recipe posts the draft and opens it', async () => {
       category: 'mains',
       servings: 2,
       time_minutes: 20,
-      ingredients: [{ amount: 2, unit: 'g', item: 'salt', note: '', no_scale: false, original: '' }],
-      steps: ['Boil.'],
+      ingredients: [{ amount: 2, unit: 'g', item: 'salt', note: '', no_scale: false, original: '', group: '' }],
+      steps: [{ text: 'Boil.', group: '' }],
+      notes: '',
       source: null,
       tags: [],
       image: null,
@@ -257,7 +262,7 @@ test('tsp row is sent as tsp', async () => {
   fireEvent.click(save())
   await waitFor(() => expect(location()).toBe('/food/soup'))
   const [body] = writes(fetch, 'POST', '/api/recipes')
-  expect(body.ingredients).toEqual([{ amount: 1.5, unit: 'tsp', item: 'salt', note: '', no_scale: false, original: '' }])
+  expect(body.ingredients).toEqual([{ amount: 1.5, unit: 'tsp', item: 'salt', note: '', no_scale: false, original: '', group: '' }])
 })
 
 test('a number box with unreadable text is an error, not a blank', async () => {
@@ -564,7 +569,7 @@ test('steps move and remove', async () => {
   expect(screen.queryByLabelText('Step 2')).not.toBeInTheDocument()
   fireEvent.click(save())
   await waitFor(() => expect(writes(fetch, 'PUT')).toHaveLength(1))
-  expect(writes(fetch, 'PUT')[0].steps).toEqual(['Serve.'])
+  expect(writes(fetch, 'PUT')[0].steps).toEqual([{ text: 'Serve.', group: '' }])
 })
 
 test('a row stored as written shows it and keeps it', async () => {
@@ -573,7 +578,7 @@ test('a row stored as written shows it and keeps it', async () => {
   expect(screen.getByText('As written: 1 cup')).toBeInTheDocument()
   fireEvent.click(save())
   await waitFor(() => expect(writes(fetch, 'PUT')).toHaveLength(1))
-  expect((writes(fetch, 'PUT')[0].ingredients as unknown[])[1]).toMatchObject({ amount: null, original: '1 cup' })
+  expect((writes(fetch, 'PUT')[0].ingredients as unknown[])[1]).toMatchObject({ amount: null, original: '1 cup', group: '' })
 })
 
 test('typing an amount on a row stored as written replaces it', async () => {
@@ -583,7 +588,7 @@ test('typing an amount on a row stored as written replaces it', async () => {
   expect(screen.queryByText('As written: 1 cup')).not.toBeInTheDocument()
   fireEvent.click(save())
   await waitFor(() => expect(writes(fetch, 'PUT')).toHaveLength(1))
-  expect((writes(fetch, 'PUT')[0].ingredients as unknown[])[1]).toMatchObject({ amount: 120, original: '' })
+  expect((writes(fetch, 'PUT')[0].ingredients as unknown[])[1]).toMatchObject({ amount: 120, original: '', group: '' })
 })
 
 test('tags are added with Enter or the button, lower-cased, without repeats', async () => {
