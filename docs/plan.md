@@ -239,12 +239,9 @@ Rulings made on the way:
   and plurals (`s`, `es`, `y`/`ies`) match at any length. At 80, "chicken" covered
   chickpeas and "butter" covered butternut squash.
 
-### After the PoC (rest of V1)
+### After the PoC
 
-Photo search with illustration fallback; offline PWA. Two users and authorship are dropped
-for now.
-
-Kitchen mode (screen awake, large text, step by step) moves to V2. It needs its own design.
+Every idea for what comes next is in `docs/ideas.md`.
 
 ## Open questions
 
