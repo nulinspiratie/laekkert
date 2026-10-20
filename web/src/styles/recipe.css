@@ -906,7 +906,10 @@
     gap: 14px;
   }
 
+  /* DrinkRecipeDesktop: 400 px wide, so a fresh row's label leaves the item
+     room to wrap by word. */
   .ingredients--drinks {
+    flex-basis: 400px;
     max-width: 520px;
     gap: 14px;
     padding: 24px 22px 10px;

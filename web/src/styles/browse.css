@@ -865,8 +865,8 @@
   min-height: 44px;
   padding: 0 12px;
   color: var(--accent-ink);
+  font-size: 15px;
   font-weight: 600;
-  text-decoration: none;
 }
 
 .filter-bar-unsorted {
