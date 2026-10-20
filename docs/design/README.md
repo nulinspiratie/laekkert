@@ -3,11 +3,12 @@
 The visual design for Lækkert was made as a canvas of artboards in Claude. Artifact:
 https://claude.ai/artifact/BueKAjP8pmy98iZUhn4WQY
 
-`artboards/` holds a verbatim copy of its `project/` files (`canvas.json` and the ten
-`*.dc.html` artboards), so the design survives the artifact. They are design-tool files, not app
-code: read them as text to lift colours, SVG paths, spacing and type. Do not run them. They
-load Google Fonts and a `support.js` that is not part of the snapshot; the app does neither
-(fonts are self-hosted through `@fontsource`).
+`artboards/` holds a verbatim copy of its `project/` files (`canvas.json` and the 21
+`*.dc.html` artboards; the M4 session added eleven and updated four), so the design survives
+the artifact. They are design-tool files, not app code: read them as text to lift colours,
+SVG paths, spacing and type. Do not run them. They load Google Fonts and a `support.js` that
+is not part of the snapshot; the app does neither (fonts are self-hosted through
+`@fontsource`).
 
 ## Export format (decided in M1)
 
@@ -28,6 +29,13 @@ loaded at runtime.
 | `DrinksDesktop.dc.html`, `DrinksPhone.dc.html` | same pages with the Drinks theme (Task 7) |
 | `RecipeDesktop.dc.html`, `RecipePhone.dc.html` | `RecipeView.tsx`, `Ingredients.tsx` (Task 8); the history section is `History.tsx`, ratings are `Stars.tsx` (M2) |
 | `EditorDesktop.dc.html` | `Editor.tsx` (M2); the same form is the phone editor, one column with a fixed Cancel and Save bar |
+| `EditorPhone.dc.html` | the phone layout of `Editor.tsx` (M2). It arrived with the M4 snapshot, after the phone editor was built, and has not been checked against it |
+| `BarPhone.dc.html`, `BarDesktop.dc.html` | `BarPage.tsx` (M4), styles in `bar.css` |
+| `BarFirstVisitPhone.dc.html`, `BarSearchEmptyPhone.dc.html` | `BarPage.tsx`: the first visit (nothing sorted) and a search with no match |
+| `BarItemSheetPhone.dc.html` | `BarItemSheet.tsx` (M4): names, kind, fresh, fold and delete; a sheet on phone, a dialog on desktop |
+| `DrinksPhone.dc.html`, `DrinksDesktop.dc.html` (M4 update) | the bar filter in `FilterPanel.tsx` and the phone chips, the unsorted banner in `Browse.tsx`, the status badges in `RecipeCard.tsx` |
+| `DrinksNoBarPhone.dc.html`, `DrinksNoBarDesktop.dc.html`, `DrinksFilterEmptyPhone.dc.html` | the bar filter's empty states in `Browse.tsx` |
+| `DrinkRecipePhone.dc.html`, `DrinkRecipeDesktop.dc.html` | `RecipeView.tsx` and `Ingredients.tsx` (M4): the bar summary, each row's state with Have/Not in bar/Fresh, undo |
 | the header and phone bottom bar of all of them | `Shell.tsx` (Task 6) |
 
 Icons and the photo-less tile glyphs (bowl, pot, plate; rocks, highball, coupe) are in
@@ -40,15 +48,41 @@ the recipe page with its notes, ratings, "Made it" form, mark entries, readable 
 "Restore this version", the mark toggles (Favourite and Try next; Tried is shown as status
 only), and ratings on cards with the "Rating" and "Recently made" sorts.
 
+## Built in M4
+
+The bar (`/bar`): every drink ingredient and every catalog entry with a kind, grouped by kind,
+with Have and Don't have toggles and a separate list of fresh items; search that offers to
+add a missing name as a bottle or as fresh; the first visit, with the unsorted bottles first
+and "Mark the other N as don't have"; and the item sheet for state, other names, kind, fresh,
+fold and delete. On the drinks page: the From your bar filter (Everything, Can make now, Only
+need fresh items) and its phone chips, the "not sorted yet" banner, a status badge on each
+card (Can make now, Buy fresh, Missing, Not sorted) and the empty states for a bar that was
+never set up and for a filter with no drinks. On a drink's page: the bar summary, each
+ingredient's state with its own toggles and an undo bar, and a link to the recipe for a
+syrup. Logic shared by these is in `bar.ts`.
+
 ## Still not built
 
 - Drag handles in the editor. Rows and steps move with "Move up" and "Move down" buttons.
 - Avatars, in the header and on timeline entries. There are no users in the PoC, so entries
   show no author.
 - The artboards' "..." menu on the recipe page.
-- "Cook with what you have", "Can make now", "Buy fresh" and "From your bar". After the PoC.
+- "Cook with what you have" (Food). After the PoC.
 
 ## Differences from the design
+
+M4 (the bar), where the app and the artboards differ:
+
+- `BarFirstVisitPhone` shows a "You can make 0 drinks now" card; the app shows the summary
+  card only once the bar is set up.
+- The phone recipe page uses the phone artboard's short labels ("Not in bar", "Fresh"); the
+  desktop uses the long ones.
+- The drink recipe page keeps the tsp / g-ml toggle, and the "Recipe: ..." link next to a
+  syrup is 44 px tall rather than 32 px.
+- A status badge with a long name wraps to two lines on a phone card instead of being cut
+  off at the artboard's fixed 26 px height.
+
+Earlier milestones:
 
 - The design's sample categories (Breakfast, Soups, Sours, ...) are placeholders. The app has
   food mains, sides, desserts, sauces and prep, and drinks cocktails, mocktails, syrups and prep.
@@ -85,6 +119,14 @@ Layout: desktop is `(min-width: 768px)`; phone has 16 px gutters (`.gutter` in `
 every control is at least 44 x 44 px.
 
 ## Screenshots
+
+`screenshots/m4/` holds the bar and the drinks inventory: `bar-phone`, `bar-desktop`,
+`bar-first-visit-*` (nothing sorted), `bar-search-empty-*`, `bar-item-sheet-*`,
+`drinks-phone`, `drinks-desktop`, `drinks-can-make-*` (`/drinks?bar=can`), `drinks-no-bar-*`
+(the bar never set up), `drinks-filter-empty-*` (nothing to make without fresh items) and
+`drink-recipe-*`. Phone shots are 390 wide and desktop 1440, at 1x; the bar pages and the
+recipe page are full-page shots, the rest are 390 x 844 and 1440 x 900. They were taken from
+a scratch data directory with the seed recipes plus nine test drinks, with metric units.
 
 `screenshots/m2/` holds the editor (`editor-desktop`, `editor-phone`, `editor-drinks-phone`),
 the recipe page scrolled to its history (`recipe-history-desktop`, `recipe-history-phone`) and
