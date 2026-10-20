@@ -2,7 +2,7 @@
 // (desktop drinks only), marks, category and tags. `aside` is the desktop side panel;
 // `sheet` is the same controls bigger, inside the phone's filter sheet (FilterSheet
 // below). On a phone the bar filter is chips under the heading and what you have is a
-// header button with its own panel (BarChips and HavePanel in Browse).
+// header button with its own panel (BarChips and the have panel in Browse).
 
 import { useEffect, useRef, type ReactNode, type Ref } from 'react'
 import { Link } from 'react-router'

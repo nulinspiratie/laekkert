@@ -61,13 +61,24 @@ never set up and for a filter with no drinks. On a drink's page: the bar summary
 ingredient's state with its own toggles and an undo bar, and a link to the recipe for a
 syrup. Logic shared by these is in `bar.ts`.
 
+## Built in M5
+
+"Cook with what you have" (Food), with no artboard. It follows the drinks page's patterns:
+- a What you have section in the filter aside on desktop;
+- a basket button in the phone header that opens the field;
+- chips with Remove buttons;
+- a badge on each card ("Have everything", "Missing: a, b +N") in the drinks badge position
+  with food colours;
+- the empty state "Nothing uses …".
+
+The field is `HaveField.tsx` and the badge text is in `haveBadge.ts`.
+
 ## Still not built
 
 - Drag handles in the editor. Rows and steps move with "Move up" and "Move down" buttons.
 - Avatars, in the header and on timeline entries. There are no users in the PoC, so entries
   show no author.
 - The artboards' "..." menu on the recipe page.
-- "Cook with what you have" (Food). After the PoC.
 
 ## Differences from the design
 
@@ -119,6 +130,13 @@ Layout: desktop is `(min-width: 768px)`; phone has 16 px gutters (`.gutter` in `
 every control is at least 44 x 44 px.
 
 ## Screenshots
+
+`screenshots/m5/` holds "Cook with what you have":
+- `food-have-desktop-*` and `food-have-phone-*` (`?have=chicken&have=leeks`, light and dark,
+  with the phone panel open);
+- `food-have-empty-phone` (no recipe uses the terms).
+
+They were taken the same way as M4's.
 
 `screenshots/m4/` holds the bar and the drinks inventory: `bar-phone`, `bar-desktop`,
 `bar-first-visit-*` (nothing sorted), `bar-search-empty-*`, `bar-item-sheet-*`,
