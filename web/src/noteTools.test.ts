@@ -31,6 +31,15 @@ describe('toggleBullets', () => {
     expect(toggleBullets('- a\nb', 0, 5)).toEqual({ text: '- - a\n- b', start: 0, end: 9 })
   })
 
+  test('knows every bullet the notes parser does, spaces included', () => {
+    expect(toggleBullets('  - a', 0, 5)).toEqual({ text: 'a', start: 0, end: 1 })
+    expect(toggleBullets('* x\n• y', 0, 7)).toEqual({ text: 'x\ny', start: 0, end: 3 })
+  })
+
+  test('a caret inside the marker lands at the start of the text', () => {
+    expect(toggleBullets('  - a', 2, 2)).toEqual({ text: 'a', start: 0, end: 0 })
+  })
+
   test('a caret alone bullets its line', () => {
     expect(toggleBullets('one\ntwo', 5, 5)).toEqual({ text: 'one\n- two', start: 7, end: 7 })
   })

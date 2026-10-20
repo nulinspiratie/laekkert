@@ -17,7 +17,7 @@ const INLINE = /(\*\*\*|\*\*|\*)(?![\s*])(.+?)(?<![\s*])\1/g
 const ITALIC = /(\*)(?![\s*])(.+?)(?<![\s*])\1/g
 
 // A marker followed by whitespace; "**bold**" and "*soft*" are text.
-const BULLET = /^\s*[-*•]\s+(.*)$/
+export const BULLET = /^\s*[-*•]\s+(.*)$/
 
 function plain(text: string): Span {
   return { text, bold: false, italic: false }
