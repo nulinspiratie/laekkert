@@ -205,7 +205,7 @@ test('ungrouped rows after a group are set off by a rule, not a heading', () => 
   expect(screen.getAllByRole('separator')).toHaveLength(1)
 })
 
-test('a drink in a group flips the bar state of its own row', async () => {
+test('a drink in a group flips the bar state of its own row, not the same place in another run', async () => {
   const bar = (item: string) => ({ item, state: 'dont' as const, fresh: false, recipe: null })
   const gin = ing({ item: 'gin', amount: 50, unit: 'ml', bar: bar('gin') })
   const lime = ing({ item: 'lime juice', amount: 25, unit: 'ml', group: 'Sour mix', bar: bar('lime juice') })
@@ -216,11 +216,19 @@ test('a drink in a group flips the bar state of its own row', async () => {
       <Ingredients ingredients={[gin, lime, syrup]} servings={1} side="drinks" onBar={onBar} />
     </MemoryRouter>,
   )
-  fireEvent.click(within(row('sugar syrup')).getByRole('button', { name: /Sugar syrup is not in the bar/ }))
+  // Lime juice is first in its run, like gin in its own: only the whole-recipe index tells them apart.
+  fireEvent.click(within(row('lime juice')).getByRole('button', { name: /Lime juice is not in the bar/ }))
   expect(onBar).toHaveBeenCalledTimes(1)
-  expect(onBar).toHaveBeenCalledWith('sugar syrup', 'have')
-  const status = await within(row('sugar syrup')).findByRole('status')
+  expect(onBar).toHaveBeenCalledWith('lime juice', 'have')
+  const status = await within(row('lime juice')).findByRole('status')
   expect(status).toHaveTextContent('Marked as in the bar.')
-  expect(within(row('lime juice')).queryByRole('status')).not.toBeInTheDocument()
+  expect(within(row('gin')).queryByRole('status')).not.toBeInTheDocument()
+  expect(within(row('gin')).queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument()
+  expect(within(row('sugar syrup')).queryByRole('status')).not.toBeInTheDocument()
+
+  // The last row of the run answers to its own index too.
+  fireEvent.click(within(row('sugar syrup')).getByRole('button', { name: /Sugar syrup is not in the bar/ }))
+  expect(onBar).toHaveBeenLastCalledWith('sugar syrup', 'have')
+  expect(await within(row('sugar syrup')).findByRole('status')).toHaveTextContent('Marked as in the bar.')
   expect(within(row('gin')).queryByRole('status')).not.toBeInTheDocument()
 })
