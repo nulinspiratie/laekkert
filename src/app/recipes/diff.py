@@ -73,24 +73,35 @@ def _whole(ingredient: Ingredient) -> str:
 def _pair_rows(
     old: list[Ingredient], new: list[Ingredient]
 ) -> tuple[list[tuple[int, int]], list[int], list[int]]:
-    """Match rows by item; repeated items pair up in order.
+    """Match rows by item, within the same group first; repeated items pair up in order.
+
+    An item may sit in several groups, so a row first looks for the same item in
+    the same group. What is left pairs by item alone, which is how a row that
+    moved or whose group was renamed is still found.
 
     Returns (old index, new index) pairs in new order, then the unmatched new
     indexes and the unmatched old indexes.
     """
-    waiting: dict[str, list[int]] = {}
-    for i, ingredient in enumerate(old):
-        waiting.setdefault(_key(ingredient), []).append(i)
-    pairs: list[tuple[int, int]] = []
-    added: list[int] = []
-    for j, ingredient in enumerate(new):
-        candidates = waiting.get(_key(ingredient))
-        if candidates:
-            pairs.append((candidates.pop(0), j))
-        else:
-            added.append(j)
-    matched_old = {i for i, _ in pairs}
-    removed = [i for i in range(len(old)) if i not in matched_old]
+    matched: dict[int, int] = {}  # new index -> old index
+    taken: set[int] = set()
+    for same_group in (True, False):
+        waiting: dict[tuple[str, str], list[int]] = {}
+        for i, ingredient in enumerate(old):
+            if i not in taken:
+                group = ingredient.group if same_group else ""
+                waiting.setdefault((_key(ingredient), group), []).append(i)
+        for j, ingredient in enumerate(new):
+            if j in matched:
+                continue
+            group = ingredient.group if same_group else ""
+            candidates = waiting.get((_key(ingredient), group))
+            if candidates:
+                i = candidates.pop(0)
+                matched[j] = i
+                taken.add(i)
+    pairs = [(i, j) for j, i in sorted(matched.items())]
+    added = [j for j in range(len(new)) if j not in matched]
+    removed = [i for i in range(len(old)) if i not in taken]
     return pairs, added, removed
 
 

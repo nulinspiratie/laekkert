@@ -384,3 +384,45 @@ def test_moving_into_an_existing_group_is_not_a_rename():
     assert changes(old, new) == [
         ("ingredients", "changed", "garlic moved from “A” to “B”")
     ]
+
+
+def test_a_shared_item_pairs_within_its_own_group_first():
+    old = make(
+        ingredients=[
+            ing("chicken", 500, "g"),
+            ing("garlic", 4, "g", group="Sauce"),
+            ing("oil", group="Sauce"),
+        ]
+    )
+    new = make(
+        ingredients=[
+            ing("garlic", 3, "g", group="Marinade"),
+            ing("chicken", 500, "g", group="Marinade"),
+            ing("garlic", 4, "g", group="Sauce"),
+            ing("oil", group="Sauce"),
+        ]
+    )
+    assert changes(old, new) == [
+        ("ingredients", "changed", "chicken moved to “Marinade”"),
+        ("ingredients", "added", "3 g garlic"),
+    ]
+
+
+def test_swapping_groups_that_share_an_item_is_only_a_reorder():
+    old = make(
+        ingredients=[
+            ing("garlic", 4, "g", group="Marinade"),
+            ing("oil", group="Marinade"),
+            ing("garlic", 2, "g", group="Sauce"),
+            ing("salt", 1, "g", group="Sauce"),
+        ]
+    )
+    new = make(
+        ingredients=[
+            ing("garlic", 2, "g", group="Sauce"),
+            ing("salt", 1, "g", group="Sauce"),
+            ing("garlic", 4, "g", group="Marinade"),
+            ing("oil", group="Marinade"),
+        ]
+    )
+    assert changes(old, new) == [("ingredients", "changed", "ingredients reordered")]
