@@ -32,9 +32,9 @@ loaded at runtime.
 | `EditorPhone.dc.html` | the phone layout of `Editor.tsx` (M2). It arrived with the M4 snapshot, after the phone editor was built, and has not been checked against it |
 | `BarPhone.dc.html`, `BarDesktop.dc.html` | `BarPage.tsx` (M4), styles in `bar.css` |
 | `BarFirstVisitPhone.dc.html`, `BarSearchEmptyPhone.dc.html` | `BarPage.tsx`: the first visit (nothing sorted) and a search with no match |
-| `BarItemSheetPhone.dc.html` | `BarItemSheet.tsx` (M4): names, kind, fresh, fold and delete; a sheet on phone, a dialog on desktop |
-| `DrinksPhone.dc.html`, `DrinksDesktop.dc.html` (M4 update) | the bar filter in `FilterPanel.tsx` and the phone chips, the unsorted banner in `Browse.tsx`, the status badges in `RecipeCard.tsx` |
-| `DrinksNoBarPhone.dc.html`, `DrinksNoBarDesktop.dc.html`, `DrinksFilterEmptyPhone.dc.html` | the bar filter's empty states in `Browse.tsx` |
+| `BarItemSheetPhone.dc.html` | `BarItemSheet.tsx` (M4): names, kind, fresh (Track it since M6), fold and delete; a sheet on phone, a dialog on desktop |
+| `DrinksPhone.dc.html`, `DrinksDesktop.dc.html` (M4 update) | the views in `FilterPanel.tsx` and the phone chips (M6; they replaced the bar filter), the unsorted banner in `Browse.tsx`, the status badges in `RecipeCard.tsx` |
+| `DrinksNoBarPhone.dc.html`, `DrinksNoBarDesktop.dc.html`, `DrinksFilterEmptyPhone.dc.html` | the Can make view's empty states in `Browse.tsx` |
 | `DrinkRecipePhone.dc.html`, `DrinkRecipeDesktop.dc.html` | `RecipeView.tsx` and `Ingredients.tsx` (M4): the bar summary, each row's state with Have/Not in bar/Fresh, undo |
 | the header and phone bottom bar of all of them | `Shell.tsx` (Task 6) |
 
@@ -72,6 +72,21 @@ syrup. Logic shared by these is in `bar.ts`.
 - the empty state "Nothing uses …".
 
 The field is `HaveField.tsx` and the badge text is in `haveBadge.ts`.
+
+## Built in M6
+
+The drinks views and tracking only the bottles, with no artboard. They follow the M4 bar
+designs:
+- the From your bar filter and the Style section are replaced by four views (Can make, All
+  drinks, Mocktails, Syrups & prep): radios with counts under Show in the desktop aside,
+  chips with counts in the phone header;
+- a can-make card whose drink also uses untracked items says "Also needs: …" in the badge
+  position, with the basket icon;
+- on the bar page, a Not tracked section of chips replaces Fresh, and not-sorted rows get a
+  "Don't track" button;
+- the item sheet's Fresh switch is a Track it switch, disabled with the reason for syrups
+  and for items that have a recipe;
+- on a drink's page, the bar summary counts bottles and says what else the drink needs.
 
 ## Still not built
 
@@ -130,6 +145,19 @@ Layout: desktop is `(min-width: 768px)`; phone has 16 px gutters (`.gutter` in `
 every control is at least 44 x 44 px.
 
 ## Screenshots
+
+`screenshots/m6/` holds the drinks views and the untracked items:
+- `drinks-can-make-*`, `drinks-mocktails-*` and `drinks-syrups-*` (the three views other than
+  All drinks);
+- `bar-not-tracked-*` (the bar page with a not-sorted bottle and the Not tracked section);
+- `bar-item-sheet-phone` (Mint, with Track it off), `bar-item-sheet-syrup-phone` (Track it
+  disabled for a syrup) and `bar-item-sheet-desktop`;
+- `drink-recipe-*` (the Mojito, with Also needs).
+
+Phone shots are 390 wide and desktop 1440, at 1x; the bar pages and the recipe page are
+full-page shots, the rest are 390 x 844 and 1440 x 900. They were taken from a scratch data
+directory with the seed recipes plus eight test drinks. The app has one theme, so there are
+no dark shots.
 
 `screenshots/m5/` holds "Cook with what you have":
 - `food-have-desktop` and `food-have-phone` (`?have=chicken&have=leeks`, with the phone

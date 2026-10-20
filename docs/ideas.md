@@ -23,6 +23,8 @@ idea becomes a milestone, it moves into `docs/plan.md` and comes off this list.
 - **Smart tags.** Rule-based tags, such as vegetarian from ingredient flags, mocktail when
   there is no alcohol, or under 30 minutes. Any manual tag can be turned smart, and from then
   on the rule decides. Existing simple tags need a way to migrate.
+  Mocktail is not one of them any more: since M6 it is a category, picked from the Drinks
+  page's Mocktails view, and a `mocktail` tag on a mocktail is dropped.
 - **Two users and authorship.** Each history entry says who made it, with avatars in the
   header and on the timeline. Dropped for now.
 - **Recipes in a private GitHub repo.** Claude Code could then do bulk work: merges, or

@@ -239,6 +239,71 @@ Rulings made on the way:
   and plurals (`s`, `es`, `y`/`ies`) match at any length. At 80, "chicken" covered
   chickpeas and "butter" covered butternut squash.
 
+### M6: Drinks views, and tracking only the bottles
+
+**Done** (2026-10-20). Serwan's feedback after using the bar; no Claude Design session.
+Spec: `docs/superpowers/specs/2026-10-20-m6-drinks-views-design.md`.
+
+- **Views.** The Drinks page opens on four views instead of the From your bar and Style
+  filters: **Can make** (the default), **All drinks**, **Mocktails** and **Syrups & prep**.
+  The first three show cocktails and mocktails only. They are phone chips with counts
+  (`Can make 2`, `All 3`, `Mocktails 1`, `Syrups 2`) and a Show section in the desktop
+  aside. The view is `show=` in the URL; old `bar=` and `cat=` links still land on the
+  matching view. While the bar isn't set up, Can make shows the set-up box above its list. A
+  search shows "{k} more in All drinks" (or Syrups & prep) when the view hides matches.
+- **Only bottles are tracked.** Fresh items (the catalog's `fresh: true`), kind Syrups, and
+  anything Lækkert has a syrups or prep recipe for are not tracked: they have no Have/Don't
+  have buttons and never keep a drink out of Can make. A new item with the word "syrup" in
+  its name starts as Syrups. A drink's `bar` is `{status, missing, unsorted, untracked}`;
+  status is `can_make`, `missing` or `unsorted`, and `fresh_only` is gone. The card says
+  "Also needs: lime juice, mint" when a makeable drink uses untracked things. Syrups and
+  prep recipes have no bar status, and their ingredients don't fill the bar.
+- **Bar page.** A Not tracked section replaces Fresh; not-sorted rows get a "Don't track"
+  button; a search with no match offers "Add it without tracking"; the item sheet has a
+  Track it switch, disabled with the reason for syrups and recipe items. Counts are of
+  tracked bottles.
+- **Recipe page.** "From your bar: {n} of {n} bottles" plus "Also needs: …"; untracked rows
+  have no state buttons, and a syrup's row still links to its recipe.
+- **API and MCP.** `POST /api/bar` and `manage_inventory` take `untrack` and `track`
+  (were `fresh` and `not_fresh`). A `track` that can't take effect is refused with a
+  sentence. Bar items carry `tracked` and `untracked_because`. `search_recipes(bar=...)`
+  takes only `"can_make"` and leaves syrups and prep out. Stale states of untracked items
+  are dropped on the next bar write.
+- **Mocktail is a category.** A tag that repeats the recipe's own category (`mocktail` on a
+  mocktail, `dessert` on a dessert) is dropped when a recipe is read and when it is saved,
+  on both sides, with no format bump. The style guide says not to add them.
+- On the NAS, mixers M4 gave kind Other (tonic, ginger beer) stay tracked until someone
+  untracks them, from the bar or with one `manage_inventory(untrack=[...])` call.
+- Screenshots are in `docs/design/screenshots/m6/`.
+
+Calls made in the spec (Serwan didn't decide these): the default keeps the name Can make;
+Mocktails is its own view and syrups and prep share one ("Syrups" on the phone chip);
+mocktails with no tracked bottle count as Can make; the Style filter goes on drinks; kind
+Other stays tracked; syrup-named items start as Syrups; only tags repeating the recipe's
+*own* category are dropped; Can make shows the set-up box while the bar isn't set up; a
+syrup M4 marked fresh reports `syrups` as its reason; the stored `fresh` field keeps its
+name.
+
+Rulings made on the way:
+
+- A tag link on a syrups or prep recipe page goes to Syrups & prep; on any other drink, to
+  All drinks.
+- The empty Can make state says "Show 1 drink" for one drink rather than "Show all 1
+  drinks".
+- A search with no hits on Can make shows the plain empty state and the "{k} more in…" link,
+  not "Nothing to make yet".
+- If the bar can't be read, the views still show, without Can make, and the list is All
+  drinks.
+- Have or Don't have on an untracked item that has no catalog entry still writes the entry
+  (as M4 does for fresh items); the state is ignored.
+- An MCP client still sending `fresh=` gets no error: the argument is dropped, as for any
+  unknown argument.
+- The category tag rule drops a final `s` bluntly, so `main` on a Mains recipe goes too,
+  which is intended.
+- On phone, a not-sorted row's "Don't track" sits on a second line under Have and
+  Don't have, so the item name keeps its width.
+- No dark screenshots: the app has one theme.
+
 ### After the PoC
 
 Every idea for what comes next is in `docs/ideas.md`.
