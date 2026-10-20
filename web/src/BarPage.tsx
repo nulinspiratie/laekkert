@@ -68,7 +68,7 @@ export function BarPage() {
     let live = true
     getBar().then(
       (loaded) => live && setBar(loaded),
-      (err: unknown) => live && setLoadError(messageOf(err)),
+      (err: unknown) => live && setLoadError(err instanceof Error ? err.message : 'Something went wrong.'),
     )
     return () => {
       live = false

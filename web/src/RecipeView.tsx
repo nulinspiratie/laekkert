@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
 import { addEntry, changeBar, getRecipe, getTimeline, recipeImageUrl, restoreVersion, setMarks } from './api'
-import { withBar } from './bar'
+import { messageOf as barMessageOf, withBar } from './bar'
 import { browseQuery, MARK_LABELS, type FilterMark } from './browse'
 import { capitalise, formatTime } from './format'
 import { Back, Bookmark, Check, Clock, Edit, Heart, People } from './icons'
@@ -155,7 +155,7 @@ function Page({ recipe, onRecipe }: { recipe: Recipe; onRecipe: (recipe: Recipe)
       if (area !== 'bar') void refresh()
       return true
     } catch (err) {
-      setProblem({ area, message: messageOf(err), item })
+      setProblem({ area, message: area === 'bar' ? barMessageOf(err) : messageOf(err), item })
       return false
     } finally {
       writing.current = false

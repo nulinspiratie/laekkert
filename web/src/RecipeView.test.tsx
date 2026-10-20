@@ -721,12 +721,19 @@ describe('a drink and the bar', () => {
 
   /**
    * A server that keeps the bar: a write changes it and the next recipe load shows it.
-   * `refuse` answers every write with that sentence; `reloadFails` fails the recipe load
+   * `refuse` answers every write with that sentence; `offline` rejects it, as fetch does with
+   * no network; `reloadFails` fails the recipe load
    * after a write; `hold` gives a promise that keeps that write in flight until it resolves.
    */
   function stubBar(
     start: Shelves,
-    options: { refuse?: string; reloadFails?: boolean; hold?: () => Promise<void> | undefined; timelineFails?: boolean } = {},
+    options: {
+      refuse?: string
+      offline?: boolean
+      reloadFails?: boolean
+      hold?: () => Promise<void> | undefined
+      timelineFails?: boolean
+    } = {},
   ) {
     const shelves = { ...start }
     const recipes = [cocktail(shelves), simpleSyrup]
@@ -737,6 +744,7 @@ describe('a drink and the bar', () => {
         expect(url).toBe('/api/bar')
         await options.hold?.()
         if (options.refuse) return json({ error: options.refuse }, 400)
+        if (options.offline) throw new TypeError('Failed to fetch')
         const changes = body as BarChanges
         for (const name of changes.have ?? []) shelves[keys[name]] = 'have'
         for (const name of changes.dont_have ?? []) shelves[keys[name]] = 'dont'
@@ -842,6 +850,15 @@ describe('a drink and the bar', () => {
     expect(screen.getAllByRole('alert')).toHaveLength(1)
     expect(screen.getByRole('button', { name: "Simple syrup is in the bar. Click if you've run out." })).toBeInTheDocument()
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  test('a flip that never reached the server says so at that row', async () => {
+    stubBar({ rum: 'have', syrup: 'have' }, { offline: true })
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: "Simple syrup is in the bar. Click if you've run out." }))
+    const alert = await within(row('simple syrup')).findByRole('alert')
+    expect(alert).toHaveTextContent("Couldn't reach Lækkert. Nothing was changed.")
+    expect(screen.getByRole('button', { name: "Simple syrup is in the bar. Click if you've run out." })).toBeInTheDocument()
   })
 
   test('a tap while a flip is in flight waits, and the refusal shows at the first row', async () => {

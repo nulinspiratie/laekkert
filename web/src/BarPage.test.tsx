@@ -181,6 +181,20 @@ test('rolls back a toggle the server refuses, saying why in its row', async () =
   expect(await within(campari.parentElement!).findByRole('alert')).toHaveTextContent(refusal)
 })
 
+const unreachable = "Couldn't reach Lækkert. Nothing was changed."
+// What fetch does when the network is down or Cloudflare Access answers with its login page.
+const offline = () => Promise.reject(new TypeError('Failed to fetch'))
+
+test('rolls back a toggle that never reached the server, saying so in its row', async () => {
+  stubBar(everyday, offline)
+  await openBar()
+  fireEvent.click(screen.getByRole('button', { name: "White rum: have. Tap if you've run out." }))
+  const toggle = await screen.findByRole('button', { name: "White rum: have. Tap if you've run out." })
+  expect(await within(toggle.parentElement!).findByRole('alert')).toHaveTextContent(unreachable)
+  expect(screen.queryByText('Failed to fetch')).not.toBeInTheDocument()
+  expect(screen.getByText('One bar for the household · 3 of 6 bottles in')).toBeInTheDocument()
+})
+
 test('says why an unsorted pick was refused in its row', async () => {
   stubBar(everyday, refuse)
   await openBar()
@@ -393,6 +407,12 @@ describe('the item sheet', () => {
     })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(sentence)
+  })
+
+  test('says inside the sheet when a change never reached the server', async () => {
+    const { dialog } = await openSheet('White rum', everyday, offline)
+    fireEvent.click(within(dialog).getByRole('radio', { name: "Don't have" }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(unreachable)
   })
 
   test('changes kind', async () => {

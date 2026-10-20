@@ -1,5 +1,6 @@
 // The bar's display helpers: grouping, search and the badges drinks wear.
 
+import { ApiError } from './api'
 import type { Bar, BarItem, DrinkBar, DrinkStatus, Kind, Recipe, RecipeIngredient, RecipeSummary } from './types'
 
 /** The kinds in the order the bar shows them. */
@@ -121,5 +122,8 @@ export function withBar(recipe: Recipe, bar: Bar): Recipe {
   return { ...recipe, ingredients, bar: drinkBar(ingredients) }
 }
 
-/** The sentence to show for a failed request: the server's own, when it gave one. */
-export const messageOf = (err: unknown): string => (err instanceof Error ? err.message : 'Something went wrong.')
+/** What a bar write says when no answer came: no network, or Cloudflare Access wanting a login. */
+export const UNREACHABLE = "Couldn't reach Lækkert. Nothing was changed."
+
+/** The sentence to show for a failed bar write: the server's own, or that it was never reached. */
+export const messageOf = (err: unknown): string => (err instanceof ApiError ? err.message : UNREACHABLE)
