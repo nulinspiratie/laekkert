@@ -78,10 +78,11 @@ One row per ingredient, in the order they're used.
 - **From a web page:** fetch the page yourself, write the recipe from it in this style,
   and pass the page's address as `source_url`. The app saves the link and takes the
   page's main photo by itself.
-- **Photo rule:** for a recipe from a web page, the source site's own photo is used. The
-  app is private and behind a login, so it never republishes it. For a recipe with no
-  source (an idea, or one you wrote), pass an `image_url` only for a freely licensed
-  photo (Unsplash, Pexels, Wikimedia Commons). No photo is fine: recipes without one look
+- **Photo rule:** the app is private (just Serwan and his partner, behind a login), so
+  any photo is fine. For a recipe from a web page, the app uses the page's own photo; pass
+  an `image_url` only if you found a better one. For a recipe with no source (an idea, or
+  one you wrote), look for a photo on the web that shows the dish well and pass its
+  direct image address as `image_url`. No photo is fine too: recipes without one look
   intentional.
 - **From a photo in the chat** (a cookbook page, a handwritten card): read it and write
   the recipe from it. You can't attach that photo to the recipe; Serwan adds it in the
