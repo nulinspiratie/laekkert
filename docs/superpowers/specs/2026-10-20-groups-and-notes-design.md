@@ -74,6 +74,10 @@ Agreed from the mockups (proposed by Claude, accepted with "looks good"):
 - Group membership is the `group` field; order is list order. A group's rows are expected
   to sit together. When they don't (a hand-edited file with `A, B, A`), the page shows a
   heading for each consecutive run (`A`, `B`, `A`); nothing re-sorts rows.
+- Rows with no group *after* a group (`Marinade: a, b`, then ungrouped `c`) are valid and
+  kept as they are (Claude's call: refusing them would make the editor's blank heading
+  an error, and re-sorting is ruled out). The page gives such a run the heading's rule
+  with no text, so `c` doesn't read as part of Marinade.
 - **Migration 2 → 3** in `MIGRATIONS`: each string step becomes `{"text": step}`; anything
   else is left for validation to reject. Ingredients and notes need nothing (defaults).
   This covers `recipe.json` and every `versions/NNNN.json` snapshot, since both go through
@@ -139,7 +143,8 @@ Matches the mockup's Main artboard.
 - **Ingredients card.** When no row has a group, the list is unchanged. Otherwise the
   rows are shown in consecutive runs by group; a run with a group gets a heading above
   it (an `h3`: small uppercase label in the accent ink, with a thin rule under it, as in
-  the mockup). The ungrouped run at the top has no heading. Each run is its own `ul`.
+  the mockup). The ungrouped run at the top has no heading; an ungrouped run further down
+  gets the rule alone. Each run is its own `ul`.
   Scaling, the unit toggle, the drinks bar summary, per-row bar buttons, undo and bar
   errors behave as now; rows keep their index in the recipe's ingredient list, which the
   bar state code relies on.
@@ -164,9 +169,10 @@ mockup for the editor; this is Claude's call, built from the editor's existing p
 - **Adding.** Next to "Add ingredient" and "Add step", an "Add group" button appends a
   heading row and one blank row under it, and focuses the heading's text box.
 - **Removing a heading** merges its rows into the group above (or into none).
-- **A blank heading** means "no group" for the rows under it. On load, the editor puts a
-  heading before each change of group, and a blank one where rows go back to no group
-  after a group (only a hand-edited file or Claude can produce that).
+- **A blank heading** means "no group" for the rows under it; its text box shows the
+  placeholder "Group name (none)". A person can make one deliberately to end a group
+  partway down. On load, the editor puts a heading before each change of group, and a
+  blank one where rows go back to no group after a group.
 - **Numbering in the form** (labels such as "Ingredient 3", "Step 2", error messages)
   counts ingredient rows and steps only, never headings.
 - **Notes.** A "Notes" card after Steps (desktop: in the main column; phone: after Steps):
@@ -191,7 +197,10 @@ mockup for the editor; this is Claude's call, built from the editor's existing p
 Merging to `main` deploys. Recipes on the NAS are format 2 and are migrated as they are
 read; each is written as format 3 the next time it is saved. **Rollback caveat:** an image
 from before this change refuses format 3 files as "newer". After a rollback, recipes saved
-since the deploy would be skipped until rolling forward again. The PR must say so.
+since the deploy would be skipped until rolling forward again, and History entries for
+edits that changed notes are hidden (the old image doesn't know the `notes` section and
+skips those lines; they stay in the file and come back on rolling forward). Accepted
+(Claude's call); the PR must say both.
 
 ## Testing
 
