@@ -722,16 +722,20 @@ describe('a drink and the bar', () => {
   /**
    * A server that keeps the bar: a write changes it and the next recipe load shows it.
    * `refuse` answers every write with that sentence; `reloadFails` fails the recipe load
-   * after a write.
+   * after a write; `hold` gives a promise that keeps that write in flight until it resolves.
    */
-  function stubBar(start: Shelves, options: { refuse?: string; reloadFails?: boolean } = {}) {
+  function stubBar(
+    start: Shelves,
+    options: { refuse?: string; reloadFails?: boolean; hold?: () => Promise<void> | undefined; timelineFails?: boolean } = {},
+  ) {
     const shelves = { ...start }
     const recipes = [cocktail(shelves), simpleSyrup]
     const keys: Record<string, keyof Shelves> = { 'white rum': 'rum', 'simple syrup': 'syrup' }
     const inner = stubApiWith({
       recipes,
-      post: (url, body) => {
+      post: async (url, body) => {
         expect(url).toBe('/api/bar')
+        await options.hold?.()
         if (options.refuse) return json({ error: options.refuse }, 400)
         const changes = body as BarChanges
         for (const name of changes.have ?? []) shelves[keys[name]] = 'have'
@@ -746,6 +750,7 @@ describe('a drink and the bar', () => {
       'fetch',
       vi.fn(async (url: string, init?: RequestInit) => {
         if (init?.method === 'POST') wrote = true
+        else if (options.timelineFails && url.endsWith('/timeline')) return json({ error: 'History is unavailable.' }, 503)
         else if (wrote && options.reloadFails && url === '/api/recipes/drinks/daiquiri') {
           return new Response('', { status: 500 })
         }
@@ -780,7 +785,7 @@ describe('a drink and the bar', () => {
   test('unsorted counts as missing in the summary', async () => {
     stubBar({ rum: null, syrup: 'dont' })
     await open()
-    expect(summaryLine()).toHaveTextContent('Missing: simple syrup, white rum')
+    expect(summaryLine()).toHaveTextContent('Missing: white rum, simple syrup')
     expect(within(row('white rum')).getByRole('button', { name: /White rum is not sorted yet/ })).toHaveTextContent(
       'Not sorted',
     )
@@ -837,6 +842,59 @@ describe('a drink and the bar', () => {
     expect(screen.getAllByRole('alert')).toHaveLength(1)
     expect(screen.getByRole('button', { name: "Simple syrup is in the bar. Click if you've run out." })).toBeInTheDocument()
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  test('a tap while a flip is in flight waits, and the refusal shows at the first row', async () => {
+    let release = () => {}
+    const hold = new Promise<void>((resolve) => (release = resolve))
+    const fetch = stubBar(
+      { rum: 'have', syrup: 'have' },
+      { refuse: "The bar can't be changed right now.", hold: () => hold },
+    )
+    await open()
+    const syrup = screen.getByRole('button', { name: "Simple syrup is in the bar. Click if you've run out." })
+    const rum = screen.getByRole('button', { name: "White rum is in the bar. Click if you've run out." })
+    fireEvent.click(syrup)
+    await waitFor(() => expect(rum).toHaveAttribute('aria-disabled', 'true'))
+    expect(syrup).toHaveAttribute('aria-disabled', 'true')
+    expect(syrup).toHaveAttribute('aria-busy', 'true')
+    expect(rum).not.toHaveAttribute('aria-busy')
+    fireEvent.click(rum)
+
+    release()
+    const alert = await within(row('simple syrup')).findByRole('alert')
+    expect(alert).toHaveTextContent("The bar can't be changed right now.")
+    expect(within(row('white rum')).queryByRole('alert')).not.toBeInTheDocument()
+    expect(posts(fetch).map((p) => p.body)).toEqual([{ dont_have: ['simple syrup'] }])
+    expect(rum).not.toHaveAttribute('aria-disabled')
+    expect(syrup).not.toHaveAttribute('aria-busy')
+  })
+
+  test('Undo waits while a write is in flight', async () => {
+    let release = () => {}
+    const hold = new Promise<void>((resolve) => (release = resolve))
+    let writes = 0
+    const fetch = stubBar({ rum: 'have', syrup: 'have' }, { hold: () => (++writes === 2 ? hold : undefined) })
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: "Simple syrup is in the bar. Click if you've run out." }))
+    const status = await within(row('simple syrup')).findByRole('status')
+    const undo = within(status).getByRole('button', { name: 'Undo' })
+    expect(undo).not.toHaveAttribute('aria-disabled')
+    fireEvent.click(screen.getByRole('button', { name: "White rum is in the bar. Click if you've run out." }))
+    await waitFor(() => expect(undo).toHaveAttribute('aria-disabled', 'true'))
+    fireEvent.click(undo)
+    release()
+    await within(row('white rum')).findByRole('status')
+    expect(posts(fetch).map((p) => p.body)).toEqual([{ dont_have: ['simple syrup'] }, { dont_have: ['white rum'] }])
+  })
+
+  test('a flip keeps a History problem, since the history is not reloaded', async () => {
+    stubBar({ rum: 'have', syrup: 'have' }, { timelineFails: true })
+    await open()
+    expect(await screen.findByText('History is unavailable.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: "Simple syrup is in the bar. Click if you've run out." }))
+    await within(row('simple syrup')).findByRole('status')
+    expect(screen.getByText('History is unavailable.')).toBeInTheDocument()
   })
 
   test('a failed reload after a flip keeps the page and the new state', async () => {

@@ -148,7 +148,8 @@ function Page({ recipe, onRecipe }: { recipe: Recipe; onRecipe: (recipe: Recipe)
     if (writing.current) return false
     writing.current = true
     setBusy(true)
-    setProblem(null)
+    // A bar write does not reload the timeline, so a History problem stays.
+    setProblem((current) => (area === 'bar' && current?.area === 'history' ? current : null))
     try {
       onRecipe(await request())
       if (area !== 'bar') void refresh()
@@ -303,6 +304,7 @@ function Page({ recipe, onRecipe }: { recipe: Recipe; onRecipe: (recipe: Recipe)
           side={side}
           bar={recipe.bar}
           onBar={side === 'drinks' ? setBarState : undefined}
+          busy={busy}
           barError={
             problem?.area === 'bar' && problem.item !== undefined ? { item: problem.item, message: problem.message } : null
           }

@@ -34,6 +34,8 @@ export interface IngredientsProps {
   onBar?: (item: string, next: BarState | null) => Promise<boolean>
   /** Drinks: the bar write the server refused, shown at the row that asked for it. */
   barError?: { item: string; message: string } | null
+  /** Drinks: another write on the page is in flight, so the bar buttons wait. */
+  busy?: boolean
 }
 
 /** The last flip, which Undo puts back: the row, its item and the state it had before. */
@@ -51,16 +53,21 @@ export function Ingredients({
   bar,
   onBar,
   barError = null,
+  busy = false,
 }: IngredientsProps) {
   const headingId = useId()
   const drinks = side === 'drinks'
   const max = drinks ? MAX_DRINKS : MAX_SERVINGS
-  const [servings, setServings] = useState(recipeServings)
+  const [servings, setServings] = useState(Math.min(recipeServings, max))
   // Read once: the preference is only written from this toggle.
   const [mode, setMode] = useState<UnitMode>(getUnitMode)
   const [flip, setFlip] = useState<Flip | null>(null)
-  // The row whose state button or Undo was pressed last: a refusal shows there.
+  // The row whose bar write was sent last: a refusal shows there.
   const [asked, setAsked] = useState<number | null>(null)
+  // The row whose bar write is in flight; the ref also stops a second write in the same tick.
+  const [pending, setPending] = useState<number | null>(null)
+  const sending = useRef(false)
+  const waiting = busy || pending !== null
   const buttons = useRef(new Map<number, HTMLButtonElement>())
 
   const pickMode = (next: UnitMode) => {
@@ -76,17 +83,28 @@ export function Ingredients({
       ? '1 serving'
       : `${servings} servings`
 
-  const toggle = async (row: number, item: IngredientBar) => {
-    if (!onBar) return
+  /** One bar write for a row; none while another write is in flight (the buttons say so). */
+  const send = async (row: number, item: string, next: BarState | null): Promise<boolean> => {
+    if (!onBar || busy || sending.current) return false
+    sending.current = true
+    setPending(row)
     setAsked(row)
+    try {
+      return await onBar(item, next)
+    } finally {
+      sending.current = false
+      setPending(null)
+    }
+  }
+
+  const toggle = async (row: number, item: IngredientBar) => {
     const now: BarState = item.state === 'have' ? 'dont' : 'have'
-    if (await onBar(item.item, now)) setFlip({ row, item: item.item, previous: item.state, now })
+    if (await send(row, item.item, now)) setFlip({ row, item: item.item, previous: item.state, now })
   }
 
   const undo = async () => {
-    if (!onBar || !flip) return
-    setAsked(flip.row)
-    if (await onBar(flip.item, flip.previous)) {
+    if (!flip) return
+    if (await send(flip.row, flip.item, flip.previous)) {
       setFlip(null)
       // The Undo button has gone: back to the row's own button.
       buttons.current.get(flip.row)?.focus()
@@ -150,6 +168,8 @@ export function Ingredients({
               mode={mode}
               problem={asked === i && barError && ing.bar?.item === barError.item ? barError.message : null}
               flip={flip?.row === i ? flip : null}
+              waiting={waiting}
+              pending={pending === i}
               onToggle={onBar && ((item) => void toggle(i, item))}
               onUndo={() => void undo()}
               buttonRef={(button) => {
@@ -168,8 +188,9 @@ export function Ingredients({
 
 /** "Missing: a, b" or "From your bar: 2 of 2", and "Buy fresh: x" when the drink has fresh items. */
 function BarSummary({ bar, ingredients }: { bar: DrinkBar; ingredients: RecipeIngredient[] }) {
-  // Unsorted bottles count as missing here.
-  const missing = [...bar.missing, ...bar.unsorted]
+  // Unsorted bottles count as missing here; the names go in recipe order.
+  const order = (name: string) => ingredients.findIndex((ing) => (ing.bar?.item ?? ing.item) === name)
+  const missing = [...bar.missing, ...bar.unsorted].sort((a, b) => order(a) - order(b))
   const shelf = new Set(
     ingredients.flatMap((ing) => (ing.bar && !ing.bar.fresh ? [normalise(ing.bar.item)] : [])),
   ).size
@@ -246,6 +267,8 @@ function IngredientRow(props: RowProps) {
 function DrinkRow({
   problem,
   flip,
+  waiting,
+  pending,
   onToggle,
   onUndo,
   buttonRef,
@@ -253,6 +276,10 @@ function DrinkRow({
 }: RowProps & {
   problem: string | null
   flip: Flip | null
+  /** A write is in flight: the buttons do nothing until it settles. */
+  waiting: boolean
+  /** That write is this row's. */
+  pending: boolean
   onToggle?: (item: IngredientBar) => void
   onUndo: () => void
   buttonRef: (button: HTMLButtonElement | null) => void
@@ -286,7 +313,14 @@ function DrinkRow({
         ) : (
           bar &&
           onToggle && (
-            <StateButton bar={bar} desktop={desktop} buttonRef={buttonRef} onClick={() => onToggle(bar)} />
+            <StateButton
+              bar={bar}
+              desktop={desktop}
+              waiting={waiting}
+              pending={pending}
+              buttonRef={buttonRef}
+              onClick={() => onToggle(bar)}
+            />
           )
         )}
       </div>
@@ -298,7 +332,7 @@ function DrinkRow({
       {flip && (
         <div role="status" className="ingredient-undo">
           <span>{flip.now === 'have' ? 'Marked as in the bar.' : 'Marked as not in the bar.'}</span>
-          <button type="button" onClick={onUndo}>
+          <button type="button" aria-disabled={waiting || undefined} onClick={onUndo}>
             Undo
           </button>
         </div>
@@ -311,11 +345,15 @@ function DrinkRow({
 function StateButton({
   bar,
   desktop,
+  waiting,
+  pending,
   buttonRef,
   onClick,
 }: {
   bar: IngredientBar
   desktop: boolean
+  waiting: boolean
+  pending: boolean
   buttonRef: (button: HTMLButtonElement | null) => void
   onClick: () => void
 }) {
@@ -346,8 +384,11 @@ function StateButton({
     <button
       ref={buttonRef}
       type="button"
-      className={`ingredient-state ingredient-state--${look.kind}`}
+      // aria-disabled, not disabled, so focus stays on the button while its write is out.
+      className={`ingredient-state ingredient-state--${look.kind}${pending ? ' ingredient-state--pending' : ''}`}
       aria-label={look.label}
+      aria-disabled={waiting || undefined}
+      aria-busy={pending || undefined}
       onClick={onClick}
     >
       {look.icon}

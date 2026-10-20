@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
 import { expect, test } from 'vitest'
 import { Ingredients } from './Ingredients'
 import type { RecipeIngredient } from './types'
@@ -141,4 +142,14 @@ test('food page has no bar', () => {
     'g/ml',
   ])
   expect(row('olive oil').className).toBe('ingredient')
+})
+
+test('a drink written for more than 12 starts at 12', () => {
+  render(
+    <MemoryRouter>
+      <Ingredients ingredients={[oil]} servings={16} side="drinks" />
+    </MemoryRouter>,
+  )
+  expect(screen.getByText('12 drinks')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'More' })).toBeDisabled()
 })

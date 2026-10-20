@@ -610,6 +610,18 @@
   cursor: pointer;
 }
 
+/* Another write is in flight: the buttons wait, the tapped one most visibly. */
+.ingredient-state[aria-disabled='true'],
+.ingredient-undo button[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.ingredient-state.ingredient-state--pending {
+  opacity: 0.75;
+  border-style: dotted;
+}
+
 .ingredient-state svg,
 .ingredient-fresh svg {
   flex: none;
