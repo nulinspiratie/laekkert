@@ -132,6 +132,51 @@ test('shows the title, category, time, servings and the method', async () => {
   expect(screen.getByRole('region', { name: 'Ingredients' })).toBeInTheDocument()
 })
 
+test('step groups: numbers run on across the lists and each group has a heading', async () => {
+  const groups = ['', 'Day before', 'Day before', 'To serve']
+  stubApi({
+    ...traybake,
+    steps: groups.map((group, i) => ({ text: `Step ${i + 1} text.`, group })),
+  })
+  renderAt(TRAYBAKE_PATH)
+  await loaded()
+  const method = screen.getByRole('region', { name: 'Method' })
+  expect(within(method).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
+    'Day before',
+    'To serve',
+  ])
+  expect(within(method).getAllByRole('list')).toHaveLength(3)
+  expect(within(method).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+    '1Step 1 text.',
+    '2Step 2 text.',
+    '3Step 3 text.',
+    '4Step 4 text.',
+  ])
+})
+
+test('notes show after the method and before the source, with their formatting', async () => {
+  stubApi({
+    ...traybake,
+    notes: '**Make ahead:** 3 days',
+    source: { url: 'https://www.example.com/recipes/traybake', photo: null },
+  })
+  renderAt(TRAYBAKE_PATH)
+  await loaded()
+  const notes = screen.getByRole('region', { name: 'Notes' })
+  expect(within(notes).getByText('Make ahead:').tagName).toBe('STRONG')
+  const method = screen.getByRole('region', { name: 'Method' })
+  const source = screen.getByRole('region', { name: 'Source' })
+  expect(method.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(notes.compareDocumentPosition(source) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+})
+
+test('no notes means no Notes heading', async () => {
+  stubApi(traybake)
+  renderAt(TRAYBAKE_PATH)
+  await loaded()
+  expect(screen.queryByRole('heading', { name: 'Notes' })).not.toBeInTheDocument()
+})
+
 test('shows nothing, not "Not found", while the recipe loads', async () => {
   stubApi(traybake)
   renderAt(TRAYBAKE_PATH)

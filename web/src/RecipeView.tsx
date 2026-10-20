@@ -1,15 +1,17 @@
 // The recipe page: hero, title block, tags, marks and rating, the ingredients card, the
-// method, the source and the History. Layout follows RecipeDesktop and RecipePhone.
+// method, the notes, the source and the History. Layout follows RecipeDesktop and RecipePhone.
 
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
 import { addEntry, changeBar, getRecipe, getTimeline, recipeImageUrl, restoreVersion, setMarks } from './api'
 import { messageOf as barMessageOf, withBar } from './bar'
 import { browseQuery, MARK_LABELS, type FilterMark } from './browse'
 import { capitalise, formatTime } from './format'
+import { runs } from './groups'
 import { Back, Bookmark, Check, Clock, Edit, Heart, People } from './icons'
 import { History } from './History'
 import { Ingredients } from './Ingredients'
+import { Notes } from './Notes'
 import { PhotoTile } from './PhotoTile'
 import { Shell } from './Shell'
 import { Stars } from './Stars'
@@ -312,6 +314,7 @@ function Page({ recipe, onRecipe }: { recipe: Recipe; onRecipe: (recipe: Recipe)
         />
         <div className="recipe-side">
           <Method steps={recipe.steps} />
+          <Notes text={recipe.notes} />
           <Source recipe={recipe} />
         </div>
       </div>
@@ -391,16 +394,23 @@ function Method({ steps }: { steps: Step[] }) {
   return (
     <section className="method" aria-labelledby={headingId}>
       <h2 id={headingId}>Method</h2>
-      <ol>
-        {steps.map((step, i) => (
-          <li key={i}>
-            <span className="method-number" aria-hidden="true">
-              {i + 1}
-            </span>
-            <p>{step.text}</p>
-          </li>
-        ))}
-      </ol>
+      {runs(steps).map((run) => (
+        <Fragment key={run.start}>
+          {run.group !== '' && <h3 className="group-heading">{run.group}</h3>}
+          {run.group === '' && run.start > 0 && <hr className="group-rule" />}
+          {/* Numbers run on across the groups, so each list starts where the last one stopped. */}
+          <ol start={run.start + 1}>
+            {run.items.map((step, k) => (
+              <li key={run.start + k}>
+                <span className="method-number" aria-hidden="true">
+                  {run.start + k + 1}
+                </span>
+                <p>{step.text}</p>
+              </li>
+            ))}
+          </ol>
+        </Fragment>
+      ))}
     </section>
   )
 }

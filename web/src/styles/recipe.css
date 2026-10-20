@@ -395,7 +395,8 @@
 }
 
 .ingredients h2,
-.method h2 {
+.method h2,
+.notes h2 {
   margin: 0;
   font-family: var(--font-serif);
   font-size: 24px;
@@ -732,6 +733,57 @@
   overflow-wrap: anywhere;
 }
 
+/* ---- Group headings (ingredients and method) and the notes ---- */
+
+.group-heading {
+  margin: 20px 0 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  color: var(--accent-ink);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* The first heading in a card sits right under the card's own controls or title. */
+.ingredients-controls + .group-heading,
+.ingredients-bar + .group-heading,
+.method h2 + .group-heading {
+  margin-top: 4px;
+}
+
+/* An ungrouped run after a group: the same rule, with no heading. */
+.group-rule {
+  height: 0;
+  margin: 20px 0 0;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.notes p,
+.notes ul {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.notes ul {
+  padding-left: 20px;
+  list-style: disc;
+}
+
 /* ---- Source ---- */
 
 .source {
@@ -884,7 +936,8 @@
   }
 
   .ingredients h2,
-  .method h2 {
+  .method h2,
+  .notes h2 {
     font-size: 28px;
   }
 
@@ -973,6 +1026,15 @@
     max-width: 62ch;
     font-size: 18px;
     line-height: 1.6;
+  }
+
+  .notes {
+    gap: 20px;
+  }
+
+  .notes p,
+  .notes ul {
+    max-width: 62ch;
   }
 
   .source {

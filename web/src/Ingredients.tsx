@@ -3,11 +3,12 @@
 // item's bar state; a bottle flips with one tap, with an undo under that row
 // (DrinkRecipePhone, DrinkRecipeDesktop).
 
-import { useId, useRef, useState } from 'react'
+import { Fragment, useId, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import { formatAmount, type AmountFlag, type UnitMode } from './amounts'
 import { normalise } from './bar'
 import { capitalise } from './format'
+import { runs } from './groups'
 import { Basket, Check, Chevron, Minus, MinusCircle, Plus, Question } from './icons'
 import { getUnitMode, setUnitMode } from './prefs'
 import type { BarState, DrinkBar, IngredientBar, RecipeIngredient, Side } from './types'
@@ -158,30 +159,38 @@ export function Ingredients({
         </div>
       </div>
       {drinks && bar && <BarSummary bar={bar} ingredients={ingredients} />}
-      <ul className="ingredient-list">
-        {ingredients.map((ing, i) =>
-          drinks ? (
-            <DrinkRow
-              key={i}
-              ingredient={ing}
-              factor={factor}
-              mode={mode}
-              problem={asked === i && barError && ing.bar?.item === barError.item ? barError.message : null}
-              flip={flip?.row === i ? flip : null}
-              waiting={waiting}
-              pending={pending === i}
-              onToggle={onBar && ((item) => void toggle(i, item))}
-              onUndo={() => void undo()}
-              buttonRef={(button) => {
-                if (button) buttons.current.set(i, button)
-                else buttons.current.delete(i)
-              }}
-            />
-          ) : (
-            <IngredientRow key={i} ingredient={ing} factor={factor} mode={mode} />
-          ),
-        )}
-      </ul>
+      {runs(ingredients).map((run) => (
+        <Fragment key={run.start}>
+          {run.group !== '' && <h3 className="group-heading">{run.group}</h3>}
+          {run.group === '' && run.start > 0 && <hr className="group-rule" />}
+          <ul className="ingredient-list">
+            {run.items.map((ing, k) => {
+              // The row's place in the whole recipe, which the bar state is keyed by.
+              const i = run.start + k
+              return drinks ? (
+                <DrinkRow
+                  key={i}
+                  ingredient={ing}
+                  factor={factor}
+                  mode={mode}
+                  problem={asked === i && barError && ing.bar?.item === barError.item ? barError.message : null}
+                  flip={flip?.row === i ? flip : null}
+                  waiting={waiting}
+                  pending={pending === i}
+                  onToggle={onBar && ((item) => void toggle(i, item))}
+                  onUndo={() => void undo()}
+                  buttonRef={(button) => {
+                    if (button) buttons.current.set(i, button)
+                    else buttons.current.delete(i)
+                  }}
+                />
+              ) : (
+                <IngredientRow key={i} ingredient={ing} factor={factor} mode={mode} />
+              )
+            })}
+          </ul>
+        </Fragment>
+      ))}
     </section>
   )
 }
