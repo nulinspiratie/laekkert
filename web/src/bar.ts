@@ -1,6 +1,6 @@
 // The bar's display helpers: grouping, search and the badges drinks wear.
 
-import type { BarItem, DrinkBar, DrinkStatus, Kind, RecipeSummary } from './types'
+import type { Bar, BarItem, DrinkBar, DrinkStatus, Kind, Recipe, RecipeIngredient, RecipeSummary } from './types'
 
 /** The kinds in the order the bar shows them. */
 export const KINDS: readonly Kind[] = ['spirits', 'liqueurs', 'aperitifs', 'bitters', 'syrups', 'other']
@@ -87,6 +87,38 @@ export function topFresh(recipes: RecipeSummary[]): { item: string; count: numbe
     }
   }
   return top
+}
+
+/** What the bar says about a drink with these ingredients; the server's rule in `BarView.status`. */
+function drinkBar(ingredients: RecipeIngredient[]): DrinkBar {
+  const missing: string[] = []
+  const unsorted: string[] = []
+  const freshNames: string[] = []
+  for (const ing of ingredients) {
+    // No bar item: one saved since the bar was read, so an unsorted bottle.
+    const name = ing.bar?.item ?? ing.item
+    const state = ing.bar?.state ?? null
+    const group = ing.bar?.fresh ? freshNames : state === 'dont' ? missing : state === null ? unsorted : null
+    if (group && !group.includes(name)) group.push(name)
+  }
+  const status: DrinkStatus = missing.length
+    ? 'missing'
+    : unsorted.length
+      ? 'unsorted'
+      : freshNames.length
+        ? 'fresh_only'
+        : 'can_make'
+  return { status, missing, unsorted, fresh: freshNames }
+}
+
+/** A drink with a bar the server just returned laid over its ingredients, and its summary to match. */
+export function withBar(recipe: Recipe, bar: Bar): Recipe {
+  const items = new Map(bar.items.map((item) => [normalise(item.name), item]))
+  const ingredients = recipe.ingredients.map((ing) => {
+    const item = ing.bar ? items.get(normalise(ing.bar.item)) : undefined
+    return ing.bar && item ? { ...ing, bar: { ...ing.bar, state: item.state, fresh: item.fresh } } : ing
+  })
+  return { ...recipe, ingredients, bar: drinkBar(ingredients) }
 }
 
 /** The sentence to show for a failed request: the server's own, when it gave one. */

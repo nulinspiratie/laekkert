@@ -1,8 +1,8 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, type To } from 'react-router'
 import { describe, expect, test, vi } from 'vitest'
 import App from './App'
-import type { Recipe, RecipeSummary, TimelineEntry } from './types'
+import type { Bar, BarChanges, BarState, Recipe, RecipeSummary, TimelineEntry } from './types'
 
 const traybake: Recipe = {
   format_version: 1,
@@ -651,5 +651,257 @@ describe('history', () => {
     await loaded()
     await waitFor(() => expect(within(entriesList()).getAllByRole('listitem')).toHaveLength(3))
     expect(screen.queryByRole('button', { name: 'Show full history' })).not.toBeInTheDocument()
+  })
+})
+
+describe('a drink and the bar', () => {
+  type Shelf = BarState | null
+  interface Shelves {
+    rum: Shelf
+    syrup: Shelf
+  }
+
+  const ml = (amount: number, item: string, note = '') => ({
+    amount,
+    unit: 'ml' as const,
+    item,
+    note,
+    no_scale: false,
+    original: '',
+    g_per_tsp: null,
+  })
+  const syrupLink = { slug: 'simple-syrup', name: 'Simple syrup' }
+
+  /** The daiquiri as the API sends it for these states: white rum, fresh lime juice, simple syrup. */
+  function cocktail({ rum, syrup }: Shelves): Recipe {
+    const shelf: [string, Shelf][] = [
+      ['white rum', rum],
+      ['simple syrup', syrup],
+    ]
+    const missing = shelf.filter(([, state]) => state === 'dont').map(([name]) => name)
+    const unsorted = shelf.filter(([, state]) => state === null).map(([name]) => name)
+    return {
+      ...daiquiri,
+      servings: 1,
+      ingredients: [
+        { ...ml(50, 'white rum'), bar: { item: 'white rum', state: rum, fresh: false, recipe: null } },
+        { ...ml(25, 'lime juice', 'fresh'), bar: { item: 'lime juice', state: null, fresh: true, recipe: null } },
+        { ...ml(15, 'simple syrup', '1:1'), bar: { item: 'simple syrup', state: syrup, fresh: false, recipe: syrupLink } },
+      ],
+      bar: {
+        status: missing.length ? 'missing' : unsorted.length ? 'unsorted' : 'fresh_only',
+        missing,
+        unsorted,
+        fresh: ['lime juice'],
+      },
+    }
+  }
+
+  const simpleSyrup: Recipe = {
+    ...daiquiri,
+    slug: 'simple-syrup',
+    name: 'Simple syrup',
+    category: 'syrups',
+    ingredients: [],
+    bar: { status: 'can_make', missing: [], unsorted: [], fresh: [] },
+  }
+
+  function barOf({ rum, syrup }: Shelves): Bar {
+    const used_in = [{ slug: 'daiquiri', name: 'Daiquiri' }]
+    return {
+      items: [
+        { name: 'white rum', aliases: [], kind: 'spirits', fresh: false, state: rum, used_in, recipe: null },
+        { name: 'lime juice', aliases: [], kind: 'other', fresh: true, state: null, used_in, recipe: null },
+        { name: 'simple syrup', aliases: [], kind: 'syrups', fresh: false, state: syrup, used_in, recipe: syrupLink },
+      ],
+      set_up: true,
+      counts: { can_make: 0, fresh_only: 0, missing: 0, unsorted: 0, total: 1 },
+    }
+  }
+
+  /**
+   * A server that keeps the bar: a write changes it and the next recipe load shows it.
+   * `refuse` answers every write with that sentence; `reloadFails` fails the recipe load
+   * after a write.
+   */
+  function stubBar(start: Shelves, options: { refuse?: string; reloadFails?: boolean } = {}) {
+    const shelves = { ...start }
+    const recipes = [cocktail(shelves), simpleSyrup]
+    const keys: Record<string, keyof Shelves> = { 'white rum': 'rum', 'simple syrup': 'syrup' }
+    const inner = stubApiWith({
+      recipes,
+      post: (url, body) => {
+        expect(url).toBe('/api/bar')
+        if (options.refuse) return json({ error: options.refuse }, 400)
+        const changes = body as BarChanges
+        for (const name of changes.have ?? []) shelves[keys[name]] = 'have'
+        for (const name of changes.dont_have ?? []) shelves[keys[name]] = 'dont'
+        for (const name of changes.unsorted ?? []) shelves[keys[name]] = null
+        recipes[0] = cocktail(shelves)
+        return json(barOf(shelves))
+      },
+    })
+    let wrote = false
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.method === 'POST') wrote = true
+        else if (wrote && options.reloadFails && url === '/api/recipes/drinks/daiquiri') {
+          return new Response('', { status: 500 })
+        }
+        return inner(url, init)
+      }),
+    )
+    return inner
+  }
+
+  const open = () => {
+    renderAt('/drinks/daiquiri')
+    return screen.findByRole('heading', { level: 1, name: 'Daiquiri' })
+  }
+  const row = (item: string) => screen.getByText(item).closest('li')!
+  const summaryLine = () => document.querySelector<HTMLElement>('.ingredients-bar')!
+
+  test('shows the summary line', async () => {
+    stubBar({ rum: 'have', syrup: 'have' })
+    await open()
+    expect(summaryLine()).toHaveTextContent('From your bar: 2 of 2')
+    expect(summaryLine()).toHaveTextContent('Buy fresh: lime juice')
+    expect(summaryLine()).not.toHaveTextContent('Missing')
+    cleanup()
+
+    stubBar({ rum: 'have', syrup: 'dont' })
+    await open()
+    expect(summaryLine()).toHaveTextContent('Missing: simple syrup')
+    expect(summaryLine()).toHaveTextContent('Buy fresh: lime juice')
+    expect(summaryLine()).not.toHaveTextContent('From your bar')
+  })
+
+  test('unsorted counts as missing in the summary', async () => {
+    stubBar({ rum: null, syrup: 'dont' })
+    await open()
+    expect(summaryLine()).toHaveTextContent('Missing: simple syrup, white rum')
+    expect(within(row('white rum')).getByRole('button', { name: /White rum is not sorted yet/ })).toHaveTextContent(
+      'Not sorted',
+    )
+  })
+
+  test('flips a bottle and undoes it', async () => {
+    const fetch = stubBar({ rum: 'have', syrup: 'have' })
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: "Simple syrup is in the bar. Click if you've run out." }))
+    const flipped = await screen.findByRole('button', { name: 'Simple syrup is not in the bar. Click when you have it.' })
+    expect(flipped).toHaveTextContent('Not in the bar')
+    expect(posts(fetch).map((p) => p.body)).toEqual([{ dont_have: ['simple syrup'] }])
+    // The page reloads the recipe, so the summary follows.
+    expect(summaryLine()).toHaveTextContent('Missing: simple syrup')
+    const undo = within(row('simple syrup')).getByRole('status')
+    expect(undo).toHaveTextContent('Marked as not in the bar.')
+
+    fireEvent.click(within(undo).getByRole('button', { name: 'Undo' }))
+    expect(
+      await screen.findByRole('button', { name: "Simple syrup is in the bar. Click if you've run out." }),
+    ).toHaveTextContent('In the bar')
+    expect(posts(fetch).map((p) => p.body)).toEqual([{ dont_have: ['simple syrup'] }, { have: ['simple syrup'] }])
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(summaryLine()).toHaveTextContent('From your bar: 2 of 2')
+  })
+
+  test('undo of an unsorted flip makes it unsorted again', async () => {
+    const fetch = stubBar({ rum: null, syrup: 'have' })
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: 'White rum is not sorted yet. Click when you have it.' }))
+    await screen.findByRole('button', { name: "White rum is in the bar. Click if you've run out." })
+    expect(within(row('white rum')).getByRole('status')).toHaveTextContent('Marked as in the bar.')
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    await screen.findByRole('button', { name: 'White rum is not sorted yet. Click when you have it.' })
+    expect(posts(fetch).map((p) => p.body)).toEqual([{ have: ['white rum'] }, { unsorted: ['white rum'] }])
+  })
+
+  test('one undo at a time: a second flip moves it to that row', async () => {
+    stubBar({ rum: 'have', syrup: 'have' })
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: "Simple syrup is in the bar. Click if you've run out." }))
+    await within(row('simple syrup')).findByRole('status')
+    fireEvent.click(screen.getByRole('button', { name: "White rum is in the bar. Click if you've run out." }))
+    await within(row('white rum')).findByRole('status')
+    expect(screen.getAllByRole('status')).toHaveLength(1)
+  })
+
+  test('a refused flip shows its sentence at that row and keeps the state', async () => {
+    stubBar({ rum: 'have', syrup: 'have' }, { refuse: "The bar can't be changed right now." })
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: "Simple syrup is in the bar. Click if you've run out." }))
+    const alert = await within(row('simple syrup')).findByRole('alert')
+    expect(alert).toHaveTextContent("The bar can't be changed right now.")
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: "Simple syrup is in the bar. Click if you've run out." })).toBeInTheDocument()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  test('a failed reload after a flip keeps the page and the new state', async () => {
+    stubBar({ rum: 'have', syrup: 'have' }, { reloadFails: true })
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: "Simple syrup is in the bar. Click if you've run out." }))
+    await screen.findByRole('button', { name: 'Simple syrup is not in the bar. Click when you have it.' })
+    expect(screen.getByRole('heading', { level: 1, name: 'Daiquiri' })).toBeInTheDocument()
+    expect(summaryLine()).toHaveTextContent('Missing: simple syrup')
+    expect(within(row('simple syrup')).getByRole('status')).toHaveTextContent('Marked as not in the bar.')
+  })
+
+  test('fresh rows have no button', async () => {
+    stubBar({ rum: 'have', syrup: 'have' })
+    await open()
+    const lime = row('lime juice')
+    expect(within(lime).queryByRole('button')).not.toBeInTheDocument()
+    expect(lime).toHaveTextContent('Fresh, buy when needed')
+  })
+
+  test('links a syrup to its recipe', async () => {
+    stubBar({ rum: 'have', syrup: 'have' })
+    await open()
+    expect(within(row('simple syrup')).getByRole('link', { name: 'Recipe: Simple syrup' })).toHaveAttribute(
+      'href',
+      '/drinks/simple-syrup',
+    )
+    expect(within(row('white rum')).queryByRole('link')).not.toBeInTheDocument()
+    cleanup()
+
+    stubBar({ rum: 'have', syrup: 'dont' })
+    await open()
+    const link = within(row('simple syrup')).getByRole('link', { name: 'Out? Make it: Simple syrup' })
+    expect(link).toHaveAttribute('href', '/drinks/simple-syrup')
+    fireEvent.click(link)
+    expect(await screen.findByRole('heading', { level: 1, name: 'Simple syrup' })).toBeInTheDocument()
+  })
+
+  test('drinks stepper says drinks and stops at 12', async () => {
+    stubBar({ rum: 'have', syrup: 'have' })
+    await open()
+    const stepper = screen.getByRole('group', { name: 'Drinks to make' })
+    expect(within(stepper).getByText('1 drink')).toBeInTheDocument()
+    expect(within(stepper).getByRole('button', { name: 'Fewer' })).toBeDisabled()
+    const more = within(stepper).getByRole('button', { name: 'More' })
+    fireEvent.click(more)
+    expect(within(stepper).getByText('2 drinks')).toBeInTheDocument()
+    expect(within(row('white rum')).getByText('100 ml')).toBeInTheDocument()
+    for (let i = 0; i < 20; i++) fireEvent.click(more)
+    expect(within(stepper).getByText('12 drinks')).toBeInTheDocument()
+    expect(more).toBeDisabled()
+    expect(screen.queryByRole('group', { name: 'Servings' })).not.toBeInTheDocument()
+  })
+
+  test('on a phone the rows say Tap and use the short labels', async () => {
+    stubViewport(false)
+    stubBar({ rum: 'have', syrup: 'dont' })
+    await open()
+    expect(screen.getByRole('button', { name: "White rum is in the bar. Tap if you've run out." })).toHaveTextContent(
+      'In the bar',
+    )
+    expect(screen.getByRole('button', { name: 'Simple syrup is not in the bar. Tap when you have it.' })).toHaveTextContent(
+      'Not in bar',
+    )
+    expect(row('lime juice')).toHaveTextContent('Fresh')
+    expect(row('lime juice')).not.toHaveTextContent('buy when needed')
   })
 })
