@@ -4,7 +4,7 @@ import pytest
 
 from app.recipes.catalog import Catalog
 from app.recipes.drafts import RecipeDraft, parse_draft, slugify, to_recipe
-from app.recipes.model import FORMAT_VERSION
+from app.recipes.model import FORMAT_VERSION, Step
 
 
 @pytest.fixture
@@ -131,7 +131,7 @@ def test_blank_rows_and_steps_are_dropped(catalog):
         catalog,
     )
     assert [i.item for i in recipe.ingredients] == ["red lentils"]
-    assert recipe.steps == ["Simmer"]
+    assert [s.text for s in recipe.steps] == ["Simmer"]
     assert recipe.name == "Dal"
 
 
@@ -147,6 +147,62 @@ def test_text_fields_are_stripped(catalog):
     )
     assert recipe.ingredients[0].note == "zest"
     assert recipe.ingredients[1].original == "1 cup"
+
+
+def test_groups_are_kept_and_tidied(catalog):
+    recipe = convert(
+        draft(
+            ingredients=[row("garlic", 1, "piece", group="  Garlic   sauce ")],
+            steps=[{"text": " Stir ", "group": " Day before"}],
+        ),
+        catalog,
+    )
+    assert recipe.ingredients[0].group == "Garlic sauce"
+    assert recipe.steps == [Step(text="Stir", group="Day before")]
+
+
+def test_string_and_object_steps_mix(catalog):
+    recipe = convert(
+        draft(steps=["Boil", {"text": "Serve", "group": "To serve"}]), catalog
+    )
+    assert [(s.text, s.group) for s in recipe.steps] == [
+        ("Boil", ""),
+        ("Serve", "To serve"),
+    ]
+
+
+def test_blank_step_is_dropped_with_its_group(catalog):
+    recipe = convert(draft(steps=[{"text": "  ", "group": "Sauce"}, "Boil"]), catalog)
+    assert [(s.text, s.group) for s in recipe.steps] == [("Boil", "")]
+
+
+def test_notes_are_tidied(catalog):
+    notes = "  **Keeps** well.  \r\n\r\n- a  \r\n"
+    assert convert(draft(notes=notes), catalog).notes == "**Keeps** well.\n\n- a"
+    inner = convert(draft(notes="One\n\n\nTwo"), catalog).notes
+    assert inner == "One\n\n\nTwo"
+
+
+def test_notes_default_to_empty(catalog):
+    assert convert(draft(), catalog).notes == ""
+
+
+def test_group_name_too_long(catalog):
+    refusal = "A group name can be at most 60 characters"
+    for group in ("g" * 60, " ".join(["gg"] * 20)):  # the second is 59 characters
+        convert(draft(ingredients=[row("salt", 1, group=group)]), catalog)
+        convert(draft(steps=[{"text": "Stir", "group": group}]), catalog)
+    too_long = "g" * 61
+    with pytest.raises(ValueError, match=refusal):
+        convert(draft(ingredients=[row("salt", 1, group=too_long)]), catalog)
+    with pytest.raises(ValueError, match=refusal):
+        convert(draft(steps=[{"text": "Stir", "group": too_long}]), catalog)
+
+
+def test_notes_too_long(catalog):
+    convert(draft(notes="n" * 5000), catalog)
+    with pytest.raises(ValueError, match="The notes can be at most 5000 characters"):
+        convert(draft(notes="n" * 5001 + "  \n"), catalog)
 
 
 def test_tags_are_normalised(catalog):

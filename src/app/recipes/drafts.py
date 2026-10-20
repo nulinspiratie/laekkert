@@ -15,11 +15,14 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 from app.recipes.catalog import Catalog
 from app.recipes.model import (
     FORMAT_VERSION,
+    GROUP_MAX,
+    NOTES_MAX,
     Ingredient,
     Mark,
     Recipe,
     Side,
     Source,
+    Step,
     Unit,
 )
 
@@ -27,6 +30,12 @@ from app.recipes.model import (
 MAX_AMOUNT = 100_000
 MAX_SERVINGS = 1000
 MAX_MINUTES = 7 * 24 * 60  # a week
+
+# Said on both group fields, so Claude's tool schemas carry it.
+GROUP_HELP = (
+    "A heading to sit under, such as 'Sauce' or 'Day before'; empty for none. "
+    "Keep rows of one group together, in order (see the style guide)."
+)
 
 
 class DraftIngredient(Ingredient):
@@ -44,11 +53,22 @@ class DraftIngredient(Ingredient):
     )
     amount: float | None = Field(default=None, allow_inf_nan=False, le=MAX_AMOUNT)
     item: str = ""
+    # Longer than GROUP_MAX is refused in `to_recipe` with a sentence, after tidying.
+    group: str = Field(default="", max_length=None, description=GROUP_HELP)
 
     @model_validator(mode="after")
     def _measured_needs_amount(self) -> "DraftIngredient":
         # Deliberately disables the parent check so to_recipe can number the error.
         return self
+
+
+class DraftStep(BaseModel):
+    """A method step as typed, with the group it sits under."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: str
+    group: str = Field(default="", description=GROUP_HELP)
 
 
 class RecipeDraft(BaseModel):
@@ -59,7 +79,8 @@ class RecipeDraft(BaseModel):
     servings: int = Field(ge=1, le=MAX_SERVINGS)
     time_minutes: int | None = Field(ge=0, le=MAX_MINUTES)
     ingredients: list[DraftIngredient]
-    steps: list[str]
+    steps: list[str | DraftStep]
+    notes: str = ""
     source: Source | None
     tags: list[str]
     image: str | None
@@ -140,6 +161,31 @@ def _half_up(value: float, places: int) -> float:
     return float(exact.quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP))
 
 
+def _group(name: str) -> str:
+    group = " ".join(name.split())
+    if len(group) > GROUP_MAX:
+        raise ValueError(f"A group name can be at most {GROUP_MAX} characters")
+    return group
+
+
+def _steps(steps: list[str | DraftStep]) -> list[Step]:
+    """Steps tidied; a blank step goes, and its group with it."""
+    drafts = [DraftStep(text=s) if isinstance(s, str) else s for s in steps]
+    return [
+        Step(text=step.text.strip(), group=_group(step.group))
+        for step in drafts
+        if step.text.strip()
+    ]
+
+
+def _notes(notes: str) -> str:
+    """Trailing spaces and surrounding blank lines go; blank lines inside stay."""
+    tidy = "\n".join(line.rstrip() for line in notes.splitlines()).strip()
+    if len(tidy) > NOTES_MAX:
+        raise ValueError(f"The notes can be at most {NOTES_MAX} characters")
+    return tidy
+
+
 def _row(number: int, row: DraftIngredient, catalog: Catalog) -> Ingredient:
     amount, unit = row.amount, row.unit
     if unit in ("tsp", "tbsp"):
@@ -148,6 +194,7 @@ def _row(number: int, row: DraftIngredient, catalog: Catalog) -> Ingredient:
         if amount <= 0:
             raise ValueError(f"Ingredient {number} needs an amount above 0")
         amount, unit = _metric(row, catalog)
+    group = _group(row.group)
     try:
         return Ingredient(
             amount=amount,
@@ -156,6 +203,7 @@ def _row(number: int, row: DraftIngredient, catalog: Catalog) -> Ingredient:
             note=row.note.strip(),
             no_scale=row.no_scale,
             original=row.original.strip(),
+            group=group,
         )
     except ValidationError as err:
         first = err.errors()[0]
@@ -210,6 +258,8 @@ def to_recipe(
     ]
     if not ingredients:
         raise ValueError("Add at least one ingredient")
+    steps = _steps(draft.steps)
+    notes = _notes(draft.notes)
     source = _source(draft.source)
     try:
         return Recipe(
@@ -221,7 +271,8 @@ def to_recipe(
             servings=draft.servings,
             time_minutes=draft.time_minutes,
             ingredients=ingredients,
-            steps=[s for s in (s.strip() for s in draft.steps) if s],
+            steps=steps,
+            notes=notes,
             source=source,
             tags=_normal_tags(draft.tags),
             marks=marks,

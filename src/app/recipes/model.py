@@ -11,7 +11,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-FORMAT_VERSION = 2
+FORMAT_VERSION = 3
+
+GROUP_MAX = 60
+NOTES_MAX = 5000
 
 Side = Literal["food", "drinks"]
 SIDES: tuple[Side, ...] = ("food", "drinks")
@@ -29,7 +32,7 @@ Mark = Literal["tried", "favourite", "try_next"]
 
 SLUG_PATTERN = r"^[a-z0-9]+(-[a-z0-9]+)*$"
 
-# What lists show: everything but ingredients, steps and source.
+# What lists show: everything but ingredients, steps, notes and source.
 SUMMARY_FIELDS = {
     "slug",
     "name",
@@ -56,12 +59,22 @@ class Ingredient(BaseModel):
     no_scale: bool = False
     # The amount as written ("1 tsp") when no metric conversion exists yet.
     original: str = ""
+    # The heading it sits under ("Sauce"); empty means no group.
+    group: str = Field("", max_length=GROUP_MAX)
 
     @model_validator(mode="after")
     def _measured_needs_amount(self) -> "Ingredient":
         if self.unit in MEASURED_UNITS and self.amount is None and not self.original:
             raise ValueError(f"{self.unit} needs an amount or the original as written")
         return self
+
+
+class Step(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(min_length=1)
+    # The heading it sits under ("Day before"); empty means no group.
+    group: str = Field("", max_length=GROUP_MAX)
 
 
 class Source(BaseModel):
@@ -82,7 +95,8 @@ class Recipe(BaseModel):
     servings: int = Field(ge=1)
     time_minutes: int | None = Field(default=None, ge=0)
     ingredients: list[Ingredient] = Field(min_length=1)
-    steps: list[str] = []
+    steps: list[Step] = []
+    notes: str = Field("", max_length=NOTES_MAX)
     source: Source | None = None
     tags: list[str] = []
     marks: list[Mark] = []
@@ -127,7 +141,22 @@ def _migrate_1_to_2(data: dict) -> dict:
     }
 
 
-MIGRATIONS: dict[int, Callable[[dict], dict]] = {1: _migrate_1_to_2}
+# Format 3 turned steps into objects (so they can sit under a group) and added
+# groups on ingredients and steps, and recipe notes. All of them default to empty.
+def _migrate_2_to_3(data: dict) -> dict:
+    steps = data.get("steps")
+    if not isinstance(steps, list):
+        # Let validation report the bad shape.
+        return {**data, "format_version": 3}
+    # Anything that is not a string is left for validation to refuse.
+    steps = [{"text": s} if isinstance(s, str) else s for s in steps]
+    return {**data, "steps": steps, "format_version": 3}
+
+
+MIGRATIONS: dict[int, Callable[[dict], dict]] = {
+    1: _migrate_1_to_2,
+    2: _migrate_2_to_3,
+}
 
 
 def parse_recipe(data: object) -> Recipe:

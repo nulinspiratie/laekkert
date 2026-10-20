@@ -239,6 +239,30 @@ Rulings made on the way:
   and plurals (`s`, `es`, `y`/`ies`) match at any length. At 80, "chicken" covered
   chickpeas and "butter" covered butternut squash.
 
+### Groups and notes
+
+**Done** (2026-10-20). Spec: `docs/superpowers/specs/2026-10-20-groups-and-notes-design.md`.
+
+- **Recipe format 3.** Ingredients and steps each carry a `group` (a short heading, empty
+  for none), steps become objects (`{text, group}`) and a recipe has `notes`. Format 2
+  files migrate on read, so old versions still restore; files are rewritten as format 3
+  only when saved. Ingredient groups and step groups are independent, and a recipe with no
+  groups looks as it did.
+- **Recipe page.** Group headings (a small accent label with a rule) in the ingredients
+  card and the method, a rule alone for an ungrouped run after a group, step numbers
+  running through the whole method, and a Notes section when there are notes. Notes keep
+  their line breaks and allow `**bold**`, `*italic*` and "- " bullets, rendered without
+  HTML.
+- **Editor.** Heading rows in the ingredient and step lists, with move and remove buttons,
+  an Add group button under each list, and a Notes card with Bold, Italic and List
+  buttons.
+- **History.** Group moves ("moved to ..."), group renames as one line, and notes added,
+  removed or changed.
+- **Claude.** `add_recipe` and `edit_recipe` take groups and notes (steps as strings or
+  `{text, group}`), `read_recipe` returns them, and the style guide says when to use them
+  (only for recipes with distinct parts) and how to name groups.
+- Screenshots are in `docs/design/screenshots/groups/`.
+
 ### After the PoC
 
 Every idea for what comes next is in `docs/ideas.md`.

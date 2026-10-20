@@ -12,7 +12,7 @@ export function formatDate(at: string, now: Date = new Date()): string {
 }
 
 // The order the editor lists its sections in.
-const SECTIONS: readonly Change['section'][] = ['details', 'ingredients', 'method', 'source', 'tags', 'photo']
+const SECTIONS: readonly Change['section'][] = ['details', 'ingredients', 'method', 'notes', 'source', 'tags', 'photo']
 
 const MARK_WORDS: Record<Mark, string> = { favourite: 'Favourite', try_next: 'Try next', tried: 'Tried' }
 

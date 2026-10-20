@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 from app.recipes.files import atomic_write
 from app.recipes.timeline import (
+    Change,
     Made,
     Note,
     Rating,
@@ -180,3 +181,10 @@ def test_invalid_utf8_line_is_skipped(tmp_path, caplog):
 
     assert entries == [first, last]
     assert len([r for r in caplog.records if r.levelno == logging.WARNING]) == 1
+
+
+def test_change_accepts_the_notes_section():
+    change = Change(section="notes", kind="changed", text="notes changed")
+    assert change.section == "notes"
+    with pytest.raises(ValidationError):
+        Change(section="groups", kind="changed", text="x")

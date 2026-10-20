@@ -1,5 +1,5 @@
 {
-  "format_version": 2,
+  "format_version": 3,
   "slug": "daiquiri",
   "side": "drinks",
   "name": "Daiquiri",
@@ -12,8 +12,8 @@
     {"amount": 15, "unit": "ml", "item": "simple syrup", "note": "1:1"}
   ],
   "steps": [
-    "Shake everything hard with ice.",
-    "Double strain into a chilled coupe."
+    {"text": "Shake everything hard with ice."},
+    {"text": "Double strain into a chilled coupe."}
   ],
   "tags": ["classic"],
   "marks": ["tried", "favourite"]

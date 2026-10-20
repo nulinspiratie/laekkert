@@ -387,7 +387,8 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  --stack-gap: 14px;
+  gap: var(--stack-gap);
   padding: 18px 16px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -395,7 +396,8 @@
 }
 
 .ingredients h2,
-.method h2 {
+.method h2,
+.notes h2 {
   margin: 0;
   font-family: var(--font-serif);
   font-size: 24px;
@@ -523,7 +525,8 @@
   --state-fresh: #6a460c;
   --state-unsorted: #6c7368;
   padding-bottom: 8px;
-  gap: 12px;
+  --stack-gap: 12px;
+  gap: var(--stack-gap);
 }
 
 .ingredients-bar {
@@ -693,7 +696,8 @@
 .method {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  --stack-gap: 18px;
+  gap: var(--stack-gap);
 }
 
 .method ol {
@@ -730,6 +734,80 @@
   font-size: 17px;
   line-height: 1.55;
   overflow-wrap: anywhere;
+}
+
+/* ---- Group headings (ingredients and method) and the notes ---- */
+
+.group-heading {
+  /* 20px above the heading in all: the card's own flex gap (--stack-gap) is
+     already part of it. */
+  margin: calc(20px - var(--stack-gap, 0px)) 0 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  color: var(--accent-ink);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* The first heading in a card sits right under the card's own controls or title. */
+.ingredients-controls + .group-heading,
+.ingredients-bar + .group-heading,
+.method h2 + .group-heading {
+  margin-top: 4px;
+}
+
+/* An ungrouped run after a group: the same rule, with no heading. */
+.group-rule {
+  height: 0;
+  margin: calc(20px - var(--stack-gap, 0px)) 0 0;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* A tinted card, so the notes read as an aside rather than another step. */
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 16px 20px;
+  background: color-mix(in srgb, var(--accent-soft) 60%, var(--surface));
+  border: 1px solid var(--card-rule);
+  border-radius: 18px;
+}
+
+.notes h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.notes-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.notes p,
+.notes ul {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.notes ul {
+  padding-left: 20px;
+  list-style: disc;
 }
 
 /* ---- Source ---- */
@@ -879,12 +957,14 @@
   .ingredients {
     flex: 1 1 360px;
     max-width: 440px;
-    gap: 18px;
+    --stack-gap: 18px;
+    gap: var(--stack-gap);
     padding: 24px;
   }
 
   .ingredients h2,
-  .method h2 {
+  .method h2,
+  .notes h2 {
     font-size: 28px;
   }
 
@@ -911,7 +991,8 @@
   .ingredients--drinks {
     flex-basis: 400px;
     max-width: 520px;
-    gap: 14px;
+    --stack-gap: 14px;
+    gap: var(--stack-gap);
     padding: 24px 22px 10px;
   }
 
@@ -950,7 +1031,8 @@
   }
 
   .method {
-    gap: 20px;
+    --stack-gap: 20px;
+    gap: var(--stack-gap);
   }
 
   .method ol {
@@ -973,6 +1055,16 @@
     max-width: 62ch;
     font-size: 18px;
     line-height: 1.6;
+  }
+
+  .notes {
+    gap: 20px;
+    padding: 24px;
+  }
+
+  .notes p,
+  .notes ul {
+    max-width: 62ch;
   }
 
   .source {
