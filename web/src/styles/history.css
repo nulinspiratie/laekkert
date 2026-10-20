@@ -1,0 +1,260 @@
+/* The History section of the recipe page. Values are from the History sections of
+   RecipeDesktop and RecipePhone in docs/design/artboards; avatars are replaced by a
+   kind icon. Colours come from the theme tokens (tokens.css). */
+
+.recipe-history {
+  padding-bottom: 40px;
+}
+
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.history h2 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 24px;
+}
+
+.history-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-label {
+  display: flex;
+}
+
+.history-label textarea {
+  min-height: 52px;
+  resize: none;
+}
+
+/* ---- Timeline ---- */
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history-entry {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.history-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.history-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.history-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.history-line {
+  flex: 1;
+  width: 2px;
+  background: var(--border);
+}
+
+.history-entry--last .history-line {
+  display: none;
+}
+
+.history-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 0 22px;
+}
+
+.history-entry--last .history-body {
+  padding-bottom: 0;
+}
+
+.history-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.history-title {
+  flex: 1 1 200px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.history-title strong {
+  color: var(--text);
+}
+
+.history-note {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 16px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.history-restore {
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.history-more {
+  width: 100%;
+}
+
+/* ---- Diff lines ---- */
+
+.history-diff {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.history-diff-line {
+  display: flex;
+  gap: 10px;
+  padding: 9px 12px;
+}
+
+.history-diff-line + .history-diff-line {
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.history-diff-sign {
+  flex: none;
+  width: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.history-diff-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.history-diff-line--added {
+  background: #e4eddc;
+  color: #284a1b;
+}
+
+.history-diff-line--removed {
+  background: #f7e4dc;
+  color: #6e2a15;
+}
+
+.history-diff-line--removed .history-diff-text {
+  text-decoration: line-through;
+}
+
+.history-diff-line--changed {
+  background: #f6e9cf;
+  color: #5e3f0c;
+}
+
+/* ---- Desktop ---- */
+
+@media (min-width: 768px) {
+  .recipe-history {
+    padding-bottom: 0;
+  }
+
+  .history {
+    gap: 20px;
+  }
+
+  .history h2 {
+    font-size: 28px;
+  }
+
+  .history-form {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .history-label {
+    flex: 1;
+  }
+
+  .history-label textarea {
+    min-height: 56px;
+    resize: vertical;
+  }
+
+  .history-entry {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .history-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .history-body {
+    padding: 8px 0 28px;
+  }
+
+  .history-title {
+    font-size: 15px;
+  }
+
+  .history-note {
+    padding: 14px 16px;
+    font-size: 17px;
+  }
+
+  .history-diff {
+    font-size: 16px;
+  }
+
+  .history-diff-line {
+    gap: 12px;
+    padding: 10px 14px;
+  }
+}

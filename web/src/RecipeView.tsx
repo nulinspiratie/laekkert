@@ -1,35 +1,36 @@
-// The recipe page: hero, title block, tags and marks, the ingredients card, the
-// method and the source. Read-only in M1; layout follows RecipeDesktop and RecipePhone.
+// The recipe page: hero, title block, tags, marks and rating, the ingredients card, the
+// method, the source and the History. Layout follows RecipeDesktop and RecipePhone.
 
-import { useEffect, useId, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
-import { getRecipe, recipeImageUrl } from './api'
-import { browseQuery, MARK_LABELS } from './browse'
+import { addEntry, getRecipe, getTimeline, recipeImageUrl, restoreVersion, setMarks } from './api'
+import { browseQuery, MARK_LABELS, type FilterMark } from './browse'
 import { capitalise, formatTime } from './format'
-import { Back, Bookmark, Check, Clock, Heart, People } from './icons'
+import { Back, Bookmark, Check, Clock, Edit, Heart, People } from './icons'
+import { History } from './History'
 import { Ingredients } from './Ingredients'
 import { PhotoTile } from './PhotoTile'
 import { Shell } from './Shell'
-import { SIDE_LABELS, type Mark, type Recipe, type Side } from './types'
+import { Stars } from './Stars'
+import { SIDE_LABELS, type NewEntry, type Recipe, type Side, type TimelineEntry } from './types'
 import { useIsDesktop } from './useIsDesktop'
 
-// The marks the page shows, in this order.
-const MARK_ORDER: readonly Mark[] = ['favourite', 'try_next', 'tried']
+// The two marks the page toggles, in this order. Tried is status only: a tasting sets it.
+const TOGGLE_MARKS: readonly FilterMark[] = ['favourite', 'try_next']
 
-const PAGE_MARK_LABELS: Record<Mark, string> = {
-  ...MARK_LABELS,
-  tried: 'Tried',
+function MarkIcon({ mark, filled }: { mark: FilterMark; filled: boolean }) {
+  return mark === 'favourite' ? <Heart filled={filled} size={20} /> : <Bookmark filled={filled} size={20} />
 }
 
-function MarkIcon({ mark }: { mark: Mark }) {
-  switch (mark) {
-    case 'favourite':
-      return <Heart filled size={18} />
-    case 'try_next':
-      return <Bookmark filled size={18} />
-    case 'tried':
-      return <Check />
-  }
+interface Timeline {
+  entries: TimelineEntry[]
+  current_version: number | null
+}
+
+/** A failed action: the sentence to show, and which part of the page it belongs to. */
+interface Problem {
+  area: 'head' | 'history'
+  message: string
 }
 
 export function RecipeView({ side, slug }: { side: Side; slug: string }) {
@@ -63,7 +64,7 @@ export function RecipeView({ side, slug }: { side: Side; slug: string }) {
   if (recipe === undefined) return <Shell side={side} phoneBar={false}>{null}</Shell>
   return (
     <Shell side={side} phoneBar={false}>
-      <Page recipe={recipe} />
+      <Page key={`${side}/${slug}`} recipe={recipe} onRecipe={setRecipe} />
     </Shell>
   )
 }
@@ -88,17 +89,70 @@ function BackLink({ side, round = false }: { side: Side; round?: boolean }) {
   )
 }
 
-function Page({ recipe }: { recipe: Recipe }) {
+function Page({ recipe, onRecipe }: { recipe: Recipe; onRecipe: (recipe: Recipe) => void }) {
   const desktop = useIsDesktop()
-  const { side } = recipe
+  const { side, slug } = recipe
   const time = recipe.time_minutes === null ? null : formatTime(recipe.time_minutes)
-  const marks = MARK_ORDER.filter((mark) => recipe.marks.includes(mark))
+  const [timeline, setTimeline] = useState<Timeline | null>(null)
+  const [problem, setProblem] = useState<Problem | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const messageOf = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong')
+
+  const refresh = useCallback(async () => {
+    try {
+      setTimeline(await getTimeline(side, slug))
+    } catch (err) {
+      setProblem({ area: 'history', message: messageOf(err) })
+    }
+  }, [side, slug])
+
+  useEffect(() => {
+    let live = true
+    getTimeline(side, slug).then(
+      (loaded) => live && setTimeline(loaded),
+      (err: unknown) => live && setProblem({ area: 'history', message: messageOf(err) }),
+    )
+    return () => {
+      live = false
+    }
+  }, [side, slug])
+
+  /** Runs a write; the page takes the recipe it returns and reloads the timeline. */
+  const perform = async (area: Problem['area'], request: () => Promise<Recipe>): Promise<boolean> => {
+    setBusy(true)
+    setProblem(null)
+    try {
+      onRecipe(await request())
+      void refresh()
+      return true
+    } catch (err) {
+      setProblem({ area, message: messageOf(err) })
+      return false
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const post = (area: Problem['area'], entry: NewEntry) =>
+    perform(area, async () => (await addEntry(side, slug, entry)).recipe)
+
+  const toggle = (mark: FilterMark) => {
+    const on = recipe.marks.includes(mark)
+    void perform('head', () => setMarks(side, slug, on ? [] : [mark], on ? [mark] : []))
+  }
+
+  const editHref = `/${side}/${encodeURIComponent(slug)}/edit`
 
   return (
     <article className="recipe">
       {desktop && (
         <div className="recipe-nav">
           <BackLink side={side} />
+          <Link to={editHref} className="recipe-edit">
+            <Edit size={18} />
+            Edit
+          </Link>
         </div>
       )}
       <div className="recipe-top">
@@ -111,6 +165,11 @@ function Page({ recipe }: { recipe: Recipe }) {
             size="hero"
           />
           {!desktop && <BackLink side={side} round />}
+          {!desktop && (
+            <Link to={editHref} className="round-btn recipe-edit-round" aria-label="Edit recipe">
+              <Edit />
+            </Link>
+          )}
         </div>
         <div className="recipe-head gutter">
           <div className="recipe-title-block">
@@ -150,15 +209,49 @@ function Page({ recipe }: { recipe: Recipe }) {
               ))}
             </ul>
           )}
-          {marks.length > 0 && (
-            <ul className="recipe-marks" aria-label="Marks">
-              {marks.map((mark) => (
-                <li key={mark}>
-                  <MarkIcon mark={mark} />
-                  {PAGE_MARK_LABELS[mark]}
-                </li>
-              ))}
-            </ul>
+          <div className="recipe-marks" role="group" aria-label="Marks">
+            {TOGGLE_MARKS.map((mark) => {
+              const on = recipe.marks.includes(mark)
+              return (
+                <button
+                  key={mark}
+                  type="button"
+                  className="mark-toggle"
+                  aria-pressed={on}
+                  disabled={busy}
+                  onClick={() => toggle(mark)}
+                >
+                  <MarkIcon mark={mark} filled={on} />
+                  {MARK_LABELS[mark]}
+                </button>
+              )
+            })}
+            {recipe.marks.includes('tried') && (
+              <span className="recipe-tried">
+                <Check />
+                Tried
+              </span>
+            )}
+          </div>
+          <div className="recipe-rate">
+            <span className="recipe-rate-label" aria-hidden="true">
+              Rating
+            </span>
+            <Stars
+              value={recipe.rating}
+              label="Rating"
+              disabled={busy}
+              onRate={(rating) => void post('head', { kind: 'rating', rating })}
+            />
+            <span className="recipe-rate-text">
+              {recipe.rating === null ? 'Not rated yet' : recipe.rating.toFixed(1)}
+            </span>
+          </div>
+          <MadeIt busy={busy} onSave={(entry) => post('head', entry)} />
+          {problem?.area === 'head' && (
+            <p role="alert" className="recipe-error">
+              {problem.message}
+            </p>
           )}
         </div>
       </div>
@@ -169,7 +262,72 @@ function Page({ recipe }: { recipe: Recipe }) {
           <Source recipe={recipe} />
         </div>
       </div>
+      <div className="recipe-history gutter">
+        <History
+          entries={timeline?.entries ?? []}
+          currentVersion={timeline?.current_version ?? null}
+          compact={!desktop}
+          error={problem?.area === 'history' ? problem.message : null}
+          onNote={(text) => post('history', { kind: 'note', text })}
+          onRestore={(version) => void perform('history', () => restoreVersion(side, slug, version))}
+        />
+      </div>
     </article>
+  )
+}
+
+/** The "Made it" button and its inline form: optional stars and note, kept until Save works. */
+function MadeIt({ busy, onSave }: { busy: boolean; onSave: (entry: NewEntry) => Promise<boolean> }) {
+  const [open, setOpen] = useState(false)
+  const [rating, setRating] = useState<number | null>(null)
+  const [note, setNote] = useState('')
+
+  const close = () => {
+    setOpen(false)
+    setRating(null)
+    setNote('')
+  }
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault()
+    const text = note.trim()
+    const entry: NewEntry = {
+      kind: 'made',
+      ...(rating !== null && { rating }),
+      ...(text && { note: text }),
+    }
+    if (await onSave(entry)) close()
+  }
+
+  if (!open) {
+    return (
+      <button type="button" className="made-it-btn" aria-expanded="false" onClick={() => setOpen(true)}>
+        <Check />
+        Made it
+      </button>
+    )
+  }
+  return (
+    <form className="made-it-form" aria-label="Made it" onSubmit={save}>
+      <Stars value={rating} label="Your rating" onRate={setRating} />
+      <label className="made-it-note">
+        <span>Note</span>
+        <textarea
+          rows={2}
+          value={note}
+          placeholder="What worked, what you would change (optional)"
+          onChange={(event) => setNote(event.target.value)}
+        />
+      </label>
+      <div className="made-it-actions">
+        <button type="submit" className="made-it-save" disabled={busy}>
+          Save
+        </button>
+        <button type="button" className="made-it-cancel" onClick={close}>
+          Cancel
+        </button>
+      </div>
+    </form>
   )
 }
 

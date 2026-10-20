@@ -120,8 +120,7 @@
   gap: 6px;
 }
 
-.recipe-tags,
-.recipe-marks {
+.recipe-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -147,22 +146,223 @@
   border-color: var(--accent);
 }
 
+/* ---- Marks, rating and Made it ---- */
+
 .recipe-marks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
 
-.recipe-marks li {
+.mark-toggle {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 36px;
-  padding: 0 14px;
-  border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--accent-soft));
-  border-radius: 999px;
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.mark-toggle[aria-pressed='true'] {
+  border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--accent-soft-ink);
-  font-size: 14px;
+}
+
+.mark-toggle:disabled,
+.star-btn:disabled,
+.made-it-save:disabled,
+.history-add:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.recipe-tried {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 6px;
+  color: var(--accent-soft-ink);
   font-weight: 600;
+}
+
+.recipe-rate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.recipe-rate-label {
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.recipe-rate-text {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.stars {
+  display: flex;
+  align-items: center;
+}
+
+.stars--static {
+  gap: 2px;
+}
+
+.star-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+/* A star in the star colour, filled to a fraction of its width. */
+.star-fraction {
+  position: relative;
+  display: block;
+  color: var(--star);
+}
+
+.star-fraction svg {
+  display: block;
+}
+
+.star-fraction > svg {
+  position: absolute;
+  inset: 0;
+}
+
+.star-fraction-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.made-it-btn,
+.made-it-save,
+.made-it-cancel,
+.history-add,
+.history-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 18px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.made-it-btn {
+  align-self: flex-start;
+  background: var(--surface);
+}
+
+.made-it-save,
+.history-add {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.made-it-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.made-it-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.made-it-note textarea,
+.history-label textarea {
+  width: 100%;
+  min-height: 56px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 16px;
+  resize: vertical;
+}
+
+.made-it-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.recipe-error {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #f7e4dc;
+  color: #6e2a15;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.recipe-edit-round {
+  position: absolute;
+  top: 20px;
+  right: 16px;
+  width: 48px;
+  height: 48px;
+  background: var(--surface);
+  border-color: transparent;
+  color: var(--text);
+  box-shadow: 0 2px 8px rgba(40, 25, 10, 0.18);
+}
+
+.recipe-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.recipe-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.recipe-edit:hover {
+  border-color: var(--accent);
 }
 
 .recipe-body {
@@ -488,10 +688,8 @@
     font-size: 15px;
   }
 
-  .recipe-marks li {
-    min-height: 40px;
-    padding: 0 16px;
-    font-size: 15px;
+  .recipe-history {
+    max-width: 760px;
   }
 
   .recipe-body {
