@@ -1,5 +1,3 @@
-import json
-
 from conftest import call, rpc
 from test_mcp_bar import tool
 from test_mcp_writes import text
@@ -130,6 +128,9 @@ def test_merge_refuses_too_many_names(client, tmp_path):
     assert text(res) == TOO_MANY
     res = merge(client, separate=[f"x{n}" for n in range(201)])
     assert text(res) == TOO_MANY
+    # Exactly the cap gets past it to the ordinary checks.
+    res = merge(client, separate=[f"x{n}" for n in range(200)])
+    assert text(res) != TOO_MANY
     assert catalog_bytes(tmp_path) == before
 
 
@@ -158,4 +159,3 @@ def test_instructions_and_style_guide_mention_them():
 def test_style_guide_tool_mentions_list_ingredients(client):
     res = call(client, "get_style_guide", {})
     assert "list_ingredients" in res["content"][0]["text"]
-    json.dumps(res)
