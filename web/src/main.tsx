@@ -17,6 +17,7 @@ import './styles/browse.css'
 import './styles/recipe.css'
 import './styles/history.css'
 import './styles/editor.css'
+import './styles/bar.css'
 import App from './App.tsx'
 
 // A data router, because the editor's useBlocker needs one. App keeps its own <Routes>.

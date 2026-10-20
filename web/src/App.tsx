@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes, useParams } from 'react-router'
+import { BarPage } from './BarPage'
 import { defaultQuery } from './browse'
 import Browse from './Browse'
 import { Editor } from './Editor'
@@ -10,6 +11,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
+      {/* Before /:side, so the bar is never taken for a side. /drinks/bar is still a recipe. */}
+      <Route path="/bar" element={<BarPage />} />
       <Route path="/:side" element={<SidePage />} />
       <Route path="/:side/new" element={<Editor mode="new" />} />
       <Route path="/:side/:slug" element={<RecipePage />} />

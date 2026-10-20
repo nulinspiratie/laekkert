@@ -105,7 +105,7 @@
   padding-top: 14px;
 }
 
-.browse-search-btn {
+.browse-head-btn {
   flex: none;
   display: flex;
   align-items: center;
@@ -808,5 +808,309 @@
 
   .recipe-table-chevron {
     color: var(--label);
+  }
+}
+
+/* ---- The bar, on drinks ---- */
+
+/* "From your bar" in the desktop filter panel (DrinksDesktop). */
+
+.filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.filter-bar-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  text-align: left;
+}
+
+.filter-bar-option[aria-checked='true'] {
+  background: var(--accent-soft);
+  color: var(--accent-soft-ink);
+  font-weight: 600;
+}
+
+.filter-bar-option[aria-checked='true'] .filter-count {
+  color: inherit;
+}
+
+.filter-radio {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--label);
+  border-radius: 50%;
+  background: var(--surface);
+}
+
+.filter-bar-option[aria-checked='true'] .filter-radio {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 3px var(--surface);
+  background: var(--accent);
+}
+
+.filter-bar-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--accent-ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.filter-bar-unsorted {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 12px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.4;
+  text-decoration: none;
+}
+
+.filter-bar-unsorted svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.filter-bar-sort {
+  color: var(--accent-ink);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/* The phone's bar chips and unsorted banner, inside the Drinks masthead. */
+
+a.browse-head-btn {
+  text-decoration: none;
+}
+
+.browse-bar-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.browse-bar-chips button {
+  flex: none;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--masthead-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--masthead-ink);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* DrinksPhone: the selected chip is the drinks green. */
+.browse-bar-chips button[aria-checked='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.browse-bar-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 8px 14px;
+  border: 1.5px dashed var(--masthead-border, var(--border-strong));
+  border-radius: 12px;
+  color: inherit;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.browse-bar-banner svg {
+  flex: none;
+}
+
+.browse-bar-banner-text {
+  flex: 1;
+}
+
+.browse-bar-sort {
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+/* Card and row badges: always an icon and words, never colour alone. */
+
+.recipe-card-photo {
+  position: relative;
+}
+
+.bar-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  min-height: 26px;
+  padding: 3px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.bar-badge svg {
+  flex: none;
+}
+
+.recipe-card-photo .bar-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  max-width: calc(100% - 16px);
+}
+
+.recipe-row-text .bar-badge,
+.recipe-table-name .bar-badge {
+  align-self: flex-start;
+}
+
+.bar-badge--can_make {
+  background: #1f4231;
+  color: #f2f5ee;
+}
+
+.bar-badge--fresh_only {
+  border-color: #d9be84;
+  background: #f6ead0;
+  color: #6a460c;
+}
+
+.bar-badge--missing {
+  border: 1.5px dashed #1e2621;
+  background: #fbf8f0;
+  color: #1e2621;
+}
+
+.bar-badge--unsorted {
+  border: 1.5px dashed #6c7368;
+  background: #fbf8f0;
+  color: #4b5248;
+}
+
+/* Why the bar filter leaves nothing (DrinksNoBar, DrinksFilterEmpty). */
+
+.browse-bar-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 32px 20px 24px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: center;
+}
+
+.browse-bar-empty > svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.browse-bar-empty-text {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-self: stretch;
+}
+
+.browse-bar-empty h2 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 26px;
+  line-height: 1.1;
+}
+
+.browse-bar-empty p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.browse-bar-empty-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.browse-bar-empty-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  padding: 0 22px;
+  border-radius: 14px;
+  background: var(--tile);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.browse-bar-empty-alt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+@media (min-width: 768px) {
+  .recipe-card-photo .bar-badge {
+    top: 10px;
+    left: 10px;
+    min-height: 28px;
+    font-size: 13px;
+  }
+
+  .browse-bar-empty {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 28px;
+    max-width: 640px;
+    padding: 36px;
+    border-radius: 20px;
+    text-align: left;
+  }
+
+  .browse-bar-empty h2 {
+    font-size: 30px;
+  }
+
+  .browse-bar-empty-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .browse-bar-empty-cta {
+    min-height: 52px;
   }
 }

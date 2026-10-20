@@ -31,6 +31,8 @@ def test_tools_listed(client):
     names = {t["name"] for t in rpc(client, 2, "tools/list").json()["result"]["tools"]}
     assert names == {
         "list_recipes",
+        "read_bar",
+        "manage_inventory",
         "read_recipe",
         "search_recipes",
         "add_recipe",

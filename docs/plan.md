@@ -62,8 +62,9 @@ recipes/<side>/<slug>/<image>            # optional photo / source photo
 uploads/                                 # photos parked on pick; Save moves them into the
                                          # recipe folder; files over a day old are removed
 trash/<side>/<slug>-<UTC stamp>/         # deleted recipes; getting one back is a file move
-catalog/ingredients.json                 # canonical names, aliases, g_per_tsp, fresh flag
-inventory.json                           # (after the PoC)
+catalog/ingredients.json                 # canonical names, aliases, g_per_tsp, fresh flag,
+                                         # kind (the bar's shelf groups)
+inventory.json                           # the bar: item name → have / dont; no key = unsorted
 ```
 
 `<side>` is `food` or `drinks`. Writes are atomic (temp file in the same folder, then
@@ -148,11 +149,58 @@ from either side is refused instead of overwriting the other. Claude's writes sh
 `via: "claude"` in the timeline. Claude can't set marks or ratings, add notes, delete or
 restore.
 
+### M4: Drinks inventory
+
+Requirement 20 and the `manage_inventory` tool from requirement 24: shelf-stable items are
+tracked as have / don't have, fresh items are marked fresh and never tracked, and drinks
+show "Can make now" and "Only need fresh items". Design first: the brief for the Claude
+Design session is [design/m4-inventory-brief.md](design/m4-inventory-brief.md). The spec
+and plan follow from its artboards.
+
+**Done** (2026-10-20): the bar. Spec: `docs/superpowers/specs/2026-10-20-m4-bar-design.md`.
+The catalog gains a `kind` per entry and an accent-insensitive key (`Crème de violette` and
+`creme de violette` are one name), and a writer that keeps fields it doesn't know. The bar's
+items are every drink ingredient plus every catalog entry with a kind; `inventory.json` holds
+have or don't have per item, and fresh items are never tracked. Each drink gets a status
+(missing, unsorted, fresh only, can make) from its ingredients. `GET`/`POST /api/bar` read
+and change the bar with one all-or-nothing change model (states, fresh, kinds, other names,
+fold, delete); drinks summaries and recipes carry their `bar`. Over MCP, `read_bar` and
+`manage_inventory` (everything but delete), and `search_recipes` gains a `bar` filter for
+drinks. The app has the `/bar` page with its item sheet, the From your bar filter, the
+"not sorted yet" banner, status badges and empty states on the drinks page, and on a drink's
+page the bar summary, per-ingredient toggles with undo and a link to a syrup's recipe. Food is
+unchanged. The seed catalog only writes a missing file, so on the NAS white rum and simple
+syrup show as Other and soda water as a bottle rather than fresh until someone sets them
+(Claude can, with `manage_inventory`). Screenshots are in `docs/design/screenshots/m4/`.
+
+Rulings made on the way:
+
+- A change to an item with no catalog entry (or no kind) writes one with kind `other`, so it
+  stays on the bar.
+- Changes that contradict each other are refused, compared by resolved item: besides the
+  spec's pairs, `dont_have` with `fresh`, `unsorted` with a state, and `delete` with
+  anything. Have or don't have on a fresh item does nothing. An empty name is refused ("A
+  name can't be empty.").
+- `manage_inventory` takes kinds as plain strings and checks them itself, so a bad kind gets
+  a readable sentence.
+- The item sheet's kind is a select, as in the artboard. Copy the artboards don't give was
+  written to match ("Pick an item", "Fold into …", "Delete …", "Cancel"). The bulk button
+  counts the unsorted items the search leaves; the desktop no-match also offers fresh; the
+  first-visit subtitle says Click on desktop and Tap on a phone.
+- Drinks page: singular forms, the "Inventory" and "From your bar" labels, and a true
+  sentence when nothing needs only fresh items but some drinks can be made ("Nothing needs
+  only fresh items"). The fresh-only and generic empty states come from the summaries, so
+  they still show when the bar can't be read.
+- Drink page: the phone uses the phone artboard's short labels ("Not in bar", "Fresh"); the
+  tsp / g-ml toggle stays; the syrup link is 44 px; undo restores the exact previous state
+  and stays until it is used or replaced; a refusal shows at its row.
+
 ### After the PoC (rest of V1)
 
-Two users and authorship; drinks inventory with "can make now" / "just buy fresh";
-throwaway ingredient filter; `merge_ingredients` and `manage_inventory`; photo search
+Two users and authorship; throwaway ingredient filter; `merge_ingredients`; photo search
 with illustration fallback; offline PWA.
+
+Kitchen mode (screen awake, large text, step by step) moves to V2. It needs its own design.
 
 ## Open questions
 

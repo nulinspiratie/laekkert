@@ -10,7 +10,7 @@ import {
   parseBrowse,
   type BrowseState,
 } from './browse'
-import type { RecipeSummary } from './types'
+import type { DrinkBar, DrinkStatus, RecipeSummary } from './types'
 
 function recipe(over: Partial<RecipeSummary> & { slug: string }): RecipeSummary {
   return {
@@ -28,7 +28,7 @@ function recipe(over: Partial<RecipeSummary> & { slug: string }): RecipeSummary 
 }
 
 function state(over: Partial<BrowseState> = {}): BrowseState {
-  return { q: '', category: null, marks: [], tags: [], sort: 'name', ...over }
+  return { q: '', category: null, marks: [], tags: [], sort: 'name', bar: null, ...over }
 }
 
 const parse = (side: 'food' | 'drinks', query: string) =>
@@ -309,5 +309,59 @@ suite('facetCounts', () => {
       recipe({ slug: 'd', tags: ['zesty'] }),
     ]
     expect(facetCounts('food', list).tags).toEqual(['quick', 'zesty', 'apple', 'baking'])
+  })
+})
+
+const status = (kind: DrinkStatus): DrinkBar => ({ status: kind, missing: [], unsorted: [], fresh: [] })
+
+const drinks = (): RecipeSummary[] => [
+  recipe({ slug: 'a', side: 'drinks', category: 'cocktails', bar: status('can_make') }),
+  recipe({ slug: 'b', side: 'drinks', category: 'cocktails', bar: status('fresh_only') }),
+  recipe({ slug: 'c', side: 'drinks', category: 'mocktails', bar: status('fresh_only'), marks: ['favourite'] }),
+  recipe({ slug: 'd', side: 'drinks', category: 'cocktails', bar: status('missing') }),
+  recipe({ slug: 'e', side: 'drinks', category: 'syrups', bar: status('unsorted') }),
+]
+
+suite('the bar filter', () => {
+  it('reads bar on drinks', () => {
+    expect(parse('drinks', 'bar=can').bar).toBe('can')
+    expect(parse('drinks', 'bar=fresh').bar).toBe('fresh')
+    expect(parse('drinks', '').bar).toBeNull()
+    expect(parse('drinks', 'bar=other').bar).toBeNull()
+  })
+
+  it('ignores bar on food and never writes it', () => {
+    expect(parse('food', 'bar=can').bar).toBeNull()
+    expect(browseQuery(state({ bar: 'can' }))).toBe('bar=can')
+    expect(browseQuery(parse('food', 'bar=can&cat=mains'))).toBe('cat=mains')
+  })
+
+  it('round-trips through the query', () => {
+    const query = 'cat=cocktails&mark=favourite&tag=sour&sort=rating&bar=fresh'
+    expect(browseQuery(parse('drinks', query))).toBe(query)
+  })
+
+  it('keeps only the drinks the bar filter names', () => {
+    const names = (bar: BrowseState['bar']) => applyBrowse(drinks(), state({ bar })).map((r) => r.slug)
+    expect(names(null)).toEqual(['a', 'b', 'c', 'd', 'e'])
+    expect(names('can')).toEqual(['a'])
+    expect(names('fresh')).toEqual(['b', 'c'])
+  })
+
+  it('combines with the other filters', () => {
+    const kept = applyBrowse(drinks(), state({ bar: 'fresh', category: 'cocktails' }))
+    expect(kept.map((r) => r.slug)).toEqual(['b'])
+  })
+
+  it('counts every drink, the makeable ones and the fresh-only ones', () => {
+    expect(facetCounts('drinks', drinks()).bar).toEqual({ all: 5, can: 1, fresh: 2 })
+    expect(facetCounts('drinks', []).bar).toEqual({ all: 0, can: 0, fresh: 0 })
+  })
+
+  it('counts with the other filters applied but not the bar filter', () => {
+    const counts = (over: Partial<BrowseState>) => facetCounts('drinks', drinks(), state(over)).bar
+    expect(counts({ category: 'cocktails' })).toEqual({ all: 3, can: 1, fresh: 1 })
+    expect(counts({ marks: ['favourite'] })).toEqual({ all: 1, can: 0, fresh: 1 })
+    expect(counts({ bar: 'can' })).toEqual({ all: 5, can: 1, fresh: 2 })
   })
 })

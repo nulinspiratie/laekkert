@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
 import { expect, test } from 'vitest'
 import { Ingredients } from './Ingredients'
 import type { RecipeIngredient } from './types'
@@ -124,4 +125,31 @@ test('only no-scale rows get the fixed pill', () => {
 test('pinch and dash print their unit once', () => {
   renderIngredients([ing({ item: 'chilli flakes', amount: 1, unit: 'pinch' })])
   expect(within(row('chilli flakes')).getByText('1 pinch')).toBeInTheDocument()
+})
+
+test('food page has no bar', () => {
+  // A food recipe never has bar fields; even if one did, the food side shows none of it.
+  const withBar = ing({ item: 'olive oil', amount: 30, unit: 'ml', bar: { item: 'olive oil', state: 'have', fresh: false, recipe: null } })
+  render(<Ingredients ingredients={[withBar, chicken]} servings={4} side="food" />)
+  expect(screen.getByRole('group', { name: 'Servings' })).toBeInTheDocument()
+  expect(screen.queryByRole('group', { name: 'Drinks to make' })).not.toBeInTheDocument()
+  expect(screen.queryByText(/in the bar/i)).not.toBeInTheDocument()
+  expect(screen.queryByText(/From your bar|Missing:|Buy fresh:/)).not.toBeInTheDocument()
+  expect(screen.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual([
+    'Fewer servings',
+    'More servings',
+    'tsp',
+    'g/ml',
+  ])
+  expect(row('olive oil').className).toBe('ingredient')
+})
+
+test('a drink written for more than 12 starts at 12', () => {
+  render(
+    <MemoryRouter>
+      <Ingredients ingredients={[oil]} servings={16} side="drinks" />
+    </MemoryRouter>,
+  )
+  expect(screen.getByText('12 drinks')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'More' })).toBeDisabled()
 })

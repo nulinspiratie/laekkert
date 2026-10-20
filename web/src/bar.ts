@@ -1,0 +1,129 @@
+// The bar's display helpers: grouping, search and the badges drinks wear.
+
+import { ApiError } from './api'
+import type { Bar, BarItem, DrinkBar, DrinkStatus, Kind, Recipe, RecipeIngredient, RecipeSummary } from './types'
+
+/** The kinds in the order the bar shows them. */
+export const KINDS: readonly Kind[] = ['spirits', 'liqueurs', 'aperitifs', 'bitters', 'syrups', 'other']
+
+export const KIND_LABELS: Record<Kind, string> = {
+  spirits: 'Spirits',
+  liqueurs: 'Liqueurs',
+  aperitifs: 'Aperitifs and vermouth',
+  bitters: 'Bitters',
+  syrups: 'Syrups',
+  other: 'Other',
+}
+
+/** The server's name key: accents, case and extra spaces do not matter. */
+export function normalise(text: string): string {
+  return text
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** Does `q` match the item's name, or failing that one of its other names? */
+export function matchItem(item: BarItem, q: string): { ok: boolean; alias: string | null } {
+  const needle = normalise(q)
+  if (needle === '' || normalise(item.name).includes(needle)) return { ok: true, alias: null }
+  const alias = item.aliases.find((other) => normalise(other).includes(needle))
+  return alias === undefined ? { ok: false, alias: null } : { ok: true, alias }
+}
+
+export function usedText(n: number): string {
+  if (n === 0) return 'Not in any drink yet'
+  return n === 1 ? 'Used in 1 drink' : `Used in ${n} drinks`
+}
+
+/** The kinds that have items, in the fixed order, with how many of each are in the bar. */
+export function groupByKind(items: BarItem[]): { kind: Kind; items: BarItem[]; have: number }[] {
+  return KINDS.map((kind) => {
+    const inKind = items.filter((item) => item.kind === kind)
+    return { kind, items: inKind, have: inKind.filter((item) => item.state === 'have').length }
+  }).filter((group) => group.items.length > 0)
+}
+
+/** Bottles and the like: everything tracked, sorted or not. */
+export const shelf = (items: BarItem[]): BarItem[] => items.filter((item) => !item.fresh)
+
+export const fresh = (items: BarItem[]): BarItem[] => items.filter((item) => item.fresh)
+
+export const unsorted = (items: BarItem[]): BarItem[] =>
+  items.filter((item) => !item.fresh && item.state === null)
+
+/** "a, b" for up to `max` names; more shows the first `max` and "+N". */
+export function nameList(names: string[], max = 2): string {
+  const shown = names.slice(0, max).join(', ')
+  return names.length > max ? `${shown} +${names.length - max}` : shown
+}
+
+/** The line a drink's card shows about the bar. */
+export function badge(bar: DrinkBar, phone: boolean): { kind: DrinkStatus; text: string } {
+  switch (bar.status) {
+    case 'can_make':
+      return { kind: 'can_make', text: 'Can make now' }
+    case 'fresh_only':
+      return { kind: 'fresh_only', text: `${phone ? 'Buy' : 'Buy fresh'}: ${nameList(bar.fresh)}` }
+    case 'missing':
+      return { kind: 'missing', text: `Missing: ${nameList(bar.missing)}` }
+    case 'unsorted':
+      return { kind: 'unsorted', text: `Not sorted: ${nameList(bar.unsorted)}` }
+  }
+}
+
+/** Of the drinks that need only fresh items, the fresh item most of them need. */
+export function topFresh(recipes: RecipeSummary[]): { item: string; count: number } | null {
+  const counts = new Map<string, number>()
+  for (const recipe of recipes) {
+    if (recipe.bar?.status !== 'fresh_only') continue
+    for (const name of new Set(recipe.bar.fresh)) counts.set(name, (counts.get(name) ?? 0) + 1)
+  }
+  let top: { item: string; count: number } | null = null
+  for (const [item, count] of counts) {
+    if (top === null || count > top.count || (count === top.count && item.localeCompare(top.item) < 0)) {
+      top = { item, count }
+    }
+  }
+  return top
+}
+
+/** What the bar says about a drink with these ingredients; the server's rule in `BarView.status`. */
+function drinkBar(ingredients: RecipeIngredient[]): DrinkBar {
+  const missing: string[] = []
+  const unsorted: string[] = []
+  const freshNames: string[] = []
+  for (const ing of ingredients) {
+    // No bar item: one saved since the bar was read, so an unsorted bottle.
+    const name = ing.bar?.item ?? ing.item
+    const state = ing.bar?.state ?? null
+    const group = ing.bar?.fresh ? freshNames : state === 'dont' ? missing : state === null ? unsorted : null
+    if (group && !group.includes(name)) group.push(name)
+  }
+  const status: DrinkStatus = missing.length
+    ? 'missing'
+    : unsorted.length
+      ? 'unsorted'
+      : freshNames.length
+        ? 'fresh_only'
+        : 'can_make'
+  return { status, missing, unsorted, fresh: freshNames }
+}
+
+/** A drink with a bar the server just returned laid over its ingredients, and its summary to match. */
+export function withBar(recipe: Recipe, bar: Bar): Recipe {
+  const items = new Map(bar.items.map((item) => [normalise(item.name), item]))
+  const ingredients = recipe.ingredients.map((ing) => {
+    const item = ing.bar ? items.get(normalise(ing.bar.item)) : undefined
+    return ing.bar && item ? { ...ing, bar: { ...ing.bar, state: item.state, fresh: item.fresh } } : ing
+  })
+  return { ...recipe, ingredients, bar: drinkBar(ingredients) }
+}
+
+/** What a bar write says when no answer came: no network, or Cloudflare Access wanting a login. */
+export const UNREACHABLE = "Couldn't reach Lækkert. Nothing was changed."
+
+/** The sentence to show for a failed bar write: the server's own, or that it was never reached. */
+export const messageOf = (err: unknown): string => (err instanceof ApiError ? err.message : UNREACHABLE)

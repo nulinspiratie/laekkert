@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>The bar, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;family=Young+Serif&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 390px; height: {{rootH}}; overflow: hidden; background: #E8E3D5; color: #1E2621; font-family: 'Hanken Grotesk', system-ui, sans-serif; display: flex; flex-direction: column">
+
+  <div style="background: #1C2620; color: #EDE6D6; padding: 14px 16px 18px; display: flex; flex-direction: column; gap: 14px">
+    <a href="DrinksPhone.dc.html" style="align-self: flex-start; display: flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 10px 0 2px; color: #EDE6D6; text-decoration: none; font-weight: 600">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"></path></svg>
+      Drinks
+    </a>
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <h1 style="margin: 0; font-family: 'Young Serif', Georgia, serif; font-weight: 400; font-size: 36px; line-height: 1">The bar</h1>
+      <p style="margin: 0; font-size: 15px; line-height: 1.45; color: #C9C3B2">{{subText}}</p>
+    </div>
+    <sc-if value="{{isFirst}}" hint-placeholder-val="{{false}}">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div aria-hidden="true" style="height: 6px; border-radius: 3px; background: #2C3832; overflow: hidden"><div style="height: 6px; width: {{progressPct}}; background: #9CC2A8"></div></div>
+        <span style="font-size: 13px; color: #C9C3B2">{{progressText}}</span>
+      </div>
+    </sc-if>
+    <a href="DrinksPhone.dc.html" style="display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 12px 0 14px; border-radius: 12px; background: #2C3832; color: #EDE6D6; text-decoration: none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9CC2A8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h14l-7 8z"></path><path d="M12 13v6M8 19h8"></path></svg>
+      <span style="flex: 1; font-size: 15px">You can make <strong style="color: #FFFFFF">{{canMakeText}}</strong> now</span>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>
+    </a>
+    <div style="display: flex; gap: 8px">
+      <label style="flex: 1; display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 14px; border-radius: 12px; background: #F5F1E6; color: #1E2621">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#545A50" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+        <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Find a bottle</span>
+        <input type="search" value="{{query}}" onChange="{{onQuery}}" placeholder="Find a bottle" style="flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-family: inherit; font-size: 16px; color: #1E2621">
+      </label>
+      <a href="BarSearchEmptyPhone.dc.html" aria-label="Add a bottle" style="flex: none; width: 48px; height: 48px; border-radius: 12px; background: #E8DFC9; color: #1C2620; display: flex; align-items: center; justify-content: center">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+      </a>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 26px; padding: 18px 16px 32px">
+
+    <sc-if value="{{showUnsorted}}" hint-placeholder-val="{{true}}">
+      <section aria-labelledby="unsorted-h" style="background: #FBF8F0; border: 1.5px dashed #6C7368; border-radius: 16px; padding: 14px 14px 14px; display: flex; flex-direction: column; gap: 6px">
+        <div style="display: flex; align-items: center; gap: 8px">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1E2621" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.4"></path><circle cx="12" cy="17" r=".9" fill="#1E2621" stroke="none"></circle></svg>
+          <h2 id="unsorted-h" style="flex: 1; margin: 0; font-family: 'Young Serif', Georgia, serif; font-weight: 400; font-size: 21px">Not sorted yet</h2>
+          <span style="min-width: 28px; height: 28px; padding: 0 8px; box-sizing: border-box; border-radius: 14px; background: #1E2621; color: #F5F1E6; font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{unsortedCount}}</span>
+        </div>
+        <p style="margin: 0 0 4px; font-size: 14px; line-height: 1.45; color: #474D44">{{unsortedHelp}}</p>
+        <sc-for list="{{unsortedGroups}}" as="g" hint-placeholder-count="1">
+          <h3 style="margin: 10px 0 0; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #4E554B">{{g.name}}</h3>
+          <sc-for list="{{g.items}}" as="it" hint-placeholder-count="2">
+            <div style="display: flex; align-items: center; gap: 8px; min-height: 64px; border-top: {{it.borderTop}}">
+              <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+                <span style="font-size: 16px; font-weight: 600; line-height: 1.25">{{it.name}}</span>
+                <span style="font-size: 13px; color: #4E554B">{{it.usedText}}</span>
+              </span>
+              <button type="button" aria-label="{{it.name}}: have" onClick="{{it.setHave}}" style="flex: none; min-width: 76px; min-height: 44px; padding: 0 10px; display: flex; align-items: center; justify-content: center; gap: 5px; border: 1.5px solid #1F4231; border-radius: 999px; background: #FFFFFF; color: #1F4231; font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"></path></svg>
+                Have
+              </button>
+              <button type="button" aria-label="{{it.name}}: don't have" onClick="{{it.setDont}}" style="flex: none; min-width: 104px; min-height: 44px; padding: 0 10px; display: flex; align-items: center; justify-content: center; gap: 5px; border: 1.5px dashed #7A8076; border-radius: 999px; background: transparent; color: #3E453B; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><path d="M8.5 12h7"></path></svg>
+                Don't have
+              </button>
+            </div>
+          </sc-for>
+        </sc-for>
+        <button type="button" onClick="{{restDont}}" style="margin-top: 8px; min-height: 48px; border: 1px solid #B9B19D; border-radius: 12px; background: transparent; color: #1E2621; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer">{{restText}}</button>
+      </section>
+    </sc-if>
+
+    <sc-for list="{{sortedGroups}}" as="g" hint-placeholder-count="3">
+      <section style="display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; padding: 0 4px">
+          <h2 style="margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #3E453B">{{g.name}}</h2>
+          <span style="font-size: 13px; color: #4E554B">{{g.countText}}</span>
+        </div>
+        <div style="background: #F5F1E6; border: 1px solid #D2CBB8; border-radius: 14px; overflow: hidden">
+          <sc-for list="{{g.items}}" as="it" hint-placeholder-count="4">
+            <div style="display: flex; align-items: center; gap: 8px; min-height: 64px; padding: 4px 8px 4px 14px; border-top: {{it.borderTop}}">
+              <a href="BarItemSheetPhone.dc.html" style="flex: 1; min-width: 0; min-height: 56px; display: flex; flex-direction: column; justify-content: center; gap: 2px; color: #1E2621; text-decoration: none">
+                <span style="font-size: 17px; font-weight: 600; line-height: 1.25">{{it.name}}</span>
+                <span style="font-size: 13px; color: #4E554B">{{it.usedText}}</span>
+              </a>
+              <sc-if value="{{it.isHave}}" hint-placeholder-val="{{true}}">
+                <button type="button" aria-label="{{it.name}}: have. Tap if you've run out." onClick="{{it.toggle}}" style="flex: none; width: 132px; min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1.5px solid #1F4231; border-radius: 999px; background: #1F4231; color: #F2F5EE; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"></path></svg>
+                  Have
+                </button>
+              </sc-if>
+              <sc-if value="{{it.isDont}}" hint-placeholder-val="{{false}}">
+                <button type="button" aria-label="{{it.name}}: don't have. Tap when you've bought it." onClick="{{it.toggle}}" style="flex: none; width: 132px; min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1.5px dashed #7A8076; border-radius: 999px; background: transparent; color: #3E453B; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><path d="M8.5 12h7"></path></svg>
+                  Don't have
+                </button>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+    </sc-for>
+
+    <sc-if value="{{noMatch}}" hint-placeholder-val="{{false}}">
+      <section aria-live="polite" style="display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 28px 8px 8px; text-align: center">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#2E5A44" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3h4v4l1.5 2.5V20a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1V9.5L10 7z"></path><path d="M8.5 13h7"></path></svg>
+        <h2 style="margin: 0; font-family: 'Young Serif', Georgia, serif; font-weight: 400; font-size: 22px; line-height: 1.25">No bottle called ‘{{query}}’</h2>
+        <p style="margin: 0 0 8px; font-size: 15px; line-height: 1.5; color: #474D44; max-width: 30ch">Check the spelling, or add it. It goes in as a bottle you have, and you can change that after.</p>
+        <button type="button" onClick="{{addHave}}" style="align-self: stretch; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 56px; border: 0; border-radius: 14px; background: #2E5A44; color: #FFFFFF; font-family: inherit; font-size: 17px; font-weight: 700; cursor: pointer">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          Add ‘{{query}}’ to the bar
+        </button>
+        <button type="button" onClick="{{addFresh}}" style="align-self: stretch; min-height: 48px; border: 1px solid #B9B19D; border-radius: 14px; background: transparent; color: #1E2621; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer">It's fresh: add it without tracking</button>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{showFresh}}" hint-placeholder-val="{{true}}">
+      <section aria-labelledby="fresh-h" style="display: flex; flex-direction: column; gap: 10px; padding: 16px 14px; border: 1px solid #D2CBB8; border-radius: 16px">
+        <div style="display: flex; align-items: center; gap: 8px; color: #3E453B">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10h16l-1.5 9h-13z"></path><path d="m8 10 3-5M16 10l-3-5"></path></svg>
+          <h2 id="fresh-h" style="margin: 0; font-size: 16px; font-weight: 700">Fresh, so never tracked</h2>
+        </div>
+        <p style="margin: 0; font-size: 14px; line-height: 1.45; color: #474D44">Buy these when a drink needs them. Those drinks say ‘Buy fresh’.</p>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px">
+          <sc-for list="{{fresh}}" as="f" hint-placeholder-count="7">
+            <a href="BarItemSheetPhone.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 999px; background: #E2DCCD; color: #2F352D; text-decoration: none; font-size: 15px">{{f.name}}</a>
+          </sc-for>
+        </div>
+        <p style="margin: 2px 0 0; font-size: 13px; line-height: 1.45; color: #4E554B">Open a bottle or a fresh item to move it between the two.</p>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{showAdd}}" hint-placeholder-val="{{true}}">
+      <a href="BarSearchEmptyPhone.dc.html" style="display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px; border: 1px dashed #8E9688; border-radius: 14px; color: #234836; text-decoration: none; font-weight: 600">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+        Add a bottle
+      </a>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"mode":{"editor":"enum","options":["everyday","first","search"],"default":"everyday"},"query":{"editor":null,"default":""},"$preview":{"width":390,"height":2560}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    const mode = props.mode || 'everyday';
+    const st = {};
+    this.items().forEach((it) => { st[it.id] = mode === 'first' ? 'new' : it.start; });
+    this.state = { st, query: props.query || '', added: [], addedFresh: [], n: 0 };
+  }
+  renderVals() {
+    const mode = this.props.mode || 'everyday';
+    const s = this.state;
+    const norm = (t) => String(t).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const q = norm(s.query.trim());
+    const all = this.items().concat(s.added);
+    const used = (n) => (n === 0 ? 'Not in any drink yet' : n === 1 ? 'Used in 1 drink' : 'Used in ' + n + ' drinks');
+    const matches = (it) => {
+      if (!q) return { ok: true };
+      if (norm(it.name).includes(q)) return { ok: true };
+      const alt = (it.alt || []).find((a) => norm(a).includes(q));
+      return alt ? { ok: true, alt } : { ok: false };
+    };
+    const setTo = (id, v) => this.setState({ st: { ...this.state.st, [id]: v } });
+    const view = (it, first) => {
+      const m = matches(it);
+      const v = s.st[it.id];
+      return {
+        ok: m.ok,
+        name: it.name,
+        usedText: m.alt ? 'Also called ' + m.alt : used(it.used),
+        isHave: v === 'have', isDont: v === 'dont',
+        borderTop: first ? 'none' : '1px solid #DDD6C5',
+        toggle: () => setTo(it.id, v === 'have' ? 'dont' : 'have'),
+        setHave: () => setTo(it.id, 'have'),
+        setDont: () => setTo(it.id, 'dont')
+      };
+    };
+    const build = (pred) => this.types().map((type) => {
+      const list = all.filter((it) => it.type === type && pred(s.st[it.id]) && matches(it).ok);
+      const items = list.map((it, i) => view(it, i === 0));
+      const have = list.filter((it) => s.st[it.id] === 'have').length;
+      return { name: type, items, countText: have + ' of ' + list.length + ' in' };
+    }).filter((g) => g.items.length > 0);
+    const unsortedGroups = build((v) => v === 'new');
+    const sortedGroups = build((v) => v !== 'new');
+    const unsortedCount = all.filter((it) => s.st[it.id] === 'new').length;
+    const haveCount = all.filter((it) => s.st[it.id] === 'have').length;
+    const freshAll = this.freshList().concat(s.addedFresh);
+    const fresh = freshAll.filter((f) => !q || norm(f).includes(q)).map((f) => ({ name: f }));
+    const anyMatch = unsortedGroups.length + sortedGroups.length + fresh.length > 0;
+    let canMake = 15;
+    this.items().forEach((it) => {
+      const now = s.st[it.id];
+      if (it.start === 'have' && now !== 'have') canMake -= it.can || 0;
+      if (it.start !== 'have' && now === 'have') canMake += it.unlock || 0;
+    });
+    canMake = Math.max(0, canMake);
+    const total = all.length;
+    const isFirst = mode === 'first';
+    const pretty = s.query.trim();
+    const cap = pretty.charAt(0).toUpperCase() + pretty.slice(1);
+    return {
+      rootH: mode === 'search' ? '844px' : isFirst ? '2860px' : '2560px',
+      isFirst,
+      subText: isFirst
+        ? 'Lækkert found ' + total + ' bottles in your drinks. Tap Have for each one in your cabinet.'
+        : 'One bar for the household · ' + haveCount + ' of ' + total + ' bottles in',
+      progressPct: Math.round(((total - unsortedCount) / total) * 100) + '%',
+      progressText: (total - unsortedCount) + ' of ' + total + ' sorted',
+      canMakeText: canMake === 1 ? '1 drink' : canMake + ' drinks',
+      query: s.query,
+      onQuery: (e) => this.setState({ query: e.target.value }),
+      showUnsorted: unsortedGroups.length > 0,
+      unsortedCount,
+      unsortedHelp: isFirst
+        ? 'Nothing is sorted yet, so no drink shows under ‘Can make now’. Tap what you have, then mark the rest in one go.'
+        : 'New from drinks you added. Until you sort them, drinks that use them count as missing.',
+      unsortedGroups,
+      restText: unsortedCount === 1 ? 'Mark it as don’t have' : 'Mark the other ' + unsortedCount + ' as don’t have',
+      restDont: () => {
+        const next = { ...this.state.st };
+        Object.keys(next).forEach((k) => { if (next[k] === 'new') next[k] = 'dont'; });
+        this.setState({ st: next });
+      },
+      sortedGroups,
+      noMatch: !!q && !anyMatch,
+      addHave: () => {
+        const id = 'added' + this.state.n;
+        this.setState({
+          n: this.state.n + 1,
+          added: [...this.state.added, { id, name: cap, type: 'Other', used: 0, start: 'none' }],
+          st: { ...this.state.st, [id]: 'have' },
+          query: ''
+        });
+      },
+      addFresh: () => this.setState({ addedFresh: [...this.state.addedFresh, cap], query: '' }),
+      showFresh: fresh.length > 0,
+      fresh,
+      showAdd: !q
+    };
+  }
+  types() { return ['Spirits', 'Liqueurs', 'Aperitifs and vermouth', 'Bitters', 'Syrups', 'Other']; }
+  items() { return [
+  { id: 'agedrum', name: 'Aged rum', type: 'Spirits', used: 3, start: 'have', can: 2, alt: ['dark rum', 'golden rum'] },
+  { id: 'bourbon', name: 'Bourbon', type: 'Spirits', used: 3, start: 'have', can: 2 },
+  { id: 'gin', name: 'Gin', type: 'Spirits', used: 7, start: 'have', can: 3, alt: ['London dry gin'] },
+  { id: 'mezcal', name: 'Mezcal', type: 'Spirits', used: 1, start: 'dont', unlock: 1 },
+  { id: 'rye', name: 'Rye whiskey', type: 'Spirits', used: 2, start: 'have', can: 1, alt: ['rye'] },
+  { id: 'tequila', name: 'Tequila blanco', type: 'Spirits', used: 2, start: 'have', can: 0, alt: ['tequila', 'silver tequila'] },
+  { id: 'vodka', name: 'Vodka', type: 'Spirits', used: 2, start: 'have', can: 1 },
+  { id: 'whiterum', name: 'White rum', type: 'Spirits', used: 4, start: 'have', can: 0, alt: ['light rum', 'silver rum'] },
+  { id: 'chartreuse', name: 'Chartreuse', type: 'Liqueurs', used: 1, start: 'dont', alt: ['green Chartreuse'] },
+  { id: 'coffee', name: 'Coffee liqueur', type: 'Liqueurs', used: 1, start: 'have', can: 1 },
+  { id: 'cointreau', name: 'Cointreau', type: 'Liqueurs', used: 3, start: 'have', can: 1, alt: ['triple sec', 'orange liqueur'] },
+  { id: 'violette', name: 'Crème de violette', type: 'Liqueurs', used: 1, start: 'new' },
+  { id: 'falernum', name: 'Falernum', type: 'Liqueurs', used: 1, start: 'new' },
+  { id: 'maraschino', name: 'Maraschino liqueur', type: 'Liqueurs', used: 2, start: 'dont', unlock: 1, alt: ['maraschino'] },
+  { id: 'aperol', name: 'Aperol', type: 'Aperitifs and vermouth', used: 1, start: 'dont' },
+  { id: 'campari', name: 'Campari', type: 'Aperitifs and vermouth', used: 3, start: 'have', can: 2 },
+  { id: 'dryverm', name: 'Dry vermouth', type: 'Aperitifs and vermouth', used: 2, start: 'have', can: 2 },
+  { id: 'sweetverm', name: 'Sweet vermouth', type: 'Aperitifs and vermouth', used: 4, start: 'have', can: 3, alt: ['rosso vermouth', 'red vermouth'] },
+  { id: 'angostura', name: 'Angostura bitters', type: 'Bitters', used: 5, start: 'have', can: 3, alt: ['aromatic bitters'] },
+  { id: 'orangebit', name: 'Orange bitters', type: 'Bitters', used: 3, start: 'have', can: 1 },
+  { id: 'orgeat', name: 'Orgeat', type: 'Syrups', used: 1, start: 'dont', alt: ['almond syrup'] },
+  { id: 'simple', name: 'Simple syrup', type: 'Syrups', used: 6, start: 'have', can: 2, alt: ['sugar syrup'] }
+]; }
+  freshList() { return ['Lime juice', 'Lemon juice', 'Grapefruit', 'Mint', 'Soda water', 'Egg white', 'Espresso']; }
+}
+</script>
+</body>
+</html>

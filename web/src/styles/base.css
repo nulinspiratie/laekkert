@@ -121,6 +121,23 @@ button {
   flex: 1;
 }
 
+/* "The bar", on the drinks side (DrinkRecipeDesktop). */
+.shell-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.shell-link[aria-current='page'] {
+  background: var(--seg-on);
+}
+
 .side-nav {
   display: flex;
   gap: 4px;

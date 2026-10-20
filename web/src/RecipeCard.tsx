@@ -1,12 +1,16 @@
 // One recipe in the browse page, three ways: a grid card, a phone list row and a
-// desktop table row. All are links to the recipe.
+// desktop table row. All are links to the recipe. Drinks also wear what the bar
+// says about them.
 
+import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
+import { badge } from './bar'
 import { MARK_LABELS, type FilterMark } from './browse'
 import { capitalise, formatTime } from './format'
-import { Bookmark, Chevron, Clock, Heart, Star } from './icons'
+import { Basket, Bookmark, Check, Chevron, Clock, Heart, MinusCircle, Question, Star } from './icons'
 import { PhotoTile } from './PhotoTile'
-import type { RecipeSummary } from './types'
+import type { DrinkStatus, RecipeSummary } from './types'
+import { useIsDesktop } from './useIsDesktop'
 
 // Only these marks show on cards, in this order.
 const CARD_MARKS: readonly FilterMark[] = ['favourite', 'try_next']
@@ -36,6 +40,26 @@ function RatingBadge({ rating, size }: { rating: number | null; size: number }) 
   )
 }
 
+const BADGE_ICONS: Record<DrinkStatus, () => ReactNode> = {
+  can_make: () => <Check size={15} strokeWidth={2.5} />,
+  fresh_only: () => <Basket size={15} strokeWidth={2} />,
+  missing: () => <MinusCircle size={15} />,
+  unsorted: () => <Question size={15} strokeWidth={2} />,
+}
+
+/** "Can make now", "Missing: orgeat" and so on, with an icon; nothing on food. */
+function BarBadge({ recipe }: { recipe: RecipeSummary }) {
+  const desktop = useIsDesktop()
+  if (!recipe.bar) return null
+  const { kind, text } = badge(recipe.bar, !desktop)
+  return (
+    <span className={`bar-badge bar-badge--${kind}`}>
+      {BADGE_ICONS[kind]()}
+      <span>{text}</span>
+    </span>
+  )
+}
+
 const href = (recipe: RecipeSummary) => `/${recipe.side}/${encodeURIComponent(recipe.slug)}`
 
 /** The recipe page's back link returns to the browse query the visitor came from. */
@@ -47,13 +71,16 @@ export function RecipeCard({ recipe }: { recipe: RecipeSummary }) {
   const state = useBrowseState()
   return (
     <Link to={href(recipe)} state={state} className="recipe-card">
-      <PhotoTile
-        side={recipe.side}
-        slug={recipe.slug}
-        category={recipe.category}
-        image={recipe.image}
-        size="card"
-      />
+      <div className="recipe-card-photo">
+        <PhotoTile
+          side={recipe.side}
+          slug={recipe.slug}
+          category={recipe.category}
+          image={recipe.image}
+          size="card"
+        />
+        <BarBadge recipe={recipe} />
+      </div>
       <div className="recipe-card-body">
         <div className="recipe-card-eyebrow">{capitalise(recipe.category)}</div>
         <div className="recipe-card-name">{recipe.name}</div>
@@ -92,6 +119,7 @@ export function RecipeRow({ recipe }: { recipe: RecipeSummary }) {
           {recipe.time_minutes !== null && <span>{formatTime(recipe.time_minutes)}</span>}
           <RatingBadge rating={recipe.rating} size={14} />
         </span>
+        <BarBadge recipe={recipe} />
       </div>
       <MarkIcons recipe={recipe} size={18} />
     </Link>
@@ -116,6 +144,7 @@ export function RecipeTableRow({ recipe }: { recipe: RecipeSummary }) {
           <span>{capitalise(recipe.category)}</span>
           <RatingBadge rating={recipe.rating} size={14} />
         </span>
+        <BarBadge recipe={recipe} />
       </div>
       <span className="recipe-time">
         {recipe.time_minutes !== null && (

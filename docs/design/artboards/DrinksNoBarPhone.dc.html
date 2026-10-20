@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>Drinks, bar never set up, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;family=Young+Serif&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #E8E3D5; color: #1E2621; font-family: 'Hanken Grotesk', system-ui, sans-serif">
+
+  <div style="background: #1C2620; color: #EDE6D6; padding: 28px 16px 16px; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; align-items: flex-start; gap: 8px">
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 6px">
+        <div style="font-size: 11px; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; color: #B9C4B4">The bar</div>
+        <h1 style="margin: 0; font-family: 'Young Serif', Georgia, serif; font-weight: 400; font-size: 36px; line-height: 1">Drinks</h1>
+      </div>
+      <a href="BarPhone.dc.html" aria-label="The bar" style="width: 48px; height: 48px; box-sizing: border-box; border: 1px solid #3A4740; border-radius: 50%; background: #26322B; color: #EDE6D6; display: flex; align-items: center; justify-content: center">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3h4v4l1.5 2.5V20a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1V9.5L10 7z"></path><path d="M8.5 13h7"></path></svg>
+      </a>
+      <button type="button" aria-label="Search drinks" style="width: 48px; height: 48px; border: 1px solid #3A4740; border-radius: 50%; background: #26322B; color: #EDE6D6; display: flex; align-items: center; justify-content: center; cursor: pointer">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+      </button>
+    </div>
+    <div role="group" aria-label="From your bar" style="display: flex; gap: 8px">
+      <a href="DrinksPhone.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 14px; box-sizing: border-box; border: 1px solid #3A4740; border-radius: 999px; color: #E2DCCB; font-weight: 600; font-size: 14px; text-decoration: none; white-space: nowrap">All 24</a>
+      <button type="button" aria-pressed="true" style="min-height: 44px; padding: 0 14px; border: 0; border-radius: 999px; background: #3E7558; color: #FFFFFF; font-family: inherit; font-weight: 600; font-size: 14px; white-space: nowrap; cursor: pointer">Can make 0</button>
+      <button type="button" aria-pressed="false" style="min-height: 44px; padding: 0 14px; border: 1px solid #3A4740; border-radius: 999px; background: transparent; color: #E2DCCB; font-family: inherit; font-weight: 600; font-size: 14px; white-space: nowrap; cursor: pointer">{{freshChip}}</button>
+    </div>
+  </div>
+
+  <div style="padding: 20px 16px">
+    <section style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 32px 20px 24px; background: #F5F1E6; border: 1px solid #D2CBB8; border-radius: 18px; text-align: center">
+      <sc-if value="{{noBar}}" hint-placeholder-val="{{true}}">
+        <svg width="96" height="64" viewBox="0 0 72 48" fill="none" stroke="#2E5A44" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 6h6v8l3 5v24a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V19l3-5z"></path><path d="M33 2h6v12l3 5v24a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V19l3-5z"></path><path d="M52 10h6v6l3 4v23a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V20l3-4z"></path><path d="M4 45h64" stroke-dasharray="2 4"></path></svg>
+        <h2 style="margin: 0; font-family: 'Young Serif', Georgia, serif; font-weight: 400; font-size: 26px; line-height: 1.2">Set up your bar first</h2>
+        <p style="margin: 0; font-size: 16px; line-height: 1.5; color: #474D44">Lækkert doesn't know what's in your cabinet yet, so nothing can show here. Tap Have for each bottle you own. It takes about a minute.</p>
+        <a href="BarFirstVisitPhone.dc.html" style="align-self: stretch; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 56px; margin-top: 6px; border-radius: 14px; background: #2E5A44; color: #FFFFFF; text-decoration: none; font-size: 17px; font-weight: 700">Set up the bar</a>
+        <a href="DrinksPhone.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; color: #234836; font-weight: 600">Show all 24 drinks</a>
+      </sc-if>
+      <sc-if value="{{noFresh}}" hint-placeholder-val="{{false}}">
+        <svg width="72" height="64" viewBox="0 0 48 44" fill="none" stroke="#2E5A44" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h22c0 8-5 13-11 13S8 14 8 6z"></path><path d="M19 19v12M13 31h12"></path><path d="M26 28h18l-2 12H28z"></path><path d="m31 28 3-5M39 28l-3-5"></path></svg>
+        <h2 style="margin: 0; font-family: 'Young Serif', Georgia, serif; font-weight: 400; font-size: 26px; line-height: 1.2">Nothing without a trip to the shop</h2>
+        <p style="margin: 0; font-size: 16px; line-height: 1.5; color: #474D44">You have the bottles for 14 drinks, but every one needs something fresh. Limes cover 9 of them.</p>
+        <a href="DrinksPhone.dc.html" style="align-self: stretch; display: flex; align-items: center; justify-content: center; min-height: 56px; margin-top: 6px; border-radius: 14px; background: #2E5A44; color: #FFFFFF; text-decoration: none; font-size: 17px; font-weight: 700">Show the 14 that need fresh items</a>
+        <a href="BarPhone.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 12px; color: #234836; font-weight: 600">Open the bar</a>
+      </sc-if>
+    </section>
+  </div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 16px 30px; background: #1C2620; display: flex; align-items: center; gap: 8px">
+    <nav aria-label="Food or drinks" style="flex: 1; display: flex; gap: 4px; padding: 4px; background: #2C3832; border-radius: 999px">
+      <a href="FoodGridPhone.dc.html" style="flex: 1; display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 999px; color: #CFC9B8; text-decoration: none; font-weight: 600">Food</a>
+      <a href="DrinksPhone.dc.html" aria-current="page" style="flex: 1; display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 999px; background: #3E7558; color: #FFFFFF; text-decoration: none; font-weight: 600">Drinks</a>
+    </nav>
+    <button type="button" aria-label="Filters" style="width: 52px; height: 52px; border-radius: 50%; border: 1px solid #3A4740; background: #26322B; color: #EDE6D6; display: flex; align-items: center; justify-content: center; cursor: pointer">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg>
+    </button>
+    <a href="EditorDesktop.dc.html" aria-label="New drink" style="width: 52px; height: 52px; border-radius: 50%; background: #E8DFC9; color: #1C2620; display: flex; align-items: center; justify-content: center">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+    </a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"variant":{"editor":"enum","options":["nobar","nofresh"],"default":"nobar"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const v = this.props.variant || 'nobar';
+    return {
+      noBar: v === 'nobar',
+      noFresh: v === 'nofresh',
+      freshChip: v === 'nobar' ? 'Fresh only 0' : 'Fresh only 14'
+    };
+  }
+}
+</script>
+</body>
+</html>

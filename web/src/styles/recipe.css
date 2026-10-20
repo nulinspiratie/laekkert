@@ -514,6 +514,180 @@
   vertical-align: 2px;
 }
 
+/* ---- A drink's ingredients and the bar (DrinkRecipePhone, DrinkRecipeDesktop) ---- */
+
+.ingredients--drinks {
+  --state-have: var(--accent-soft-ink);
+  --state-on-have: #f2f5ee;
+  --state-raised: #fbf8f0;
+  --state-fresh: #6a460c;
+  --state-unsorted: #6c7368;
+  padding-bottom: 8px;
+  gap: 12px;
+}
+
+.ingredients-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--bg);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ingredients-bar span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ingredients-bar svg {
+  flex: none;
+}
+
+.ingredients-bar-missing {
+  color: var(--text);
+}
+
+.ingredients-bar-have {
+  color: var(--state-have);
+}
+
+.ingredients-bar-fresh {
+  color: var(--state-fresh);
+}
+
+/* A column: the line, then a refusal or the undo bar. */
+.ingredient.ingredient--drink {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+}
+
+.ingredient-line {
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 64px;
+  padding: 6px 0;
+}
+
+.ingredient-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.ingredient-recipe {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  color: var(--accent-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ingredient-state {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* Another write is in flight: the buttons wait, the tapped one most visibly. */
+.ingredient-state[aria-disabled='true'],
+.ingredient-undo button[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.ingredient-state.ingredient-state--pending {
+  opacity: 0.75;
+  border-style: dotted;
+}
+
+.ingredient-state svg,
+.ingredient-fresh svg {
+  flex: none;
+}
+
+.ingredient-state--have {
+  border: 1.5px solid var(--state-have);
+  background: var(--state-have);
+  color: var(--state-on-have);
+}
+
+.ingredient-state--dont {
+  border: 1.5px dashed var(--text);
+  background: var(--state-raised);
+  color: var(--text);
+}
+
+.ingredient-state--unsorted {
+  border: 1.5px dashed var(--state-unsorted);
+  background: var(--state-raised);
+  color: var(--label);
+}
+
+.ingredient-fresh {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 6px;
+  color: var(--state-fresh);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ingredient-problem {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+.ingredient-undo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 4px 4px 4px 14px;
+  border-radius: 12px;
+  background: var(--masthead);
+  color: var(--masthead-ink);
+  font-size: 14px;
+}
+
+.ingredient-undo span {
+  flex: 1;
+}
+
+.ingredient-undo button {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--masthead-brand);
+  font-weight: 700;
+  cursor: pointer;
+}
+
 /* ---- Method ---- */
 
 .method {
@@ -730,6 +904,36 @@
   .ingredient {
     grid-template-columns: 84px minmax(0, 1fr);
     gap: 14px;
+  }
+
+  /* DrinkRecipeDesktop: 400 px wide, so a fresh row's label leaves the item
+     room to wrap by word. */
+  .ingredients--drinks {
+    flex-basis: 400px;
+    max-width: 520px;
+    gap: 14px;
+    padding: 24px 22px 10px;
+  }
+
+  .ingredients-bar {
+    gap: 6px 16px;
+    padding: 10px 14px;
+    font-size: 15px;
+  }
+
+  .ingredient-line {
+    grid-template-columns: 72px minmax(0, 1fr) auto;
+    gap: 14px;
+  }
+
+  .ingredient-state {
+    gap: 6px;
+    padding: 0 12px;
+  }
+
+  .ingredient-fresh {
+    gap: 6px;
+    padding: 0 8px;
   }
 
   /* Too narrow for ingredients beside the method: the method wraps below, so

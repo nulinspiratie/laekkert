@@ -3,7 +3,8 @@
 
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
-import { addEntry, getRecipe, getTimeline, recipeImageUrl, restoreVersion, setMarks } from './api'
+import { addEntry, changeBar, getRecipe, getTimeline, recipeImageUrl, restoreVersion, setMarks } from './api'
+import { messageOf as barMessageOf, withBar } from './bar'
 import { browseQuery, MARK_LABELS, type FilterMark } from './browse'
 import { capitalise, formatTime } from './format'
 import { Back, Bookmark, Check, Clock, Edit, Heart, People } from './icons'
@@ -12,7 +13,15 @@ import { Ingredients } from './Ingredients'
 import { PhotoTile } from './PhotoTile'
 import { Shell } from './Shell'
 import { Stars } from './Stars'
-import { SIDE_LABELS, type NewEntry, type Recipe, type Side, type TimelineEntry } from './types'
+import {
+  SIDE_LABELS,
+  type BarChanges,
+  type BarState,
+  type NewEntry,
+  type Recipe,
+  type Side,
+  type TimelineEntry,
+} from './types'
 import { useIsDesktop } from './useIsDesktop'
 
 // The two marks the page toggles, in this order. Tried is status only: a tasting sets it.
@@ -27,10 +36,20 @@ interface Timeline {
   current_version: number | null
 }
 
-/** A failed action: the sentence to show, and which part of the page it belongs to. */
+/**
+ * A failed action: the sentence to show, and which part of the page it belongs to. A bar
+ * write names its item, so the sentence shows at that ingredient.
+ */
 interface Problem {
-  area: 'head' | 'history'
+  area: 'head' | 'history' | 'bar'
   message: string
+  item?: string
+}
+
+/** The change that gives an item this state; null is unsorted. */
+function barChange(item: string, state: BarState | null): BarChanges {
+  if (state === 'have') return { have: [item] }
+  return state === 'dont' ? { dont_have: [item] } : { unsorted: [item] }
 }
 
 export function RecipeView({ side, slug }: { side: Side; slug: string }) {
@@ -120,18 +139,23 @@ function Page({ recipe, onRecipe }: { recipe: Recipe; onRecipe: (recipe: Recipe)
     }
   }, [side, slug])
 
-  /** Runs a write; the page takes the recipe it returns and reloads the timeline. */
-  const perform = async (area: Problem['area'], request: () => Promise<Recipe>): Promise<boolean> => {
+  /** Runs a write; the page takes the recipe it returns and, unless it was the bar, reloads the timeline. */
+  const perform = async (
+    area: Problem['area'],
+    request: () => Promise<Recipe>,
+    item?: string,
+  ): Promise<boolean> => {
     if (writing.current) return false
     writing.current = true
     setBusy(true)
-    setProblem(null)
+    // A bar write does not reload the timeline, so a History problem stays.
+    setProblem((current) => (area === 'bar' && current?.area === 'history' ? current : null))
     try {
       onRecipe(await request())
-      void refresh()
+      if (area !== 'bar') void refresh()
       return true
     } catch (err) {
-      setProblem({ area, message: messageOf(err) })
+      setProblem({ area, message: area === 'bar' ? barMessageOf(err) : messageOf(err), item })
       return false
     } finally {
       writing.current = false
@@ -146,6 +170,19 @@ function Page({ recipe, onRecipe }: { recipe: Recipe; onRecipe: (recipe: Recipe)
     const on = recipe.marks.includes(mark)
     void perform('head', () => setMarks(side, slug, on ? [] : [mark], on ? [mark] : []))
   }
+
+  /** Sets an item's state, then reloads the drink so every row and the summary are fresh. */
+  const setBarState = (item: string, state: BarState | null) =>
+    perform(
+      'bar',
+      async () => {
+        const bar = await changeBar(barChange(item, state))
+        // The write worked: if the reload fails, the bar it returned stands in.
+        const reloaded = await getRecipe(side, slug).catch(() => null)
+        return reloaded ?? withBar(recipe, bar)
+      },
+      item,
+    )
 
   const editHref = `/${side}/${encodeURIComponent(slug)}/edit`
 
@@ -207,7 +244,7 @@ function Page({ recipe, onRecipe }: { recipe: Recipe; onRecipe: (recipe: Recipe)
             <ul className="recipe-tags" aria-label="Tags">
               {recipe.tags.map((tag) => (
                 <li key={tag}>
-                  <Link to={`/${side}?${browseQuery({ q: '', category: null, marks: [], tags: [tag], sort: 'name' })}`}>
+                  <Link to={`/${side}?${browseQuery({ q: '', category: null, marks: [], tags: [tag], sort: 'name', bar: null })}`}>
                     {tag}
                   </Link>
                 </li>
@@ -261,7 +298,17 @@ function Page({ recipe, onRecipe }: { recipe: Recipe; onRecipe: (recipe: Recipe)
         </div>
       </div>
       <div className="recipe-body gutter">
-        <Ingredients ingredients={recipe.ingredients} servings={recipe.servings} />
+        <Ingredients
+          ingredients={recipe.ingredients}
+          servings={recipe.servings}
+          side={side}
+          bar={recipe.bar}
+          onBar={side === 'drinks' ? setBarState : undefined}
+          busy={busy}
+          barError={
+            problem?.area === 'bar' && problem.item !== undefined ? { item: problem.item, message: problem.message } : null
+          }
+        />
         <div className="recipe-side">
           <Method steps={recipe.steps} />
           <Source recipe={recipe} />
