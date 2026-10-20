@@ -102,6 +102,9 @@ class Identities:
                 if key := name_key(name):
                     self.index.setdefault(key, position)
         self.virtual: dict[str, str] = {}  # identity key -> item as first written
+        self.in_drinks: dict[
+            str, str
+        ] = {}  # identity key -> as the first drink writes it
         self.spellings: dict[str, list[str]] = {}  # identity key -> items as written
         self.counts: dict[str, dict[str, int]] = {}  # identity key -> side -> recipes
         for recipe in _ordered(recipes):
@@ -114,6 +117,8 @@ class Identities:
                     self.virtual.setdefault(key, ingredient.item)
                 identity = self.key(ingredient.item)
                 assert identity is not None
+                if recipe.side == "drinks":
+                    self.in_drinks.setdefault(identity, ingredient.item)
                 self.spellings.setdefault(identity, []).append(ingredient.item)
                 if identity not in used:
                     used.add(identity)
@@ -222,23 +227,23 @@ def _merge(
     raw: list,
     ids: Identities,
     is_on_bar: Callable[[str], bool],
-    a: str,
-    b: str,
-) -> tuple[list, str]:
-    """Merge `a`'s identity into `b`'s; the new raw entries and `b`'s key."""
-    a_key, b_key = ids.key(a), ids.key(b)
-    if a_key is None:
-        raise IngredientError(no_ingredient(a))
-    if b_key is None:
-        raise IngredientError(no_ingredient(b))
-    if a_key == b_key:
-        raise IngredientError(same(a, b))
+    a: tuple[str, str],
+    b_key: str,
+) -> list:
+    """Merge the identity `a` (its name as given, its key) into `b_key`'s; the
+    new raw entries."""
+    a_name, a_key = a
     moving = [ids.name(a_key), *ids.other_names(a_key)]
     if any(is_on_bar(name) for name in moving):
-        raise IngredientError(on_bar(a))
+        raise IngredientError(on_bar(a_name))
     a_position, b_position = ids.entry_position(a_key), ids.entry_position(b_key)
     a_raw = {} if a_position is None else raw[a_position]
-    target = {"name": ids.name(b_key)} if b_position is None else raw[b_position]
+    if b_position is None:
+        # Named as the bar names it when a drink uses it, else as recipes do.
+        name = ids.in_drinks.get(b_key) or ids.name(b_key)
+        target = {"name": name}
+    else:
+        target = raw[b_position]
     merged = dict(target)
     for field, value in a_raw.items():
         if field not in ("name", "aliases"):
@@ -257,7 +262,7 @@ def _merge(
     ]
     if b_position is None:
         result.append(merged)
-    return result, b_key
+    return result
 
 
 def _separate(raw: list, ids: Identities, n: str) -> list:
@@ -278,15 +283,19 @@ def _separate(raw: list, ids: Identities, n: str) -> list:
 def merge(
     raw: list[dict],
     recipes: dict[str, list[Recipe]],
-    on_bar: Callable[[str], bool],
+    is_on_bar: Callable[[str], bool],
     merges: dict[str, str],
     separate: list[str],
+    *,
+    after_merges: Callable[[list], None] | None = None,
 ) -> tuple[list[dict], list[str]]:
     """The catalog's raw entries after the whole call, and the identities it touched.
 
-    `on_bar(name)` says whether a name is on the bar now. Conflicts in the call
-    are refused first, then each merge in order, then each separate; any refusal
-    raises `IngredientError` and nothing is returned. Never writes.
+    `is_on_bar(name)` says whether a name is on the bar now. Conflicts in the
+    call's names are refused first, then each merge in order, then each
+    separate; any refusal raises `IngredientError` and nothing is returned.
+    `after_merges(raw)`, when given, sees the entries after the merges and before
+    the separates, and may refuse too. Never writes.
     """
     pairs = [(a.strip(), b.strip()) for a, b in merges.items()]
     names: list[str] = []
@@ -296,10 +305,38 @@ def merge(
     _check_conflicts(pairs, names)
     result = copy.deepcopy(raw)
     touched: list[str] = []
+    # Identities as the call found them: what each A went into, and every B.
+    first = Identities([_parse(r) for r in result], recipes)
+    moved: dict[str, str] = {}
+    targets: set[str] = set()
     for a, b in pairs:
         ids = Identities([_parse(r) for r in result], recipes)
-        result, key = _merge(result, ids, on_bar, a, b)
-        touched.append(key)
+        a_key, b_key = ids.key(a), ids.key(b)
+        if a_key is None:
+            raise IngredientError(no_ingredient(a))
+        if b_key is None:
+            raise IngredientError(no_ingredient(b))
+        # Every name in use now was in use when the call began.
+        first_a, first_b = first.key(a), first.key(b)
+        assert first_a is not None and first_b is not None
+        if first_a == first_b:
+            raise IngredientError(same(a, b))
+        if first_a in moved:
+            if moved[first_a] != first_b:
+                raise IngredientError(twice(a))
+            touched.append(b_key)  # already there: nothing more to do
+            continue
+        if first_a in targets:
+            raise IngredientError(chain(a))
+        if first_b in moved:
+            raise IngredientError(chain(b))
+        moved[first_a] = first_b
+        targets.add(first_b)
+        assert a_key != b_key  # only an earlier merge could join them, refused above
+        result = _merge(result, ids, is_on_bar, (a, a_key), b_key)
+        touched.append(b_key)
+    if after_merges is not None and pairs:
+        after_merges(result)
     for n in names:
         ids = Identities([_parse(r) for r in result], recipes)
         result = _separate(result, ids, n)

@@ -489,3 +489,93 @@ def test_merge_then_separate_in_one_call(catalog, store, bar):
     result = bar.merge_ingredients({"cilantro": "coriander"}, ["dhania"])
     assert catalog.raw() == [{"name": "coriander", "aliases": ["cilantro"]}]
     assert [i["name"] for i in result] == ["coriander", "dhania"]
+
+
+# --- the bar stays as it was ---
+
+
+def test_merge_refuses_to_change_a_bar_state(catalog, store, bar):
+    drink(store, "Mojito", "mint leaves", "white rum")
+    food(store, "Salad", "mint")
+    bar.inventory_path.write_text(
+        json.dumps(
+            {"format_version": 1, "items": {"mint": "have", "mint leaves": "dont"}}
+        )
+    )
+    inventory = bar.inventory_path.read_bytes()
+    before = bar.view().json()
+    refused(
+        bar,
+        catalog,
+        "‘mint’ is on the bar. Fold it there instead (manage_inventory).",
+        {"mint": "mint leaves"},
+    )
+    assert not catalog.path.exists()
+    assert bar.inventory_path.read_bytes() == inventory
+    assert bar.view().json() == before
+
+
+def test_merge_may_copy_fresh_onto_a_bar_item(catalog, store, bar):
+    entries(catalog, {"name": "garden mint", "fresh": True})
+    drink(store, "Mojito", "mint", "white rum")
+    food(store, "Salad", "garden mint")
+    bar.inventory_path.write_text(
+        json.dumps({"format_version": 1, "items": {"mint": "have"}})
+    )
+    [result] = bar.merge_ingredients({"garden mint": "mint"}, [])
+    assert catalog.raw() == [
+        {"name": "mint", "fresh": True, "aliases": ["garden mint"]}
+    ]
+    assert result["fresh"] is True
+    [mint] = [i for i in bar.view().items if i.name == "mint"]
+    assert (mint.fresh, mint.state) == (True, None)
+
+
+def test_new_entry_for_a_drink_item_keeps_the_bar_name(catalog, store, bar):
+    drink(store, "Old fashioned", "bourbon", "Sugar")
+    food(store, "Cake", "sugar", "caster sugar")
+    names_before = [i.name for i in bar.view().items]
+    bar.merge_ingredients({"caster sugar": "sugar"}, [])
+    assert catalog.raw() == [{"name": "Sugar", "aliases": ["caster sugar"]}]
+    assert [i.name for i in bar.view().items] == names_before == ["bourbon", "Sugar"]
+
+
+# --- conflicts between identities in one call ---
+
+
+def test_merge_refuses_one_identity_into_two_targets(seeded, catalog, store, bar):
+    food(store, "Curry", "jeera", "x", "z")
+    refused(
+        bar,
+        catalog,
+        "‘ground cumin’ is merged twice.",
+        {"cumin": "x", "ground cumin": "z"},
+    )
+
+
+def test_merge_of_one_identity_twice_into_one_target(seeded, catalog, store, bar):
+    food(store, "Curry", "jeera")
+    result = bar.merge_ingredients({"cumin": "jeera", "ground cumin": "Jeera"}, [])
+    [jeera] = [e for e in catalog.raw() if e["name"] == "jeera"]
+    assert jeera["aliases"] == ["ground cumin", "cumin"]
+    assert not [e for e in catalog.raw() if e["name"] == "ground cumin"]
+    assert [i["name"] for i in result] == ["jeera"]
+
+
+def test_merge_refuses_identity_chains(seeded, catalog, store, bar):
+    food(store, "Curry", "jeera", "x", "y")
+    chain = "Chains aren't allowed in one call: ‘{}’ is merged and merged into."
+    # An A whose identity was an earlier B.
+    refused(bar, catalog, chain.format("cumin"), {"x": "ground cumin", "cumin": "y"})
+    # A B whose identity was an earlier A.
+    refused(bar, catalog, chain.format("cumin"), {"ground cumin": "x", "y": "cumin"})
+
+
+def test_separate_may_still_change_the_bar(seeded, catalog, store, bar):
+    # The guard is for merges: a separated drink name is a new, unsorted item.
+    [result] = bar.merge_ingredients({}, ["mint leaves"])
+    assert result["recipes"] == {"food": 0, "drinks": 1}
+    view = bar.view()
+    # mint, no longer used by a drink and without a kind, leaves the bar.
+    assert [i.name for i in view.items if "mint" in i.name] == ["mint leaves"]
+    assert [i.state for i in view.items if i.name == "mint leaves"] == [None]

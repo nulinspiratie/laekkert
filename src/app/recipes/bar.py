@@ -27,7 +27,14 @@ from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
 from app.recipes.catalog import Catalog, CatalogEntry, Kind, name_key
 from app.recipes.files import atomic_write
-from app.recipes.ingredients import EMPTY_NAME, Identities, merge, touched_json
+from app.recipes.ingredients import (
+    EMPTY_NAME,
+    Identities,
+    IngredientError,
+    merge,
+    on_bar,
+    touched_json,
+)
 from app.recipes.model import SIDES, Recipe
 from app.recipes.store import RecipeStore
 
@@ -684,6 +691,48 @@ def _apply(changes: BarChanges, draft: _Draft) -> None:
             draft.drop_entry(raw)
 
 
+def _bar_states(raw: list, drinks: list[Recipe], shelf: _Inventory) -> dict:
+    """Each bar item's name and state, by item key."""
+    registry = _Registry([_parse(r) for r in raw], drinks)
+    keys = set(registry.used_in)
+    keys.update(key for key in registry.by_item if registry.in_bar(key))
+    return {
+        key: (registry.fresh(key), registry.state(key, shelf)) for key in sorted(keys)
+    }
+
+
+def _check_bar_kept(
+    raw: list,
+    new_raw: list,
+    recipes: dict[str, list[Recipe]],
+    shelf: _Inventory,
+    merges: dict[str, str],
+) -> None:
+    """Refuse merges that change the bar: the same items, each with its state,
+    unless a merge made it fresh (fresh items have no state).
+
+    A merged name can carry an inventory state no bar item showed (left from a
+    drink since deleted); merged into a bar item, it would show there. The
+    refusal names the first A with a name in the inventory.
+    """
+    before = _bar_states(raw, recipes["drinks"], shelf)
+    after = _bar_states(new_raw, recipes["drinks"], shelf)
+    if before.keys() == after.keys() and all(
+        after[key] == before[key] or (after[key][0] and not before[key][0])
+        for key in before
+    ):
+        return
+    identities = Identities([_parse(r) for r in raw], recipes)
+
+    def in_inventory(a: str) -> bool:
+        key = identities.key(a)
+        names = [identities.name(key), *identities.other_names(key)] if key else [a]
+        return bool(shelf.names([name_key(n) for n in names]))
+
+    sources = [a.strip() for a in merges]
+    raise IngredientError(on_bar(next(filter(in_inventory, sources), sources[0])))
+
+
 class Bar:
     def __init__(self, data_dir: Path, catalog: Catalog, store: RecipeStore):
         self.inventory_path = Path(data_dir) / "inventory.json"
@@ -733,13 +782,18 @@ class Bar:
             recipes = {s: self._store.list(s) for s in SIDES}
             registry = _Registry([_parse(r) for r in raw], recipes["drinks"])
 
-            def on_bar(name: str) -> bool:
+            def is_on_bar(name: str) -> bool:
                 item = registry.item_key(name)
                 return registry.in_bar(item) or (
                     item is not None and registry.state(item, shelf) is not None
                 )
 
-            new_raw, touched = merge(raw, recipes, on_bar, merges, separate)
+            def bar_kept(merged: list) -> None:
+                _check_bar_kept(raw, merged, recipes, shelf, merges)
+
+            new_raw, touched = merge(
+                raw, recipes, is_on_bar, merges, separate, after_merges=bar_kept
+            )
             if new_raw != raw:
                 self._catalog.save_raw(new_raw)
             identities = Identities([_parse(r) for r in new_raw], recipes)
