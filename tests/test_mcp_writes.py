@@ -3,7 +3,11 @@ import pytest
 from conftest import call, rpc
 
 from app.api import SAVE_FAILED, SAVE_INCOMPLETE
+from app.recipes.drafts import RecipeDraft
+from app.recipes.fetch import Fetcher
+from app.recipes.model import Source
 from app.recipes.store import RecipeStore, SaveIncomplete
+from app.recipes.uploads import UploadStore
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
 PAGE = "https://example.com/dal"
@@ -270,13 +274,59 @@ def test_add_recipe_blank_name_sentence(client):
 
 
 def test_add_recipe_save_failures(client, monkeypatch):
-    def broken(self, *args):
+    def broken(self, *args, **kwargs):
         raise OSError("disk full")
 
-    def half(self, *args):
+    def half(self, *args, **kwargs):
         raise SaveIncomplete("rollback failed")
 
     monkeypatch.setattr(RecipeStore, "create", broken)
     assert text(add(client)) == SAVE_FAILED
     monkeypatch.setattr(RecipeStore, "create", half)
     assert text(add(client)) == SAVE_INCOMPLETE
+
+
+def test_add_recipe_malformed_og_image_still_saves(client, routes):
+    routes[PAGE] = html('<meta property="og:image" content="http://[oops">')
+    result = saved(add(client, source_url=PAGE))
+    assert result["photo"] is False
+    assert result["warnings"] == ["Saved without a photo: the page has no main photo"]
+
+
+def test_add_recipe_unexpected_fetch_failure_still_saves(client, monkeypatch, caplog):
+    async def boom(self, url):
+        raise RuntimeError("surprise")
+
+    monkeypatch.setattr(Fetcher, "image", boom)
+    result = saved(add(client, image_url=PHOTO))
+    assert result["photo"] is False
+    assert result["warnings"] == [
+        "Saved without a photo: the photo could not be fetched"
+    ]
+    assert "surprise" in caplog.text
+
+
+def test_add_recipe_disk_error_while_parking_is_not_a_warning(client, monkeypatch):
+    def full(self, body):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(UploadStore, "save_detected", full)
+    assert text(add(client, image_url=PHOTO)) == SAVE_FAILED
+
+
+def test_add_recipe_refuses_a_duplicate_made_during_the_fetch(client, routes, store):
+    def competing(request):
+        # Another request saves the same page while this one waits for its photo.
+        draft = RecipeDraft(
+            **{**RECIPE, "time_minutes": None, "tags": []},
+            source=Source(url=PAGE),
+            image=None,
+        )
+        store.create("food", draft, "claude")
+        return image()
+
+    routes[PHOTO] = competing
+    res = add(client, source_url=PAGE, image_url=PHOTO)
+    assert text(res) == "Already in Lækkert as quick-dal; use edit_recipe to change it"
+    sources = [r.source.url for r in store.list("food") if r.source]
+    assert sources == [PAGE]

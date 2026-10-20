@@ -1,5 +1,6 @@
 """MCP server, so Claude (claude.ai on the phone included) can read recipes."""
 
+import logging
 import re
 from importlib import resources
 from typing import Any, Literal
@@ -13,7 +14,7 @@ from app.recipes.drafts import DraftIngredient, parse_draft
 from app.recipes.fetch import Fetcher, FetchError
 from app.recipes.model import Mark, Recipe
 from app.recipes.search import search
-from app.recipes.store import RecipeStore, SaveIncomplete
+from app.recipes.store import RecipeStore, SaveIncomplete, already_saved
 from app.recipes.uploads import ImageTooLarge, UnsupportedImage, UploadStore
 
 INSTRUCTIONS = (
@@ -29,6 +30,9 @@ STYLE_GUIDE = (resources.files("app") / "style_guide.md").read_text(encoding="ut
 Sort = Literal["relevance", "name", "time", "rating", "recently_made"]
 
 NO_PHOTO = "the page has no main photo"
+PHOTO_FAILED = "the photo could not be fetched"
+
+log = logging.getLogger("app.mcp")
 # A host name or address with an optional port; anything else is not echoed back.
 HOST = re.compile(r"[A-Za-z0-9.-]+(:[0-9]{1,5})?")
 
@@ -178,14 +182,18 @@ def build_mcp(store: RecipeStore, uploads: UploadStore, fetcher: Fetcher) -> MCP
             return None, []
         try:
             url = image_url
-            if url is None:
-                assert source_url is not None
+            if url is None and source_url is not None:
                 url = await fetcher.page_image_url(source_url)
             if url is None:
                 return None, [f"Saved without a photo: {NO_PHOTO}"]
             return uploads.save_detected(await fetcher.image(url)), []
         except (FetchError, UnsupportedImage, ImageTooLarge) as err:
             return None, [f"Saved without a photo: {lower_first(str(err))}"]
+        except OSError:
+            raise  # the disk would fail the save too: SAVE_FAILED
+        except Exception:
+            log.exception("fetching a recipe photo failed")
+            return None, [f"Saved without a photo: {PHOTO_FAILED}"]
 
     @server.tool()
     async def add_recipe(
@@ -215,16 +223,15 @@ def build_mcp(store: RecipeStore, uploads: UploadStore, fetcher: Fetcher) -> MCP
             )
             # Everything the store would refuse is refused before any fetch.
             store.check(side, draft)
-            if source_url:
-                for other in store.list(side):
-                    if other.source and other.source.url == source_url:
-                        raise ToolError(
-                            f"Already in Lækkert as {other.slug}; "
-                            "use edit_recipe to change it"
-                        )
+            if source_url and (other := store.with_source(side, source_url)):
+                # Early, to skip the fetch; create checks again under its lock.
+                raise ToolError(already_saved(other.slug))
             name, warnings = await fetch_photo(source_url, image_url)
             created = store.create(
-                side, draft.model_copy(update={"image": name}), "claude"
+                side,
+                draft.model_copy(update={"image": name}),
+                "claude",
+                unique_source=True,
             )
         except ValueError as err:
             raise ToolError(str(err)) from None

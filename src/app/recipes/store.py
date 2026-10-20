@@ -74,6 +74,11 @@ MARK_ORDER: tuple[Mark, ...] = ("favourite", "try_next", "tried")
 # `/:side/new` is the editor, so no recipe may have this slug.
 RESERVED_SLUGS = {"new"}
 
+
+def already_saved(slug: str) -> str:
+    return f"Already in Lækkert as {slug}; use edit_recipe to change it"
+
+
 PHOTO_GONE = "That photo is no longer available; pick it again"
 RATING_RANGE = "Ratings go from 0.5 to 5 in half stars"
 NOTE_TOO_LONG = "A note can be at most 2000 characters"
@@ -306,19 +311,40 @@ class RecipeStore:
             "version": self.current_version(side, slug) or 0,
         }
 
-    def check(self, side: Side, draft: RecipeDraft) -> None:
-        """Raise the ValueError `create` would raise for this draft, saving nothing."""
-        if side not in SIDES:
-            raise ValueError("Pick food or drinks")
-        slug = self._free_slug(side, draft.name)
-        to_recipe(draft, side=side, slug=slug, marks=[], catalog=self._catalog)
-
-    @_locked
-    def create(self, side: Side, draft: RecipeDraft, via: Via) -> Recipe:
+    def _validated(self, side: Side, draft: RecipeDraft) -> tuple[str, Recipe]:
+        """The free slug and the cleaned-up recipe; raises ValueError (a sentence)."""
         if side not in SIDES:
             raise ValueError("Pick food or drinks")
         slug = self._free_slug(side, draft.name)
         recipe = to_recipe(draft, side=side, slug=slug, marks=[], catalog=self._catalog)
+        return slug, recipe
+
+    def check(self, side: Side, draft: RecipeDraft) -> None:
+        """Raise the ValueError `create` would raise for this draft, saving nothing."""
+        self._validated(side, draft)
+
+    def with_source(self, side: Side, url: str) -> Recipe | None:
+        """The recipe on this side that came from this exact link, if any."""
+        for recipe in self.list(side):
+            if recipe.source and recipe.source.url == url:
+                return recipe
+        return None
+
+    @_locked
+    def create(
+        self,
+        side: Side,
+        draft: RecipeDraft,
+        via: Via,
+        *,
+        unique_source: bool = False,
+    ) -> Recipe:
+        """Save a new recipe; with `unique_source`, not if its link is already saved."""
+        slug, recipe = self._validated(side, draft)
+        if unique_source and recipe.source and recipe.source.url:
+            existing = self.with_source(side, recipe.source.url)
+            if existing is not None:
+                raise ValueError(already_saved(existing.slug))
         moves = self._photo_moves(side, slug, recipe)
         entry = new_entry(Created, via, version=1)
         self._commit(

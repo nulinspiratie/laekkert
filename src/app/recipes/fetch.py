@@ -219,8 +219,11 @@ def page_image(html: str, base_url: str) -> str | None:
     parser.close()
     for key in (*IMAGE_KEYS, "image_src"):
         for link in parser.found.get(key, []):
-            absolute = urljoin(base_url, link)
-            parts = urlsplit(absolute)
+            try:
+                absolute = urljoin(base_url, link)
+                parts = urlsplit(absolute)
+            except ValueError:
+                continue  # a malformed link, such as "http://[oops"
             if parts.scheme in DEFAULT_PORTS and parts.netloc:
                 return absolute
     return None

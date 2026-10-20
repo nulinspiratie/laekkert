@@ -76,6 +76,15 @@ def test_page_image_falls_back_to_twitter_and_link():
     )
 
 
+def test_page_image_skips_a_malformed_link():
+    bad = '<meta property="og:image" content="http://[oops">'
+    twitter = '<meta name="twitter:image" content="https://example.com/t.jpg">'
+    assert page_image(bad + twitter, "https://example.com/r") == (
+        "https://example.com/t.jpg"
+    )
+    assert page_image(bad, "https://example.com/r") is None
+
+
 def test_page_image_resolves_relative():
     protocol_relative = '<meta property="og:image" content="//cdn.example.com/a.jpg">'
     assert (
