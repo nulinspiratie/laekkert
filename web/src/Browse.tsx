@@ -3,7 +3,7 @@
 // only the list from the API, the search box text and the view are state.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { listRecipes } from './api'
 import {
   MARK_LABELS,
@@ -19,7 +19,7 @@ import {
 } from './browse'
 import { FilterPanel, FilterSheet, SearchField } from './FilterPanel'
 import { capitalise } from './format'
-import { Close, Filters, Grid, List, Search } from './icons'
+import { Close, Filters, Grid, List, Plus, Search } from './icons'
 import { getView, setLastSide, setView, type View } from './prefs'
 import { RecipeCard, RecipeRow, RecipeTableRow } from './RecipeCard'
 import { PageHeading, Shell } from './Shell'
@@ -136,16 +136,22 @@ export default function Browse({ side }: { side: Side }) {
           </aside>
           <div className="browse-main">
             <PageHeading side={side} title={title} subtitle={subtitle}>
-              <label className="browse-sort">
-                Sort
-                <select value={state.sort} onChange={(event) => onChange({ sort: event.target.value as SortKey })}>
-                  {SORT_OPTIONS.map(({ key, label }) => (
-                    <option key={key} value={key}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="browse-tools">
+                <label className="browse-sort">
+                  Sort
+                  <select value={state.sort} onChange={(event) => onChange({ sort: event.target.value as SortKey })}>
+                    {SORT_OPTIONS.map(({ key, label }) => (
+                      <option key={key} value={key}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <Link to={`/${side}/new`} className="browse-new">
+                  <Plus />
+                  New recipe
+                </Link>
+              </div>
             </PageHeading>
             <Chips state={state} onChange={onChange} />
             {results}
@@ -180,6 +186,9 @@ export default function Browse({ side }: { side: Side }) {
       >
         {view === 'grid' ? <List size={22} /> : <Grid size={22} />}
       </button>
+      <Link to={`/${side}/new`} className="round-btn round-btn--accent" aria-label="New recipe">
+        <Plus size={24} />
+      </Link>
     </>
   )
   const toggleSearch = () => {

@@ -47,9 +47,13 @@ Everything else in V1 comes after the PoC.
 
 ```
 recipes/<side>/<slug>/recipe.json        # format_version, current state
-recipes/<side>/<slug>/timeline.jsonl     # notes, ratings, edit events (date, via)
+recipes/<side>/<slug>/timeline.jsonl     # one entry per line: created, baseline, edit, note,
+                                         # rating, made, marks (each with id, at, via)
 recipes/<side>/<slug>/versions/0003.json # snapshot per edit → diffs + rollback
 recipes/<side>/<slug>/<image>            # optional photo / source photo
+uploads/                                 # photos parked on pick; Save moves them into the
+                                         # recipe folder; files over a day old are removed
+trash/<side>/<slug>-<UTC stamp>/         # deleted recipes; getting one back is a file move
 catalog/ingredients.json                 # canonical names, aliases, g_per_tsp, fresh flag
 inventory.json                           # (after the PoC)
 ```
@@ -104,6 +108,17 @@ components, see [docs/design/README.md](design/README.md).
 Form editor (all fields of requirement 5, image upload); tags and marks with their rules
 (favourite implies tried, try next clears on the first tasting); timeline with notes,
 ratings and edits; snapshot per edit with a readable diff; rollback.
+
+**Done** (2026-10-20): the recipe editor (new and edit, one form for both sides, photo and
+source photo upload, delete to `trash/`), the timeline on the recipe page (notes, half-star
+ratings, a "Made it" entry, mark changes, edits with a readable diff) and "Restore this
+version", which writes the old content as a new version. Versions start at `0001` on create;
+recipes that predate M2 get a `baseline` entry on their first edit. Recipe format 2 drops
+the Kid approved and Kids rejected marks (their data becomes the tags `kid approved` and
+`kids rejected`); the marks are now Favourite, Try next and Tried, with the tasting rules.
+The API computes `rating` and `last_made` from the timeline, and the browse page gains the
+"Rating" and "Recently made" sorts. The default food view is all food, quickest first.
+Drag handles and avatars are not built. Screenshots are in `docs/design/screenshots/m2/`.
 
 ### M3: Claude integration
 

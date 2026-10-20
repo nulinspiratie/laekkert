@@ -1,8 +1,8 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, type To } from 'react-router'
 import { describe, expect, test, vi } from 'vitest'
 import App from './App'
-import type { Recipe, RecipeSummary } from './types'
+import type { Recipe, RecipeSummary, TimelineEntry } from './types'
 
 const traybake: Recipe = {
   format_version: 1,
@@ -21,9 +21,11 @@ const traybake: Recipe = {
   ],
   steps: ['Heat the oven.', 'Roast everything.'],
   source: null,
-  tags: ['batch cook'],
-  marks: ['tried', 'kid_approved'],
+  tags: ['batch cook', 'kid approved'],
+  marks: ['tried'],
   image: null,
+  rating: null,
+  last_made: null,
 }
 
 const daiquiri: Recipe = {
@@ -42,12 +44,27 @@ function summary(recipe: Recipe): RecipeSummary {
   return rest
 }
 
-/** Answers the listing and recipe routes; any other recipe is a 404. */
-function stubApi(...recipes: Recipe[]) {
-  const fetch = vi.fn(async (url: string) => {
+interface Timeline {
+  entries: TimelineEntry[]
+  current_version: number | null
+}
+
+type Post = (url: string, body: unknown) => Response | Promise<Response>
+
+/**
+ * Answers the listing, recipe and timeline routes; any other recipe is a 404. Writes go to
+ * `post`, which answers 500 unless a test gives one.
+ */
+function stubApiWith(options: { recipes: Recipe[]; timeline?: Timeline; post?: Post }) {
+  const { recipes, timeline = { entries: [], current_version: null }, post } = options
+  const fetch = vi.fn(async (url: string, init?: RequestInit) => {
+    if (init?.method === 'POST') {
+      return post ? post(url, JSON.parse(String(init.body))) : new Response('{}', { status: 500 })
+    }
     if (url.startsWith('/api/recipes?')) {
       return new Response(JSON.stringify({ recipes: recipes.map(summary) }), { status: 200 })
     }
+    if (url.endsWith('/timeline')) return new Response(JSON.stringify(timeline), { status: 200 })
     const slug = decodeURIComponent(url.split('/').pop()!)
     const found = recipes.find((r) => r.slug === slug && url.includes(`/${r.side}/`))
     if (!found) return new Response(JSON.stringify({ error: 'not found' }), { status: 404 })
@@ -56,6 +73,19 @@ function stubApi(...recipes: Recipe[]) {
   vi.stubGlobal('fetch', fetch)
   return fetch
 }
+
+function stubApi(...recipes: Recipe[]) {
+  return stubApiWith({ recipes })
+}
+
+/** The bodies of the POSTs a stubbed fetch received, with their URLs. */
+function posts(fetch: ReturnType<typeof stubApiWith>) {
+  return fetch.mock.calls
+    .filter(([, init]) => init?.method === 'POST')
+    .map(([url, init]) => ({ url, body: JSON.parse(String(init!.body)) as unknown }))
+}
+
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status })
 
 function stubViewport(desktop: boolean) {
   vi.stubGlobal(
@@ -122,26 +152,26 @@ test('tags link to the browse page filtered by that tag', async () => {
   expect(screen.getByRole('link', { name: 'batch cook' })).toHaveAttribute('href', '/food?tag=batch+cook')
 })
 
-test('marks show as read-only pills in a fixed order', async () => {
-  stubApi({ ...traybake, marks: ['kid_rejected', 'tried', 'try_next', 'kid_approved', 'favourite'] })
+test('Favourite and Try next are toggles; Tried is status text', async () => {
+  stubApi({ ...traybake, marks: ['tried', 'favourite'] })
   renderAt(TRAYBAKE_PATH)
   await loaded()
-  const marks = screen.getByRole('list', { name: 'Marks' })
-  expect(within(marks).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-    'Favourite',
-    'Kid approved',
-    'Try next',
-    'Tried',
-    'Kids rejected',
+  const marks = screen.getByRole('group', { name: 'Marks' })
+  expect(within(marks).getAllByRole('button').map((b) => [b.textContent, b.getAttribute('aria-pressed')])).toEqual([
+    ['Favourite', 'true'],
+    ['Try next', 'false'],
   ])
-  expect(within(marks).queryByRole('button')).not.toBeInTheDocument()
+  expect(within(marks).queryByRole('button', { name: 'Tried' })).not.toBeInTheDocument()
+  expect(screen.getByText('Tried')).toBeInTheDocument()
 })
 
-test('a recipe without marks has no marks list', async () => {
+test('a kid approved tag is a plain tag link, not a mark', async () => {
   stubApi({ ...traybake, marks: [] })
   renderAt(TRAYBAKE_PATH)
   await loaded()
-  expect(screen.queryByRole('list', { name: 'Marks' })).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'kid approved' })).toHaveAttribute('href', '/food?tag=kid+approved')
+  expect(screen.queryByText('Tried')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /kid/i })).not.toBeInTheDocument()
 })
 
 test('the hero is the recipe photo when it has one', async () => {
@@ -160,14 +190,6 @@ test('the hero is the category tile without a photo', async () => {
   await loaded()
   expect(container.querySelector('img')).toBeNull()
   expect(container.querySelector('.photo-tile--hero.photo-tile--plain')).not.toBeNull()
-})
-
-test('M1 leaves out ratings, history, notes and editing', async () => {
-  stubApi(traybake)
-  renderAt(TRAYBAKE_PATH)
-  await loaded()
-  expect(screen.queryByText(/rating|history|note|edit|restore/i)).not.toBeInTheDocument()
-  expect(screen.queryByRole('link', { name: /edit/i })).not.toBeInTheDocument()
 })
 
 describe('back link', () => {
@@ -285,4 +307,348 @@ test('an API error shows an alert inside the shell', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('loading food/chicken-leek-traybake failed: 500')
   expect(screen.getByRole('navigation', { name: 'Food or drinks' })).toBeInTheDocument()
   expect(screen.queryByText('Not found')).not.toBeInTheDocument()
+})
+
+describe('marks, rating and Made it', () => {
+  test('toggling Favourite posts marks and shows Tried', async () => {
+    const fetch = stubApiWith({
+      recipes: [{ ...traybake, marks: [] }],
+      post: () => json({ ...traybake, marks: ['favourite', 'tried'] }),
+    })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    expect(screen.queryByText('Tried')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Favourite' }))
+    expect(await screen.findByText('Tried')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Favourite' })).toHaveAttribute('aria-pressed', 'true')
+    expect(posts(fetch)).toEqual([
+      { url: '/api/recipes/food/chicken-leek-traybake/marks', body: { add: ['favourite'], remove: [] } },
+    ])
+  })
+
+  test('switching a mark off removes it', async () => {
+    const fetch = stubApiWith({
+      recipes: [{ ...traybake, marks: ['try_next'] }],
+      post: () => json({ ...traybake, marks: [] }),
+    })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Try next' }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Try next' })).toHaveAttribute('aria-pressed', 'false'),
+    )
+    expect(posts(fetch)[0].body).toEqual({ add: [], remove: ['try_next'] })
+  })
+
+  test('failed mark toggle shows the error and keeps the old state', async () => {
+    stubApiWith({
+      recipes: [{ ...traybake, marks: [] }],
+      post: () => json({ error: 'could not save; nothing was changed' }, 503),
+    })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Favourite' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not save; nothing was changed')
+    expect(screen.getByRole('button', { name: 'Favourite' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  test('the rating shows as stars with its text', async () => {
+    stubApi({ ...traybake, rating: 4.5 })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    expect(screen.getByText('4.5')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /^Rate \d stars?$/ })).toHaveLength(5)
+  })
+
+  test('tapping the current star gives a half star', async () => {
+    const fetch = stubApiWith({
+      recipes: [{ ...traybake, rating: null }],
+      post: (_url, body) => json({ entry: {}, recipe: { ...traybake, rating: (body as { rating: number }).rating } }),
+    })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    const group = screen.getByRole('group', { name: 'Rating' })
+    fireEvent.click(within(group).getByRole('button', { name: 'Rate 4 stars' }))
+    expect(await screen.findByText('4.0')).toBeInTheDocument()
+    fireEvent.click(within(group).getByRole('button', { name: 'Rate 4 stars' }))
+    expect(await screen.findByText('3.5')).toBeInTheDocument()
+    expect(posts(fetch).map((p) => p.body)).toEqual([
+      { kind: 'rating', rating: 4 },
+      { kind: 'rating', rating: 3.5 },
+    ])
+  })
+
+  test('tapping star 1 when the rating is 1 posts a half star', async () => {
+    const fetch = stubApiWith({
+      recipes: [{ ...traybake, rating: 1 }],
+      post: () => json({ entry: {}, recipe: { ...traybake, rating: 0.5 } }),
+    })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Rate 1 star' }))
+    expect(await screen.findByText('0.5')).toBeInTheDocument()
+    expect(posts(fetch).map((p) => p.body)).toEqual([{ kind: 'rating', rating: 0.5 }])
+  })
+
+  test('a failed rating keeps the old rating and shows the error', async () => {
+    stubApiWith({
+      recipes: [{ ...traybake, rating: 4 }],
+      post: () => json({ error: 'rating must be between 0.5 and 5' }, 400),
+    })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Rate 2 stars' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('rating must be between 0.5 and 5')
+    expect(screen.getByText('4.0')).toBeInTheDocument()
+  })
+
+  test('made it posts rating and note', async () => {
+    const fetch = stubApiWith({
+      recipes: [traybake],
+      post: () => json({ entry: {}, recipe: { ...traybake, rating: 3, last_made: '2026-10-20T18:00:00Z' } }),
+    })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    expect(screen.queryByRole('form', { name: 'Made it' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Made it' }))
+    const form = screen.getByRole('form', { name: 'Made it' })
+    fireEvent.click(within(form).getByRole('button', { name: 'Rate 3 stars' }))
+    fireEvent.change(within(form).getByRole('textbox', { name: 'Note' }), { target: { value: 'Less salt next time' } })
+    fireEvent.click(within(form).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(screen.queryByRole('form', { name: 'Made it' })).not.toBeInTheDocument())
+    expect(posts(fetch)).toEqual([
+      {
+        url: '/api/recipes/food/chicken-leek-traybake/timeline',
+        body: { kind: 'made', rating: 3, note: 'Less salt next time' },
+      },
+    ])
+    expect(screen.getByText('3.0')).toBeInTheDocument()
+  })
+
+  test('made it with nothing filled in posts a bare entry', async () => {
+    const fetch = stubApiWith({ recipes: [traybake], post: () => json({ entry: {}, recipe: traybake }) })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Made it' }))
+    fireEvent.click(within(screen.getByRole('form', { name: 'Made it' })).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(posts(fetch)).toHaveLength(1))
+    expect(posts(fetch)[0].body).toEqual({ kind: 'made' })
+  })
+
+  test('a failed made it keeps the form filled in and shows the error', async () => {
+    stubApiWith({ recipes: [traybake], post: () => json({ error: 'could not save; nothing was changed' }, 503) })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Made it' }))
+    const form = screen.getByRole('form', { name: 'Made it' })
+    fireEvent.change(within(form).getByRole('textbox', { name: 'Note' }), { target: { value: 'Good' } })
+    fireEvent.click(within(form).getByRole('button', { name: 'Save' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not save')
+    expect(within(screen.getByRole('form', { name: 'Made it' })).getByRole('textbox', { name: 'Note' })).toHaveValue('Good')
+  })
+})
+
+describe('edit link', () => {
+  test('Edit link goes to the editor', async () => {
+    stubApi(traybake)
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    expect(screen.getByRole('link', { name: 'Edit' })).toHaveAttribute('href', '/food/chicken-leek-traybake/edit')
+  })
+
+  test('on a phone the edit button is round and labelled', async () => {
+    stubViewport(false)
+    stubApi(daiquiri)
+    renderAt('/drinks/daiquiri')
+    await screen.findByRole('heading', { level: 1, name: 'Daiquiri' })
+    const edit = screen.getByRole('link', { name: 'Edit recipe' })
+    expect(edit).toHaveAttribute('href', '/drinks/daiquiri/edit')
+    expect(edit).toHaveClass('round-btn')
+  })
+})
+
+describe('history', () => {
+  const at = (day: number) => `2026-09-${String(day).padStart(2, '0')}T12:00:00Z`
+  const base = { id: 'a1b2c3d4e5f6', via: 'app' as const }
+  const created: TimelineEntry = { ...base, id: 'c00000000001', kind: 'created', version: 1, at: at(3) }
+  const edit: TimelineEntry = {
+    ...base,
+    id: 'e00000000002',
+    kind: 'edit',
+    version: 2,
+    at: at(28),
+    restored_from: null,
+    changes: [
+      { section: 'ingredients', kind: 'removed', text: '1 tsp chili flakes' },
+      { section: 'ingredients', kind: 'added', text: '½ tsp chili flakes' },
+      { section: 'method', kind: 'changed', text: 'step 2' },
+    ],
+  }
+  const note = (n: number): TimelineEntry => ({
+    ...base,
+    id: `n${String(n).padStart(11, '0')}`,
+    kind: 'note',
+    text: `Note number ${n}`,
+    at: at(10 + n),
+  })
+
+  const entriesList = () => within(screen.getByRole('region', { name: 'History' })).getByRole('list', { name: 'Timeline' })
+
+  test('history shows an edit with its diff lines', async () => {
+    stubApiWith({ recipes: [traybake], timeline: { entries: [edit, created], current_version: 2 } })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    const list = await screen.findByRole('list', { name: 'Timeline' })
+    // The diff is a list inside the entry; only the timeline's own items count.
+    const items = (await within(list).findAllByRole('listitem')).filter((li) => li.parentElement === list)
+    expect(items).toHaveLength(2)
+    expect(items[0]).toHaveTextContent('Edited ingredients and method')
+    expect(items[0]).toHaveTextContent('28 Sep')
+    const diff = within(items[0]).getByRole('list', { name: 'Changes' })
+    expect(within(diff).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      '−1 tsp chili flakes',
+      '+½ tsp chili flakes',
+      '•step 2',
+    ])
+    expect(items[1]).toHaveTextContent('Created this recipe')
+    expect(items[1]).toHaveTextContent('3 Sep')
+  })
+
+  test('notes, ratings and made it entries show their content', async () => {
+    const entries: TimelineEntry[] = [
+      { ...base, id: 'm00000000001', kind: 'made', rating: 4, note: 'With rice', at: at(20) },
+      { ...base, id: 'r00000000001', kind: 'rating', rating: 4.5, previous: 4, at: at(19) },
+      { ...base, id: 'k00000000001', kind: 'marks', added: ['favourite'], removed: [], at: at(18) },
+      { ...note(1), via: 'claude' },
+    ]
+    stubApiWith({ recipes: [traybake], timeline: { entries, current_version: null } })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    const items = within(await screen.findByRole('list', { name: 'Timeline' })).getAllByRole('listitem')
+    expect(items[0]).toHaveTextContent('Made it')
+    expect(items[0]).toHaveTextContent('With rice')
+    expect(items[0].querySelector('[role="img"][aria-label="Rated 4.0 out of 5"]')).not.toBeNull()
+    expect(items[1]).toHaveTextContent('Changed the rating 4.0 → 4.5')
+    expect(items[2]).toHaveTextContent('Marked it Favourite')
+    expect(items[3]).toHaveTextContent('Added a note · via Claude')
+    expect(items[3]).toHaveTextContent('Note number 1')
+  })
+
+  test('restore asks first and posts the version', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const fetch = stubApiWith({
+      recipes: [traybake],
+      timeline: { entries: [edit, created], current_version: 2 },
+      post: () => json({ ...traybake, name: 'Chicken and leek traybake' }),
+    })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    // Only the older version can be restored; the newest one is the recipe as it is.
+    const buttons = await screen.findAllByRole('button', { name: 'Restore this version' })
+    expect(buttons).toHaveLength(1)
+    fireEvent.click(buttons[0])
+    expect(confirm).toHaveBeenCalledWith(
+      'Restore the recipe as it was after this change? Later changes stay in the history.',
+    )
+    await waitFor(() => expect(posts(fetch)).toHaveLength(1))
+    expect(posts(fetch)[0]).toEqual({ url: '/api/recipes/food/chicken-leek-traybake/restore', body: { version: 1 } })
+  })
+
+  test('a cancelled restore posts nothing', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const fetch = stubApiWith({ recipes: [traybake], timeline: { entries: [edit, created], current_version: 2 } })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    fireEvent.click(await screen.findByRole('button', { name: 'Restore this version' }))
+    expect(posts(fetch)).toEqual([])
+  })
+
+  test('adding a note posts it, clears the box and reloads the history', async () => {
+    const fetch = stubApiWith({
+      recipes: [traybake],
+      timeline: { entries: [created], current_version: 1 },
+      post: () => json({ entry: note(1), recipe: traybake }),
+    })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    const box = screen.getByRole('textbox', { name: 'Add a note' })
+    expect(box).toHaveAttribute('placeholder', 'Add a note: what worked, what you changed')
+    expect(screen.getByRole('button', { name: 'Add note' })).toBeDisabled()
+    fireEvent.change(box, { target: { value: '  More lemon  ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add note' }))
+    await waitFor(() => expect(box).toHaveValue(''))
+    expect(posts(fetch)[0].body).toEqual({ kind: 'note', text: 'More lemon' })
+    const timelineGets = () =>
+      fetch.mock.calls.filter(([url, init]) => String(url).endsWith('/timeline') && init?.method !== 'POST')
+    await waitFor(() => expect(timelineGets()).toHaveLength(2))
+  })
+
+  test('restore and add note wait while another write is in flight', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    let finish: (response: Response) => void = () => {}
+    const fetch = stubApiWith({
+      recipes: [{ ...traybake, marks: [] }],
+      timeline: { entries: [edit, created], current_version: 2 },
+      post: () => new Promise<Response>((resolve) => (finish = resolve)),
+    })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    const restore = await screen.findByRole('button', { name: 'Restore this version' })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Add a note' }), { target: { value: 'Waiting' } })
+    expect(restore).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Favourite' }))
+    await waitFor(() => expect(restore).toBeDisabled())
+    expect(screen.getByRole('button', { name: 'Add note' })).toBeDisabled()
+    fireEvent.click(restore)
+    expect(posts(fetch)).toHaveLength(1)
+    finish(json({ ...traybake, marks: ['favourite', 'tried'] }))
+    await waitFor(() => expect(restore).toBeEnabled())
+    expect(screen.getByRole('button', { name: 'Add note' })).toBeEnabled()
+  })
+
+  test('a failed note keeps the text and shows the error', async () => {
+    stubApiWith({
+      recipes: [traybake],
+      timeline: { entries: [created], current_version: 1 },
+      post: () => json({ error: 'could not save; nothing was changed' }, 503),
+    })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    const box = screen.getByRole('textbox', { name: 'Add a note' })
+    fireEvent.change(box, { target: { value: 'Keep me' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add note' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not save; nothing was changed')
+    expect(box).toHaveValue('Keep me')
+  })
+
+  test('desktop history shows every entry and no full-history button', async () => {
+    const entries = [1, 2, 3, 4, 5].map(note)
+    stubApiWith({ recipes: [traybake], timeline: { entries, current_version: null } })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    await waitFor(() => expect(within(entriesList()).getAllByRole('listitem')).toHaveLength(5))
+    expect(screen.queryByRole('button', { name: 'Show full history' })).not.toBeInTheDocument()
+  })
+
+  test('phone history shows three and a full-history button', async () => {
+    stubViewport(false)
+    const entries = [1, 2, 3, 4, 5].map(note)
+    stubApiWith({ recipes: [traybake], timeline: { entries, current_version: null } })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    await waitFor(() => expect(within(entriesList()).getAllByRole('listitem')).toHaveLength(3))
+    expect(within(entriesList()).getAllByRole('listitem')[0]).toHaveTextContent('Note number 1')
+    fireEvent.click(screen.getByRole('button', { name: 'Show full history' }))
+    expect(within(entriesList()).getAllByRole('listitem')).toHaveLength(5)
+    expect(screen.queryByRole('button', { name: 'Show full history' })).not.toBeInTheDocument()
+  })
+
+  test('phone history with three entries or fewer has no full-history button', async () => {
+    stubViewport(false)
+    stubApiWith({ recipes: [traybake], timeline: { entries: [note(1), note(2), note(3)], current_version: null } })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    await waitFor(() => expect(within(entriesList()).getAllByRole('listitem')).toHaveLength(3))
+    expect(screen.queryByRole('button', { name: 'Show full history' })).not.toBeInTheDocument()
+  })
 })

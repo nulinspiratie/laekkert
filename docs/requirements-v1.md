@@ -26,7 +26,7 @@ A personal food and drinks recipe app for Serwan and his partner, self-hosted, w
 ## Tags and marks
 
 14. Simple free-form tags, added by the user (e.g. vegetarian, mocktail, date night, batch cook). Tags work as filters.
-15. Marks: tried, favourite, try next, kid approved, kids rejected. Favourite implies tried. Try next clears on the first logged tasting.
+15. Marks: tried, favourite, try next. Favourite implies tried. Try next clears on the first logged tasting. Anything else, such as kid approved, is a regular tag.
 
 ## Timeline and history
 
@@ -40,7 +40,7 @@ A personal food and drinks recipe app for Serwan and his partner, self-hosted, w
 20. Drinks inventory: track shelf-stable items (bottles, bitters, syrups) as have / don't have. Fresh items (limes, mint, soda) are marked as fresh and not tracked. Suggestions: "can make now" and "just buy fresh items".
 21. Food: throwaway ingredient filter ("I have chicken and leeks") that is never saved, ranking recipes by fewest missing ingredients.
 22. Fuzzy search across names and ingredients, tolerant of typos and word order ("chicken curry" finds "curry with chicken").
-23. Default food view: kid-approved meals, sorted by cooking time.
+23. Default food view: all meals, sorted by cooking time.
 
 ## Claude integration
 

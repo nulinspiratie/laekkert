@@ -36,7 +36,7 @@ test('nav links go to each side with its default query', () => {
   expect(nav).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Food' })).toHaveAttribute(
     'href',
-    '/food?mark=kid_approved&sort=time',
+    '/food?sort=time',
   )
   expect(screen.getByRole('link', { name: 'Drinks' })).toHaveAttribute('href', '/drinks')
 })
@@ -116,12 +116,12 @@ test('the Drinks heading carries the bar eyebrow, Food does not', () => {
   expect(screen.getByText('The bar')).toBeInTheDocument()
   rerender(
     <MemoryRouter>
-      <PageHeading side="food" title="Food" subtitle="Kid approved, quickest first">
+      <PageHeading side="food" title="Food" subtitle="Favourite, quickest first">
         <button>Sort</button>
       </PageHeading>
     </MemoryRouter>,
   )
   expect(screen.queryByText('The bar')).not.toBeInTheDocument()
-  expect(screen.getByText('Kid approved, quickest first')).toBeInTheDocument()
+  expect(screen.getByText('Favourite, quickest first')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Sort' })).toBeInTheDocument()
 })

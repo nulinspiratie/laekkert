@@ -111,21 +111,58 @@ export function Heart({ filled, ...props }: IconProps & { filled?: boolean }) {
   )
 }
 
-export function Kid(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <circle cx="12" cy="12" r="8" />
-      <path d="M9 14.5c.8.9 1.8 1.4 3 1.4s2.2-.5 3-1.4" />
-      <circle cx="9.5" cy="10" r="1" fill="currentColor" stroke="none" />
-      <circle cx="14.5" cy="10" r="1" fill="currentColor" stroke="none" />
-    </Svg>
-  )
-}
-
 export function Bookmark({ filled, ...props }: IconProps & { filled?: boolean }) {
   return (
     <Svg {...(filled ? { fill: 'currentColor', strokeWidth: 1.5 } : {})} {...props}>
       <path d="M7 4h10v16l-5-3.5L7 20z" />
+    </Svg>
+  )
+}
+
+/** The rating star; solid when `filled` (a rating shown on a card). */
+export function Star({ filled, ...props }: IconProps & { filled?: boolean }) {
+  return (
+    <Svg {...(filled ? { fill: 'currentColor', strokeWidth: 1.5 } : {})} {...props}>
+      <path d="m12 4 2.4 5 5.4.6-4 3.7 1.1 5.3L12 16l-4.9 2.6 1.1-5.3-4-3.7 5.4-.6z" />
+    </Svg>
+  )
+}
+
+/** A star drawn empty, half or full: `fraction` is 0, 0.5 or 1 of its width in the star colour. */
+export function StarFraction({ fraction, size = 24 }: { fraction: number; size?: number }) {
+  return (
+    <span className="star-fraction" style={{ width: size, height: size }} aria-hidden="true">
+      <Star size={size} />
+      <span className="star-fraction-fill" style={{ width: `${fraction * 100}%` }}>
+        <Star filled size={size} />
+      </span>
+    </span>
+  )
+}
+
+export function Edit(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 20h4L19 9l-4-4L4 16z" />
+      <path d="m13.5 6.5 4 4" />
+    </Svg>
+  )
+}
+
+export function Restore(props: IconProps) {
+  return (
+    <Svg size={18} {...props}>
+      <path d="M4 12a8 8 0 1 0 2.5-5.8" />
+      <path d="M4 4v4h4" />
+    </Svg>
+  )
+}
+
+export function Note(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M6 4h12v16H6z" />
+      <path d="M9 9h6M9 13h6M9 17h3" />
     </Svg>
   )
 }

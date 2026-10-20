@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 
 Side = Literal["food", "drinks"]
 SIDES: tuple[Side, ...] = ("food", "drinks")
@@ -25,7 +25,7 @@ CATEGORIES: dict[Side, tuple[str, ...]] = {
 Unit = Literal["g", "ml", "piece", "dash", "pinch", "to taste"]
 MEASURED_UNITS = ("g", "ml", "piece", "dash")
 
-Mark = Literal["tried", "favourite", "try_next", "kid_approved", "kid_rejected"]
+Mark = Literal["tried", "favourite", "try_next"]
 
 SLUG_PATTERN = r"^[a-z0-9]+(-[a-z0-9]+)*$"
 
@@ -105,7 +105,29 @@ class NewerFormatError(ValueError):
     """The file was written by a newer version of the app."""
 
 
-MIGRATIONS: dict[int, Callable[[dict], dict]] = {}
+# Format 1 had two kid marks. Format 2 keeps them as regular tags.
+_V1_KID_MARK_TAGS = {"kid_approved": "kid approved", "kid_rejected": "kids rejected"}
+
+
+def _migrate_1_to_2(data: dict) -> dict:
+    marks = data.get("marks", [])
+    tags = data.get("tags", [])
+    if not isinstance(marks, list) or not isinstance(tags, list):
+        # Let validation report the bad shape.
+        return {**data, "format_version": 2}
+    new_tags = list(tags)
+    for mark, tag in _V1_KID_MARK_TAGS.items():
+        if mark in marks and tag not in new_tags:
+            new_tags.append(tag)
+    return {
+        **data,
+        "marks": [m for m in marks if m not in _V1_KID_MARK_TAGS],
+        "tags": new_tags,
+        "format_version": 2,
+    }
+
+
+MIGRATIONS: dict[int, Callable[[dict], dict]] = {1: _migrate_1_to_2}
 
 
 def parse_recipe(data: object) -> Recipe:

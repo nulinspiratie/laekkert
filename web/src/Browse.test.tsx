@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
-import { MemoryRouter, useLocation } from 'react-router'
+import { createMemoryRouter, RouterProvider, useLocation } from 'react-router'
 import { afterEach, expect, test, vi } from 'vitest'
 import App from './App'
 import type { RecipeSummary } from './types'
@@ -12,6 +12,8 @@ function recipe(over: Partial<RecipeSummary> & Pick<RecipeSummary, 'slug' | 'nam
     tags: [],
     marks: [],
     image: null,
+    rating: null,
+    last_made: null,
     ...over,
   }
 }
@@ -20,16 +22,16 @@ const traybake = recipe({
   slug: 'chicken-leek-traybake',
   name: 'Chicken and leek traybake',
   time_minutes: 45,
-  tags: ['weeknight'],
-  marks: ['kid_approved', 'favourite'],
+  tags: ['weeknight', 'kid approved'],
+  marks: ['favourite'],
   image: 'photo.jpg',
 })
 const quesadillas = recipe({
   slug: 'veggie-quesadillas',
   name: 'Veggie quesadillas',
   time_minutes: 20,
-  tags: ['weeknight', 'vegetarian'],
-  marks: ['kid_approved', 'tried'],
+  tags: ['weeknight', 'vegetarian', 'kid approved'],
+  marks: ['tried'],
 })
 const dal = recipe({
   slug: 'red-lentil-dal',
@@ -53,10 +55,10 @@ const daiquiri = recipe({
   side: 'drinks',
   category: 'cocktails',
   time_minutes: 5,
-  marks: ['favourite', 'kid_rejected'],
+  marks: ['favourite'],
 })
 
-const DEFAULT_FOOD = '/food?mark=kid_approved&sort=time'
+const DEFAULT_FOOD = '/food?sort=time'
 
 function listing(recipes: RecipeSummary[]) {
   return new Response(JSON.stringify({ recipes }), { status: 200 })
@@ -85,13 +87,23 @@ function Location() {
   return <output aria-label="location">{pathname + search}</output>
 }
 
+// A data router, because the editor (one test navigates to it) needs one.
 function renderAt(path: string) {
-  return render(
-    <MemoryRouter initialEntries={[path]}>
-      <App />
-      <Location />
-    </MemoryRouter>,
+  const router = createMemoryRouter(
+    [
+      {
+        path: '*',
+        element: (
+          <>
+            <App />
+            <Location />
+          </>
+        ),
+      },
+    ],
+    { initialEntries: [path] },
   )
+  return render(<RouterProvider router={router} />)
 }
 
 const location = () => screen.getByLabelText('location').textContent
@@ -99,18 +111,23 @@ const recipeNames = () =>
   screen
     .getAllByRole('link')
     .map((link) => link.getAttribute('href') ?? '')
-    .filter((href) => /^\/(food|drinks)\/[^?]+$/.test(href))
+    .filter((href) => /^\/(food|drinks)\/(?!new$)[^?]+$/.test(href))
 
 afterEach(() => {
   vi.useRealTimers()
 })
 
-test('the default food view lists only kid-approved recipes, quickest first', async () => {
+test('the default food view lists all food, quickest first', async () => {
   const fetch = stubFetch()
   renderAt(DEFAULT_FOOD)
-  expect(await screen.findByText('Kid approved, quickest first · 2 recipes')).toBeInTheDocument()
+  expect(await screen.findByText('quickest first · 4 recipes')).toBeInTheDocument()
   expect(fetch).toHaveBeenCalledWith('/api/recipes?side=food')
-  expect(recipeNames()).toEqual(['/food/veggie-quesadillas', '/food/chicken-leek-traybake'])
+  expect(recipeNames()).toEqual([
+    '/food/veggie-quesadillas',
+    '/food/red-lentil-dal',
+    '/food/brownies',
+    '/food/chicken-leek-traybake',
+  ])
   expect(screen.getByRole('heading', { level: 1, name: 'Food' })).toBeInTheDocument()
 })
 
@@ -122,9 +139,9 @@ test('the subtitle says "1 recipe" in the singular', async () => {
 
 test('removing the chip shows all recipes', async () => {
   stubFetch()
-  renderAt(DEFAULT_FOOD)
-  await screen.findByText('Kid approved, quickest first · 2 recipes')
-  fireEvent.click(screen.getByRole('button', { name: 'Remove Kid approved filter' }))
+  renderAt('/food?mark=favourite&sort=time')
+  await screen.findByText('Favourite, quickest first · 2 recipes')
+  fireEvent.click(screen.getByRole('button', { name: 'Remove Favourite filter' }))
   expect(await screen.findByText('quickest first · 4 recipes')).toBeInTheDocument()
   expect(location()).toBe('/food?sort=time')
   expect(recipeNames()).toHaveLength(4)
@@ -299,7 +316,7 @@ test('a recipe card has category, name, time and the marks that matter', async (
   expect(within(card).getByText('Mains')).toBeInTheDocument()
   expect(within(card).getByText('45 min')).toBeInTheDocument()
   expect(within(card).getByRole('img', { name: 'Favourite' })).toBeInTheDocument()
-  expect(within(card).getByRole('img', { name: 'Kid approved' })).toBeInTheDocument()
+  expect(within(card).queryByRole('img', { name: /kid/i })).not.toBeInTheDocument()
   expect(within(card).queryByRole('img', { name: 'Try next' })).not.toBeInTheDocument()
   const tried = screen.getByRole('link', { name: /Veggie quesadillas/ })
   expect(within(tried).queryByRole('img', { name: /tried/i })).not.toBeInTheDocument()
@@ -336,7 +353,7 @@ test('the list view shows a table-like row per recipe', async () => {
 
 test('an empty result offers Clear filters, which goes to the bare side', async () => {
   stubFetch()
-  renderAt('/food?tag=nope&mark=kid_approved')
+  renderAt('/food?tag=nope&mark=favourite')
   expect(await screen.findByText('Nothing matches these filters.')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
   expect(location()).toBe('/food')
@@ -364,7 +381,7 @@ test('visiting a side remembers it', async () => {
   expect(localStorage.getItem('laekkert.side')).toBe('drinks')
 })
 
-test('drinks has the bar heading, its own categories and no kid approved mark', async () => {
+test('drinks has the bar heading, its own categories and the same two marks', async () => {
   const fetch = stubFetch([daiquiri])
   renderAt('/drinks')
   expect(await screen.findByText('A to Z · 1 recipe')).toBeInTheDocument()
@@ -374,17 +391,70 @@ test('drinks has the bar heading, its own categories and no kid approved mark', 
   expect(screen.getByRole('button', { name: 'Cocktails 1' })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Kid approved' })).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Favourite' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Try next' })).toBeInTheDocument()
   const card = screen.getByRole('link', { name: /Daiquiri/ })
   expect(within(card).getByRole('img', { name: 'Favourite' })).toBeInTheDocument()
-  expect(within(card).queryByRole('img', { name: /reject/i })).not.toBeInTheDocument()
 })
 
-test('M1 leaves out ratings, avatar and recipe creation', async () => {
+test('the sort select offers cooking time, rating, recently made and A to Z', async () => {
   stubFetch()
   renderAt('/food')
   await screen.findByText('A to Z · 4 recipes')
-  expect(screen.queryByText(/rating|recently made|new recipe|cook with what you have/i)).toBeNull()
-  expect(screen.queryByRole('option', { name: /rating/i })).toBeNull()
+  const options = within(screen.getByRole('combobox', { name: 'Sort' })).getAllByRole('option')
+  expect(options.map((option) => option.textContent)).toEqual(['Cooking time', 'Rating', 'Recently made', 'A–Z'])
+  expect(screen.queryByText(/cook with what you have/i)).toBeNull()
+})
+
+test('sorting by rating and recently made reorders the list and the subtitle', async () => {
+  stubFetch([
+    { ...traybake, rating: 4, last_made: '2026-10-01T18:00:00Z' },
+    { ...dal, rating: 5, last_made: '2026-08-01T18:00:00Z' },
+    brownies,
+  ])
+  renderAt('/food')
+  await screen.findByText('A to Z · 3 recipes')
+  fireEvent.change(screen.getByRole('combobox', { name: 'Sort' }), { target: { value: 'rating' } })
+  expect(location()).toBe('/food?sort=rating')
+  expect(await screen.findByText('highest rated first · 3 recipes')).toBeInTheDocument()
+  expect(recipeNames()).toEqual(['/food/red-lentil-dal', '/food/chicken-leek-traybake', '/food/brownies'])
+  fireEvent.change(screen.getByRole('combobox', { name: 'Sort' }), { target: { value: 'made' } })
+  expect(await screen.findByText('recently made first · 3 recipes')).toBeInTheDocument()
+  expect(recipeNames()).toEqual(['/food/chicken-leek-traybake', '/food/red-lentil-dal', '/food/brownies'])
+})
+
+test('card shows rating', async () => {
+  stubFetch([{ ...traybake, rating: 4.5 }, { ...dal, rating: 4 }, brownies])
+  renderAt('/food')
+  await screen.findByText('A to Z · 3 recipes')
+  const rated = screen.getByRole('link', { name: /Chicken and leek traybake/ })
+  const label = within(rated).getByLabelText('Rated 4.5 out of 5')
+  expect(label).toHaveTextContent('4.5')
+  expect(within(screen.getByRole('link', { name: /Red lentil dal/ })).getByLabelText('Rated 4.0 out of 5')).toHaveTextContent('4.0')
+  const unrated = screen.getByRole('link', { name: /Brownies/ })
+  expect(within(unrated).queryByLabelText(/^Rated/)).not.toBeInTheDocument()
+})
+
+test('list views show the rating too', async () => {
+  stubFetch([{ ...traybake, rating: 3.5 }])
+  localStorage.setItem('laekkert.view', 'list')
+  renderAt('/food')
+  await screen.findByText('A to Z · 1 recipe')
+  expect(within(screen.getByRole('link', { name: /Chicken/ })).getByLabelText('Rated 3.5 out of 5')).toBeInTheDocument()
+})
+
+test('New recipe link goes to the editor', async () => {
+  stubFetch()
+  renderAt('/food')
+  await screen.findByText('A to Z · 4 recipes')
+  fireEvent.click(screen.getByRole('link', { name: 'New recipe' }))
+  expect(location()).toBe('/food/new')
+})
+
+test('the drinks page links to a new drink in the editor', async () => {
+  stubFetch([daiquiri])
+  renderAt('/drinks')
+  await screen.findByRole('link', { name: /Daiquiri/ })
+  expect(screen.getByRole('link', { name: 'New recipe' })).toHaveAttribute('href', '/drinks/new')
 })
 
 // ---- phone ----
@@ -392,18 +462,18 @@ test('M1 leaves out ratings, avatar and recipe creation', async () => {
 test('on a phone the filter button says how many filters are active', async () => {
   stubViewport(false)
   stubFetch()
-  const view = renderAt(DEFAULT_FOOD)
+  const view = renderAt('/food?mark=favourite&sort=time')
   expect(await screen.findByRole('button', { name: 'Filters, 1 active' })).toBeInTheDocument()
   view.unmount()
 
-  renderAt('/food?sort=time&q=leek')
+  renderAt(DEFAULT_FOOD + '&q=leek')
   expect(await screen.findByRole('button', { name: 'Filters' })).toBeInTheDocument()
 })
 
 test('phone filter count adds marks, tags and category; not sort or search', async () => {
   stubViewport(false)
   stubFetch()
-  renderAt('/food?cat=mains&mark=favourite&mark=kid_approved&tag=weeknight&sort=time&q=x')
+  renderAt('/food?cat=mains&mark=favourite&mark=try_next&tag=weeknight&sort=time&q=x')
   expect(await screen.findByRole('button', { name: 'Filters, 4 active' })).toBeInTheDocument()
 })
 
@@ -418,32 +488,44 @@ test('the phone has no side panel, desktop search field or header toggle', async
   expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
 })
 
+test('the phone bar has a New recipe button that goes to the editor', async () => {
+  stubViewport(false)
+  stubFetch()
+  renderAt('/food')
+  await screen.findByText('A to Z · 4 recipes')
+  const add = screen.getByRole('link', { name: 'New recipe' })
+  expect(add).toHaveAttribute('href', '/food/new')
+  expect(add.textContent).toBe('')
+  fireEvent.click(add)
+  expect(location()).toBe('/food/new')
+})
+
 test('the phone filter sheet filters live, resets and closes with the count', async () => {
   stubViewport(false)
   stubFetch()
-  renderAt(DEFAULT_FOOD)
+  renderAt('/food?mark=favourite&sort=time')
   fireEvent.click(await screen.findByRole('button', { name: 'Filters, 1 active' }))
 
   const sheet = screen.getByRole('dialog', { name: 'Filters' })
   expect(within(sheet).getByRole('heading', { name: 'Filters' })).toBeInTheDocument()
-  expect(within(sheet).getByRole('button', { name: 'Kid approved' })).toHaveAttribute('aria-pressed', 'true')
+  expect(within(sheet).getByRole('button', { name: 'Favourite' })).toHaveAttribute('aria-pressed', 'true')
   fireEvent.click(within(sheet).getByRole('button', { name: 'vegetarian' }))
-  expect(location()).toBe('/food?mark=kid_approved&tag=vegetarian&sort=time')
+  expect(location()).toBe('/food?mark=favourite&tag=vegetarian&sort=time')
   expect(within(sheet).getByRole('button', { name: 'Show 1 recipe' })).toBeInTheDocument()
 
   fireEvent.click(within(sheet).getByRole('radio', { name: 'A–Z' }))
-  expect(location()).toBe('/food?mark=kid_approved&tag=vegetarian')
+  expect(location()).toBe('/food?mark=favourite&tag=vegetarian')
   expect(within(sheet).getByRole('radio', { name: 'A–Z' })).toBeChecked()
 
   fireEvent.click(within(sheet).getByRole('radio', { name: 'Mains' }))
-  expect(location()).toBe('/food?cat=mains&mark=kid_approved&tag=vegetarian')
+  expect(location()).toBe('/food?cat=mains&mark=favourite&tag=vegetarian')
 
   fireEvent.click(within(sheet).getByRole('button', { name: 'Reset' }))
   expect(location()).toBe(DEFAULT_FOOD)
 
-  fireEvent.click(within(sheet).getByRole('button', { name: 'Show 2 recipes' }))
+  fireEvent.click(within(sheet).getByRole('button', { name: 'Show 4 recipes' }))
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Filters, 1 active' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Filters' })).toBeInTheDocument()
 })
 
 test('the phone view button switches between grid and list rows', async () => {

@@ -26,27 +26,38 @@ loaded at runtime.
 | `FoodGridPhone.dc.html`, `FoodListPhone.dc.html` | same, phone |
 | `FilterSheetPhone.dc.html` | `FilterPanel.tsx` as a phone sheet (Task 7) |
 | `DrinksDesktop.dc.html`, `DrinksPhone.dc.html` | same pages with the Drinks theme (Task 7) |
-| `RecipeDesktop.dc.html`, `RecipePhone.dc.html` | `RecipeView.tsx`, `Ingredients.tsx` (Task 8) |
-| `EditorDesktop.dc.html` | not built (M2) |
+| `RecipeDesktop.dc.html`, `RecipePhone.dc.html` | `RecipeView.tsx`, `Ingredients.tsx` (Task 8); the history section is `History.tsx`, ratings are `Stars.tsx` (M2) |
+| `EditorDesktop.dc.html` | `Editor.tsx` (M2); the same form is the phone editor, one column with a fixed Cancel and Save bar |
 | the header and phone bottom bar of all of them | `Shell.tsx` (Task 6) |
 
 Icons and the photo-less tile glyphs (bowl, pot, plate; rocks, highball, coupe) are in
 `web/src/icons.tsx`.
 
-## Not built in M1
+## Built in M2
 
-- Ratings: stars on cards and the page, and the "Rating" and "Recently made" sorts. M2
-  (timeline).
-- History, notes, "Restore this version", Edit, New recipe and the editor artboard. M2.
-- Mark toggles on the recipe page. M2; M1 shows marks read-only.
+The editor (`EditorDesktop`, plus a phone layout that has no artboard), the history section of
+the recipe page with its notes, ratings, "Made it" form, mark entries, readable diffs and
+"Restore this version", the mark toggles (Favourite and Try next; Tried is shown as status
+only), and ratings on cards with the "Rating" and "Recently made" sorts.
+
+## Still not built
+
+- Drag handles in the editor. Rows and steps move with "Move up" and "Move down" buttons.
+- Avatars, in the header and on timeline entries. There are no users in the PoC, so entries
+  show no author.
+- The artboards' "..." menu on the recipe page.
 - "Cook with what you have", "Can make now", "Buy fresh" and "From your bar". After the PoC.
-- The signed-in avatar. There are no users in the PoC.
 
 ## Differences from the design
 
 - The design's sample categories (Breakfast, Soups, Sours, ...) are placeholders. The app has
   food mains, sides, desserts, sauces and prep, and drinks cocktails, mocktails, syrups and prep.
 - The brand reads "Lækkert", not "Recipes".
+- Kid approved is a tag, not a mark. The artboards' Kid approved toggle and kid icon are left
+  out; a "kid approved" tag looks like any other tag. The marks are Favourite, Try next and
+  the status Tried.
+- A change of rating shows as bold text ("Changed the rating 4.0 → 4.5"), not the artboard's
+  pill.
 
 ## Tokens
 
@@ -74,6 +85,12 @@ Layout: desktop is `(min-width: 768px)`; phone has 16 px gutters (`.gutter` in `
 every control is at least 44 x 44 px.
 
 ## Screenshots
+
+`screenshots/m2/` holds the editor (`editor-desktop`, `editor-phone`, `editor-drinks-phone`),
+the recipe page scrolled to its history (`recipe-history-desktop`, `recipe-history-phone`) and
+the food grid sorted by rating (`food-grid-rating-desktop`). Phone shots are 390 x 844 and
+desktop 1280 x 900, at 1x. They were taken from a scratch data directory with generated
+gradient photos, not recipe images.
 
 `screenshots/m1/` holds what the built M1 UI looks like, for comparing against the artboards:
 `food-grid-*`, `food-list-*`, `drinks-*`, `recipe-*` (phone 390 x 844 at 2x, desktop 1440 x 1000)

@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useParams } from 'react-router'
 import { defaultQuery } from './browse'
 import Browse from './Browse'
+import { Editor } from './Editor'
 import { getLastSide } from './prefs'
 import { RecipeView } from './RecipeView'
 import { isSide } from './types'
@@ -10,7 +11,9 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/:side" element={<SidePage />} />
+      <Route path="/:side/new" element={<Editor mode="new" />} />
       <Route path="/:side/:slug" element={<RecipePage />} />
+      <Route path="/:side/:slug/edit" element={<Editor mode="edit" />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   )

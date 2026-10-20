@@ -218,6 +218,12 @@ button {
   text-decoration: none;
 }
 
+.round-btn--accent {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
 /* Page heading (see PageHeading in Shell.tsx) */
 
 .page-heading {

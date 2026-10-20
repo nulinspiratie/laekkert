@@ -21,6 +21,8 @@ function recipe(over: Partial<RecipeSummary> & { slug: string }): RecipeSummary 
     tags: [],
     marks: [],
     image: null,
+    rating: null,
+    last_made: null,
     ...over,
   }
 }
@@ -41,7 +43,6 @@ suite('constants', () => {
   it('labels the filter marks', () => {
     expect(MARK_LABELS).toEqual({
       favourite: 'Favourite',
-      kid_approved: 'Kid approved',
       try_next: 'Try next',
     })
   })
@@ -76,11 +77,15 @@ suite('parseBrowse', () => {
   })
 
   it('orders and dedupes marks in display order', () => {
-    expect(parse('food', 'mark=try_next&mark=favourite&mark=try_next&mark=kid_approved').marks).toEqual([
+    expect(parse('food', 'mark=try_next&mark=favourite&mark=try_next').marks).toEqual([
       'favourite',
-      'kid_approved',
       'try_next',
     ])
+  })
+
+  it('drops a stale kid_approved mark from an old link', () => {
+    expect(parse('food', 'mark=kid_approved&mark=favourite&sort=time').marks).toEqual(['favourite'])
+    expect(browseQuery(parse('food', 'mark=kid_approved&sort=time'))).toBe('sort=time')
   })
 
   it('dedupes tags and keeps URL order', () => {
@@ -89,7 +94,14 @@ suite('parseBrowse', () => {
 
   it('falls back to name for a missing or unknown sort', () => {
     expect(parse('food', '').sort).toBe('name')
-    expect(parse('food', 'sort=rating').sort).toBe('name')
+    expect(parse('food', 'sort=bogus').sort).toBe('name')
+  })
+
+  it('parse keeps sort=rating and sort=made', () => {
+    expect(parse('food', 'sort=rating').sort).toBe('rating')
+    expect(parse('drinks', 'sort=made').sort).toBe('made')
+    expect(browseQuery(state({ sort: 'rating' }))).toBe('sort=rating')
+    expect(browseQuery(state({ sort: 'made' }))).toBe('sort=made')
   })
 
   it('treats empty q, cat and tag values as absent', () => {
@@ -127,14 +139,14 @@ suite('browseQuery', () => {
   })
 
   it('round-trips a full query', () => {
-    const query = 'q=a+b&cat=desserts&mark=kid_approved&tag=x&tag=y+z&sort=time'
+    const query = 'q=a+b&cat=desserts&mark=try_next&tag=x&tag=y+z&sort=time'
     expect(browseQuery(parse('food', query))).toBe(query)
   })
 })
 
 suite('defaultQuery', () => {
-  it('shows kid-approved food quickest first, and all drinks', () => {
-    expect(defaultQuery('food')).toBe('mark=kid_approved&sort=time')
+  it('shows all food quickest first, and all drinks', () => {
+    expect(defaultQuery('food')).toBe('sort=time')
     expect(defaultQuery('drinks')).toBe('')
   })
 })
@@ -148,10 +160,10 @@ suite('applyBrowse', () => {
       category: 'desserts',
       time_minutes: 90,
       tags: ['quick', 'baking'],
-      marks: ['favourite', 'kid_approved'],
+      marks: ['favourite', 'try_next'],
     }),
-    recipe({ slug: 'c', name: 'Bolognese', time_minutes: 45, tags: ['quick'], marks: ['kid_approved'] }),
-    recipe({ slug: 'd', name: 'Carbonara', time_minutes: 20, marks: ['kid_approved', 'favourite'] }),
+    recipe({ slug: 'c', name: 'Bolognese', time_minutes: 45, tags: ['quick'], marks: ['try_next'] }),
+    recipe({ slug: 'd', name: 'Carbonara', time_minutes: 20, marks: ['try_next', 'favourite'] }),
   ]
 
   it('returns everything for the empty state, sorted by name ignoring case', () => {
@@ -163,7 +175,7 @@ suite('applyBrowse', () => {
   })
 
   it('requires every selected mark', () => {
-    const out = applyBrowse(recipes, state({ marks: ['favourite', 'kid_approved'] }))
+    const out = applyBrowse(recipes, state({ marks: ['favourite', 'try_next'] }))
     expect(out.map((r) => r.slug)).toEqual(['b', 'd'])
   })
 
@@ -172,7 +184,7 @@ suite('applyBrowse', () => {
   })
 
   it('combines category, marks and tags with AND', () => {
-    const s = state({ category: 'desserts', marks: ['kid_approved'], tags: ['quick'] })
+    const s = state({ category: 'desserts', marks: ['try_next'], tags: ['quick'] })
     expect(applyBrowse(recipes, s).map((r) => r.slug)).toEqual(['b'])
     expect(applyBrowse(recipes, { ...s, category: 'mains', tags: ['baking'] })).toEqual([])
   })
@@ -194,6 +206,40 @@ suite('applyBrowse', () => {
     ])
   })
 
+  it('rating sort puts unrated last', () => {
+    const list = [
+      recipe({ slug: 'u1', name: 'Unrated b' }),
+      recipe({ slug: 'r35', name: 'Three and a half', rating: 3.5 }),
+      recipe({ slug: 'r5b', name: 'Beta', rating: 5 }),
+      recipe({ slug: 'r5a', name: 'Alpha', rating: 5 }),
+      recipe({ slug: 'u0', name: 'Unrated a' }),
+    ]
+    expect(applyBrowse(list, state({ sort: 'rating' })).map((r) => r.slug)).toEqual([
+      'r5a',
+      'r5b',
+      'r35',
+      'u0',
+      'u1',
+    ])
+  })
+
+  it('made sort is newest first, never-made last', () => {
+    const list = [
+      recipe({ slug: 'never-b', name: 'Never b' }),
+      recipe({ slug: 'old', name: 'Old', last_made: '2026-01-02T10:00:00Z' }),
+      recipe({ slug: 'new-b', name: 'Beta', last_made: '2026-10-01T09:00:00Z' }),
+      recipe({ slug: 'new-a', name: 'Alpha', last_made: '2026-10-01T09:00:00Z' }),
+      recipe({ slug: 'never-a', name: 'Never a' }),
+    ]
+    expect(applyBrowse(list, state({ sort: 'made' })).map((r) => r.slug)).toEqual([
+      'new-a',
+      'new-b',
+      'old',
+      'never-a',
+      'never-b',
+    ])
+  })
+
   it('keeps the input order when q is set', () => {
     const out = applyBrowse(recipes, state({ q: 'x', sort: 'time' }))
     expect(out.map((r) => r.slug)).toEqual(['a', 'b', 'c', 'd'])
@@ -209,11 +255,16 @@ suite('applyBrowse', () => {
 
 suite('describe', () => {
   it('names the mark and the sort', () => {
-    expect(describe(state({ marks: ['kid_approved'], sort: 'time' }))).toBe('Kid approved, quickest first')
+    expect(describe(state({ marks: ['try_next'], sort: 'time' }))).toBe('Try next, quickest first')
   })
 
   it('says A to Z for the empty state', () => {
     expect(describe(state())).toBe('A to Z')
+  })
+
+  it('names the new sorts', () => {
+    expect(describe(state({ sort: 'rating' }))).toBe('highest rated first')
+    expect(describe(state({ sort: 'made' }))).toBe('recently made first')
   })
 
   it('replaces the sort with best match first when q is set', () => {

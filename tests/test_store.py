@@ -4,13 +4,19 @@ import shutil
 
 import pytest
 
+from app.recipes.catalog import Catalog
 from app.recipes.model import SIDES, parse_recipe
 from app.recipes.store import SEED_DIR, RecipeStore
+from app.recipes.uploads import UploadStore
+
+
+def make_store(data_dir):
+    return RecipeStore(data_dir, Catalog(data_dir), UploadStore(data_dir))
 
 
 @pytest.fixture
 def store(tmp_path):
-    s = RecipeStore(tmp_path)
+    s = make_store(tmp_path)
     assert s.seed_if_empty()
     return s
 
@@ -29,6 +35,23 @@ def test_seed_recipes_are_valid():
         for folder in folders:
             r = parse_recipe(json.loads((folder / "recipe.json").read_text()))
             assert (r.side, r.slug) == (side, folder.name)
+
+
+def test_seeds_are_format_2():
+    for path in SEED_DIR.glob("*/*/recipe.json"):
+        assert json.loads(path.read_text())["format_version"] == 2, path
+
+
+def test_loads_v1_file_from_disk(store):
+    # The M1 traybake as it was written on the NAS.
+    path = store.recipes_dir / "food" / "chicken-leek-traybake" / "recipe.json"
+    data = json.loads(path.read_text())
+    data.update(format_version=1, tags=["batch cook"], marks=["tried", "kid_approved"])
+    path.write_text(json.dumps(data))
+    r = store.get("food", "chicken-leek-traybake")
+    assert r is not None and r.format_version == 2
+    assert r.marks == ["tried"]
+    assert r.tags == ["batch cook", "kid approved"]
 
 
 def test_list_is_per_side_and_sorted(store):
@@ -76,7 +99,7 @@ def test_folder_slug_mismatch_is_skipped(store, caplog):
 
 
 def test_seed_if_empty_copies_once(tmp_path):
-    s = RecipeStore(tmp_path)
+    s = make_store(tmp_path)
     assert s.seed_if_empty() is True
     path = tmp_path / "recipes/drinks/daiquiri/recipe.json"
     path.write_text(path.read_text().replace("Daiquiri", "Edited"))
@@ -85,7 +108,7 @@ def test_seed_if_empty_copies_once(tmp_path):
 
 
 def test_seed_skipped_when_any_recipe_exists(tmp_path):
-    s = RecipeStore(tmp_path)
+    s = make_store(tmp_path)
     src = SEED_DIR / "drinks/daiquiri/recipe.json"
     write(s, "drinks", "daiquiri", src.read_text())
     assert s.seed_if_empty() is False
@@ -93,7 +116,7 @@ def test_seed_skipped_when_any_recipe_exists(tmp_path):
 
 
 def test_missing_data_dir_lists_empty(tmp_path):
-    assert RecipeStore(tmp_path / "nope").list("food") == []
+    assert make_store(tmp_path / "nope").list("food") == []
 
 
 def test_seed_failure_is_logged_not_raised(tmp_path, monkeypatch, caplog):
@@ -102,7 +125,7 @@ def test_seed_failure_is_logged_not_raised(tmp_path, monkeypatch, caplog):
 
     monkeypatch.setattr(shutil, "copytree", deny)
     with caplog.at_level(logging.WARNING, logger="app.recipes"):
-        assert RecipeStore(tmp_path).seed_if_empty() is False
+        assert make_store(tmp_path).seed_if_empty() is False
     assert "read-only" in caplog.text
 
 
