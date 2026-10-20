@@ -8,7 +8,11 @@ from starlette.testclient import TestClient
 from app.config import Settings
 from app.main import create_app
 from app.mcp_server import STYLE_GUIDE
+from app.recipes.catalog import Catalog
+from app.recipes.drafts import RecipeDraft
 from app.recipes.fetch import Fetcher
+from app.recipes.store import RecipeStore
+from app.recipes.uploads import UploadStore
 
 HEADERS = {
     "Accept": "application/json, text/event-stream",
@@ -33,6 +37,12 @@ def client(tmp_path):
     app = create_app(Settings(), data_dir=tmp_path, fetcher=fake_fetcher())
     with TestClient(app, base_url="https://laekkert.serwan.me") as c:
         yield c
+
+
+@pytest.fixture
+def store(client, tmp_path):
+    """A second store on the app's data folder, to set up state the tools read."""
+    return RecipeStore(tmp_path, Catalog(tmp_path), UploadStore(tmp_path))
 
 
 def rpc(client, id, method, params=None):
@@ -66,7 +76,7 @@ def test_initialize_through_public_hostname(client):
 
 def test_tools_listed(client):
     names = {t["name"] for t in rpc(client, 2, "tools/list").json()["result"]["tools"]}
-    assert names == {"list_recipes", "read_recipe", "get_style_guide"}
+    assert names == {"list_recipes", "read_recipe", "search_recipes", "get_style_guide"}
 
 
 def test_list_recipes_tool(client):
@@ -92,6 +102,145 @@ def test_read_unknown_recipe_is_tool_error(client, slug):
     res = call(client, "read_recipe", {"side": "drinks", "slug": slug})
     assert res["isError"] is True
     assert "No recipe" in res["content"][0]["text"]
+
+
+def slugs(res):
+    assert res["isError"] is False
+    return [r["slug"] for r in res["structuredContent"]["result"]]
+
+
+def search(client, **arguments):
+    return call(client, "search_recipes", {"side": "food", **arguments})
+
+
+def add_untimed(store):
+    """A food recipe with no time, to sit last when sorting by time."""
+    draft = RecipeDraft(
+        name="Apple crumble",
+        category="desserts",
+        servings=4,
+        time_minutes=None,
+        ingredients=[{"amount": 800, "unit": "g", "item": "apples"}],
+        steps=["Bake."],
+        source=None,
+        tags=[],
+        image=None,
+    )
+    return store.create("food", draft, "app")
+
+
+def test_search_by_query(client):
+    assert slugs(search(client, query="lentil")) == ["red-lentil-dal"]
+
+
+def test_search_by_tag_and_category(client):
+    assert slugs(search(client, tags=["Batch Cook"])) == ["chicken-leek-traybake"]
+    both = search(client, tags=["batch cook", "kid approved"], category="mains")
+    assert slugs(both) == ["chicken-leek-traybake"]
+    assert slugs(search(client, tags=["batch cook", "vegetarian"])) == []
+    assert slugs(search(client, category="mains")) == [
+        "chicken-leek-traybake",
+        "red-lentil-dal",
+    ]
+
+
+def test_search_by_mark(client, store):
+    assert slugs(search(client, marks=["tried"])) == ["chicken-leek-traybake"]
+    store.set_marks("food", "red-lentil-dal", ["tried"], [], "app")
+    assert slugs(search(client, marks=["tried"])) == [
+        "chicken-leek-traybake",
+        "red-lentil-dal",
+    ]
+    # Every mark has to be there.
+    assert slugs(search(client, marks=["tried", "try_next"])) == ["red-lentil-dal"]
+
+
+def test_search_sort_time_puts_unknown_last(client, store):
+    add_untimed(store)
+    res = search(client, sort="time")
+    assert slugs(res) == ["red-lentil-dal", "chicken-leek-traybake", "apple-crumble"]
+    assert res["structuredContent"]["result"][2]["time_minutes"] is None
+
+
+def test_search_sort_rating(client, store):
+    add_untimed(store)
+    store.add_rating("food", "red-lentil-dal", 3.0, "app")
+    store.add_rating("food", "chicken-leek-traybake", 4.5, "app")
+    res = search(client, sort="rating")
+    assert slugs(res) == ["chicken-leek-traybake", "red-lentil-dal", "apple-crumble"]
+    assert [r["rating"] for r in res["structuredContent"]["result"]] == [4.5, 3.0, None]
+
+
+def test_search_sort_recently_made(client, store):
+    add_untimed(store)
+    store.add_made("food", "red-lentil-dal", None, "", "app")
+    # Never made comes last, by name: the crumble would lead on name alone.
+    assert slugs(search(client, sort="recently_made")) == [
+        "red-lentil-dal",
+        "apple-crumble",
+        "chicken-leek-traybake",
+    ]
+
+
+def test_search_sorts_by_name_and_breaks_ties_by_name(client, store):
+    add_untimed(store)
+    names = ["apple-crumble", "chicken-leek-traybake", "red-lentil-dal"]
+    assert slugs(search(client, sort="name")) == names
+    assert slugs(search(client)) == names
+    # Nothing is rated, so the order falls back to the name.
+    assert slugs(search(client, sort="rating")) == names
+
+
+def test_search_relevance_keeps_search_order(client):
+    # A name hit beats an ingredient hit, whatever the name order.
+    res = search(client, query="chicken")
+    assert slugs(res)[0] == "chicken-leek-traybake"
+
+
+def test_search_entries_match_list_recipes(client):
+    listed = call(client, "list_recipes", {"side": "food"})
+    found = search(client)
+    assert found["structuredContent"] == listed["structuredContent"]
+    entry = found["structuredContent"]["result"][0]
+    assert {"rating", "last_made", "version"} <= set(entry)
+
+
+def test_search_limit(client):
+    assert len(slugs(search(client, limit=1))) == 1
+    assert len(slugs(search(client))) == 2
+    assert search(client, limit=0)["isError"] is True
+    assert search(client, limit=51)["isError"] is True
+
+
+def test_search_unknown_category_is_empty_not_error(client):
+    res = search(client, category="nonsense")
+    assert res["isError"] is False
+    assert slugs(res) == []
+
+
+def test_search_rejects_unknown_side(client):
+    res = call(client, "search_recipes", {"side": "bar"})
+    assert res["isError"] is True
+
+
+def test_read_recipe_has_version_and_rating(client, store):
+    store.add_rating("drinks", "daiquiri", 4.0, "app")
+    res = call(client, "read_recipe", {"side": "drinks", "slug": "daiquiri"})
+    body = res["structuredContent"]
+    assert body["rating"] == 4.0
+    assert body["last_made"] is None
+    assert body["version"] == 0
+    seed = call(client, "read_recipe", {"side": "drinks", "slug": "virgin-mojito"})
+    assert seed["structuredContent"]["rating"] is None
+
+
+def test_list_recipes_has_rating_and_version(client, store):
+    store.add_made("drinks", "daiquiri", 5.0, "", "app")
+    entries = call(client, "list_recipes", {"side": "drinks"})["structuredContent"]
+    daiquiri = entries["result"][0]
+    assert daiquiri["rating"] == 5.0
+    assert daiquiri["last_made"] is not None
+    assert daiquiri["version"] == 0
 
 
 def test_healthz_still_works_with_mcp_mounted(client):
