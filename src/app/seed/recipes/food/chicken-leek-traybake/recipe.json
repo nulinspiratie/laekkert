@@ -1,5 +1,5 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "slug": "chicken-leek-traybake",
   "side": "food",
   "name": "Chicken and leek traybake",
@@ -21,6 +21,6 @@
     "Rub the chicken with the rest of the oil, the paprika, lemon zest and salt, and lay it skin up on the vegetables.",
     "Roast for 40 minutes until the skin is crisp, then squeeze over the lemon juice."
   ],
-  "tags": ["batch cook"],
-  "marks": ["tried", "kid_approved"]
+  "tags": ["batch cook", "kid approved"],
+  "marks": ["tried"]
 }

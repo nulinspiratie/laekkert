@@ -33,7 +33,7 @@ def test_list_requires_valid_side(client, query):
 
 def test_detail(client):
     body = client.get("/api/recipes/drinks/daiquiri").json()
-    assert body["format_version"] == 1 and body["ingredients"][0]["unit"] == "ml"
+    assert body["format_version"] == 2 and body["ingredients"][0]["unit"] == "ml"
 
 
 def test_detail_adds_g_per_tsp(client):

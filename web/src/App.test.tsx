@@ -45,7 +45,7 @@ test('root redirects to the last side used', async () => {
 test('root redirects to the side with its default query', async () => {
   stubFetch(200, { recipes: [] })
   const food = renderAt('/')
-  expect(screen.getByLabelText('location')).toHaveTextContent('/food?mark=kid_approved&sort=time')
+  expect(screen.getByLabelText('location')).toHaveTextContent('/food?sort=time')
   food.unmount()
 
   localStorage.setItem('laekkert.side', 'drinks')

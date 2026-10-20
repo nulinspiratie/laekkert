@@ -41,7 +41,6 @@ suite('constants', () => {
   it('labels the filter marks', () => {
     expect(MARK_LABELS).toEqual({
       favourite: 'Favourite',
-      kid_approved: 'Kid approved',
       try_next: 'Try next',
     })
   })
@@ -76,11 +75,15 @@ suite('parseBrowse', () => {
   })
 
   it('orders and dedupes marks in display order', () => {
-    expect(parse('food', 'mark=try_next&mark=favourite&mark=try_next&mark=kid_approved').marks).toEqual([
+    expect(parse('food', 'mark=try_next&mark=favourite&mark=try_next').marks).toEqual([
       'favourite',
-      'kid_approved',
       'try_next',
     ])
+  })
+
+  it('drops a stale kid_approved mark from an old link', () => {
+    expect(parse('food', 'mark=kid_approved&mark=favourite&sort=time').marks).toEqual(['favourite'])
+    expect(browseQuery(parse('food', 'mark=kid_approved&sort=time'))).toBe('sort=time')
   })
 
   it('dedupes tags and keeps URL order', () => {
@@ -127,14 +130,14 @@ suite('browseQuery', () => {
   })
 
   it('round-trips a full query', () => {
-    const query = 'q=a+b&cat=desserts&mark=kid_approved&tag=x&tag=y+z&sort=time'
+    const query = 'q=a+b&cat=desserts&mark=try_next&tag=x&tag=y+z&sort=time'
     expect(browseQuery(parse('food', query))).toBe(query)
   })
 })
 
 suite('defaultQuery', () => {
-  it('shows kid-approved food quickest first, and all drinks', () => {
-    expect(defaultQuery('food')).toBe('mark=kid_approved&sort=time')
+  it('shows all food quickest first, and all drinks', () => {
+    expect(defaultQuery('food')).toBe('sort=time')
     expect(defaultQuery('drinks')).toBe('')
   })
 })
@@ -148,10 +151,10 @@ suite('applyBrowse', () => {
       category: 'desserts',
       time_minutes: 90,
       tags: ['quick', 'baking'],
-      marks: ['favourite', 'kid_approved'],
+      marks: ['favourite', 'try_next'],
     }),
-    recipe({ slug: 'c', name: 'Bolognese', time_minutes: 45, tags: ['quick'], marks: ['kid_approved'] }),
-    recipe({ slug: 'd', name: 'Carbonara', time_minutes: 20, marks: ['kid_approved', 'favourite'] }),
+    recipe({ slug: 'c', name: 'Bolognese', time_minutes: 45, tags: ['quick'], marks: ['try_next'] }),
+    recipe({ slug: 'd', name: 'Carbonara', time_minutes: 20, marks: ['try_next', 'favourite'] }),
   ]
 
   it('returns everything for the empty state, sorted by name ignoring case', () => {
@@ -163,7 +166,7 @@ suite('applyBrowse', () => {
   })
 
   it('requires every selected mark', () => {
-    const out = applyBrowse(recipes, state({ marks: ['favourite', 'kid_approved'] }))
+    const out = applyBrowse(recipes, state({ marks: ['favourite', 'try_next'] }))
     expect(out.map((r) => r.slug)).toEqual(['b', 'd'])
   })
 
@@ -172,7 +175,7 @@ suite('applyBrowse', () => {
   })
 
   it('combines category, marks and tags with AND', () => {
-    const s = state({ category: 'desserts', marks: ['kid_approved'], tags: ['quick'] })
+    const s = state({ category: 'desserts', marks: ['try_next'], tags: ['quick'] })
     expect(applyBrowse(recipes, s).map((r) => r.slug)).toEqual(['b'])
     expect(applyBrowse(recipes, { ...s, category: 'mains', tags: ['baking'] })).toEqual([])
   })
@@ -209,7 +212,7 @@ suite('applyBrowse', () => {
 
 suite('describe', () => {
   it('names the mark and the sort', () => {
-    expect(describe(state({ marks: ['kid_approved'], sort: 'time' }))).toBe('Kid approved, quickest first')
+    expect(describe(state({ marks: ['try_next'], sort: 'time' }))).toBe('Try next, quickest first')
   })
 
   it('says A to Z for the empty state', () => {

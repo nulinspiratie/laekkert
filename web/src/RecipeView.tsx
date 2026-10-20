@@ -6,7 +6,7 @@ import { Link, useLocation } from 'react-router'
 import { getRecipe, recipeImageUrl } from './api'
 import { browseQuery, MARK_LABELS } from './browse'
 import { capitalise, formatTime } from './format'
-import { Back, Bookmark, Check, Clock, Close, Heart, Kid, People } from './icons'
+import { Back, Bookmark, Check, Clock, Heart, People } from './icons'
 import { Ingredients } from './Ingredients'
 import { PhotoTile } from './PhotoTile'
 import { Shell } from './Shell'
@@ -14,26 +14,21 @@ import { SIDE_LABELS, type Mark, type Recipe, type Side } from './types'
 import { useIsDesktop } from './useIsDesktop'
 
 // The marks the page shows, in this order.
-const MARK_ORDER: readonly Mark[] = ['favourite', 'kid_approved', 'try_next', 'tried', 'kid_rejected']
+const MARK_ORDER: readonly Mark[] = ['favourite', 'try_next', 'tried']
 
 const PAGE_MARK_LABELS: Record<Mark, string> = {
   ...MARK_LABELS,
   tried: 'Tried',
-  kid_rejected: 'Kids rejected',
 }
 
 function MarkIcon({ mark }: { mark: Mark }) {
   switch (mark) {
     case 'favourite':
       return <Heart filled size={18} />
-    case 'kid_approved':
-      return <Kid size={18} />
     case 'try_next':
       return <Bookmark filled size={18} />
     case 'tried':
       return <Check />
-    case 'kid_rejected':
-      return <Close size={18} />
   }
 }
 

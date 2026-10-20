@@ -111,17 +111,6 @@ export function Heart({ filled, ...props }: IconProps & { filled?: boolean }) {
   )
 }
 
-export function Kid(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <circle cx="12" cy="12" r="8" />
-      <path d="M9 14.5c.8.9 1.8 1.4 3 1.4s2.2-.5 3-1.4" />
-      <circle cx="9.5" cy="10" r="1" fill="currentColor" stroke="none" />
-      <circle cx="14.5" cy="10" r="1" fill="currentColor" stroke="none" />
-    </Svg>
-  )
-}
-
 export function Bookmark({ filled, ...props }: IconProps & { filled?: boolean }) {
   return (
     <Svg {...(filled ? { fill: 'currentColor', strokeWidth: 1.5 } : {})} {...props}>

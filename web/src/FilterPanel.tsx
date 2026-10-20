@@ -12,18 +12,11 @@ import {
   type facetCounts,
 } from './browse'
 import { capitalise } from './format'
-import { Bookmark, Check, Heart, Kid, Search } from './icons'
+import { Bookmark, Check, Heart, Search } from './icons'
 import { SIDE_LABELS, type Side } from './types'
-
-// The design's Drinks panel has no "Kid approved".
-const MARKS_FOR: Record<Side, readonly FilterMark[]> = {
-  food: FILTER_MARKS,
-  drinks: FILTER_MARKS.filter((mark) => mark !== 'kid_approved'),
-}
 
 const MARK_ICONS: Record<FilterMark, () => ReactNode> = {
   favourite: () => <Heart size={20} />,
-  kid_approved: () => <Kid size={20} />,
   try_next: () => <Bookmark size={20} />,
 }
 
@@ -56,7 +49,7 @@ export function FilterPanel({ side, state, counts, onChange, variant = 'aside', 
 
       <section className="filter-section">
         <Heading>Marks</Heading>
-        {MARKS_FOR[side].map((mark) => {
+        {FILTER_MARKS.map((mark) => {
           const on = state.marks.includes(mark)
           return (
             <button

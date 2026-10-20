@@ -8,7 +8,7 @@ export const SIDE_LABELS: Record<Side, string> = { food: 'Food', drinks: 'Drinks
 
 export type Unit = 'g' | 'ml' | 'piece' | 'dash' | 'pinch' | 'to taste'
 
-export type Mark = 'tried' | 'favourite' | 'try_next' | 'kid_approved' | 'kid_rejected'
+export type Mark = 'tried' | 'favourite' | 'try_next'
 
 export interface Ingredient {
   amount: number | null

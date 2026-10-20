@@ -2,7 +2,7 @@
 
 import type { Mark, RecipeSummary, Side } from './types'
 
-export type FilterMark = Extract<Mark, 'favourite' | 'kid_approved' | 'try_next'>
+export type FilterMark = Extract<Mark, 'favourite' | 'try_next'>
 export type SortKey = 'time' | 'name'
 
 export interface BrowseState {
@@ -25,11 +25,10 @@ export const CATEGORIES: Record<Side, readonly string[]> = {
 }
 
 /** The marks the browse page filters on, in display order. */
-export const FILTER_MARKS: readonly FilterMark[] = ['favourite', 'kid_approved', 'try_next']
+export const FILTER_MARKS: readonly FilterMark[] = ['favourite', 'try_next']
 
 export const MARK_LABELS: Record<FilterMark, string> = {
   favourite: 'Favourite',
-  kid_approved: 'Kid approved',
   try_next: 'Try next',
 }
 
@@ -56,7 +55,7 @@ export function browseQuery(state: BrowseState): string {
 }
 
 export function defaultQuery(side: Side): string {
-  return side === 'food' ? 'mark=kid_approved&sort=time' : ''
+  return side === 'food' ? 'sort=time' : ''
 }
 
 const byName = (a: RecipeSummary, b: RecipeSummary) =>

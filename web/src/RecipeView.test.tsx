@@ -21,8 +21,8 @@ const traybake: Recipe = {
   ],
   steps: ['Heat the oven.', 'Roast everything.'],
   source: null,
-  tags: ['batch cook'],
-  marks: ['tried', 'kid_approved'],
+  tags: ['batch cook', 'kid approved'],
+  marks: ['tried'],
   image: null,
 }
 
@@ -123,18 +123,25 @@ test('tags link to the browse page filtered by that tag', async () => {
 })
 
 test('marks show as read-only pills in a fixed order', async () => {
-  stubApi({ ...traybake, marks: ['kid_rejected', 'tried', 'try_next', 'kid_approved', 'favourite'] })
+  stubApi({ ...traybake, marks: ['tried', 'try_next', 'favourite'] })
   renderAt(TRAYBAKE_PATH)
   await loaded()
   const marks = screen.getByRole('list', { name: 'Marks' })
   expect(within(marks).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
     'Favourite',
-    'Kid approved',
     'Try next',
     'Tried',
-    'Kids rejected',
   ])
   expect(within(marks).queryByRole('button')).not.toBeInTheDocument()
+})
+
+test('a kid approved tag is a plain tag link, not a mark', async () => {
+  stubApi(traybake)
+  renderAt(TRAYBAKE_PATH)
+  await loaded()
+  expect(screen.getByRole('link', { name: 'kid approved' })).toHaveAttribute('href', '/food?tag=kid+approved')
+  const marks = screen.getByRole('list', { name: 'Marks' })
+  expect(within(marks).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Tried'])
 })
 
 test('a recipe without marks has no marks list', async () => {

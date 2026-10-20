@@ -14,7 +14,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from app.recipes.model import FORMAT_VERSION
+# The catalog file has its own format, independent of the recipe format.
+CATALOG_FORMAT_VERSION = 1
 
 SEED_CATALOG = (
     Path(__file__).resolve().parent.parent / "seed" / "catalog" / ("ingredients.json")
@@ -79,7 +80,7 @@ class Catalog:
         except (OSError, ValueError, KeyError, TypeError) as exc:
             log.warning("ignoring %s: %s", self.path, exc)
             return {}
-        if not isinstance(version, int) or version > FORMAT_VERSION:
+        if not isinstance(version, int) or version > CATALOG_FORMAT_VERSION:
             log.warning(
                 "ignoring %s: format_version %r is not supported", self.path, version
             )

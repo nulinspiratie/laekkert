@@ -31,6 +31,23 @@ def test_seed_recipes_are_valid():
             assert (r.side, r.slug) == (side, folder.name)
 
 
+def test_seeds_are_format_2():
+    for path in SEED_DIR.glob("*/*/recipe.json"):
+        assert json.loads(path.read_text())["format_version"] == 2, path
+
+
+def test_loads_v1_file_from_disk(store):
+    # The M1 traybake as it was written on the NAS.
+    path = store.recipes_dir / "food" / "chicken-leek-traybake" / "recipe.json"
+    data = json.loads(path.read_text())
+    data.update(format_version=1, tags=["batch cook"], marks=["tried", "kid_approved"])
+    path.write_text(json.dumps(data))
+    r = store.get("food", "chicken-leek-traybake")
+    assert r is not None and r.format_version == 2
+    assert r.marks == ["tried"]
+    assert r.tags == ["batch cook", "kid approved"]
+
+
 def test_list_is_per_side_and_sorted(store):
     assert [r.slug for r in store.list("drinks")] == ["daiquiri", "virgin-mojito"]
     assert {r.side for r in store.list("food")} == {"food"}

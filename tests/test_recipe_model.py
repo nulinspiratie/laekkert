@@ -7,7 +7,7 @@ from app.recipes.model import NewerFormatError, parse_recipe
 
 def valid(**overrides) -> dict:
     data = {
-        "format_version": 1,
+        "format_version": 2,
         "slug": "daiquiri",
         "side": "drinks",
         "name": "Daiquiri",
@@ -65,9 +65,13 @@ def test_unknown_key_rejected():
         parse_recipe(valid(colour="red"))
 
 
+def test_current_format_is_2():
+    assert model.FORMAT_VERSION == 2
+
+
 def test_newer_format_raises():
     with pytest.raises(NewerFormatError):
-        parse_recipe(valid(format_version=2))
+        parse_recipe(valid(format_version=3))
 
 
 def test_missing_format_version_raises():
@@ -87,10 +91,54 @@ def test_migrations_run_in_order(monkeypatch):
 
         return migrate
 
-    monkeypatch.setattr(model, "FORMAT_VERSION", 3)
-    monkeypatch.setattr(model, "MIGRATIONS", {1: step(1), 2: step(2)})
-    assert parse_recipe(valid()).format_version == 3
-    assert calls == [1, 2]
+    monkeypatch.setattr(model, "FORMAT_VERSION", 4)
+    monkeypatch.setattr(model, "MIGRATIONS", {2: step(2), 3: step(3)})
+    assert parse_recipe(valid()).format_version == 4
+    assert calls == [2, 3]
+
+
+def test_v1_kid_marks_become_tags():
+    r = parse_recipe(
+        valid(
+            format_version=1,
+            marks=["tried", "kid_approved", "kid_rejected"],
+            tags=["quick"],
+        )
+    )
+    assert r.format_version == 2
+    assert r.marks == ["tried"]
+    assert r.tags == ["quick", "kid approved", "kids rejected"]
+
+
+def test_v1_without_kid_marks_keeps_everything_else():
+    r = parse_recipe(
+        valid(format_version=1, marks=["tried", "favourite"], tags=["quick"])
+    )
+    assert r.format_version == 2
+    assert r.marks == ["tried", "favourite"]
+    assert r.tags == ["quick"]
+    assert r.name == "Daiquiri"
+
+
+def test_v1_kid_tag_not_duplicated():
+    r = parse_recipe(
+        valid(format_version=1, marks=["kid_approved"], tags=["kid approved"])
+    )
+    assert r.marks == []
+    assert r.tags == ["kid approved"]
+
+
+def test_v1_migration_does_not_mutate_its_input():
+    data = valid(format_version=1, marks=["kid_approved"], tags=[])
+    parse_recipe(data)
+    assert data["format_version"] == 1
+    assert data["marks"] == ["kid_approved"] and data["tags"] == []
+
+
+@pytest.mark.parametrize("mark", ["kid_approved", "kid_rejected"])
+def test_v2_rejects_kid_marks(mark):
+    with pytest.raises(ValidationError):
+        parse_recipe(valid(marks=[mark]))
 
 
 def test_summary_keys():

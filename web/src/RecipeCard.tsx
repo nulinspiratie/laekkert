@@ -4,12 +4,12 @@
 import { Link, useLocation } from 'react-router'
 import { MARK_LABELS, type FilterMark } from './browse'
 import { capitalise, formatTime } from './format'
-import { Bookmark, Chevron, Clock, Heart, Kid } from './icons'
+import { Bookmark, Chevron, Clock, Heart } from './icons'
 import { PhotoTile } from './PhotoTile'
 import type { RecipeSummary } from './types'
 
-// Only these marks show on cards in M1, in this order.
-const CARD_MARKS: readonly FilterMark[] = ['favourite', 'kid_approved', 'try_next']
+// Only these marks show on cards, in this order.
+const CARD_MARKS: readonly FilterMark[] = ['favourite', 'try_next']
 
 function MarkIcons({ recipe, size }: { recipe: RecipeSummary; size: number }) {
   const shown = CARD_MARKS.filter((mark) => recipe.marks.includes(mark))
@@ -18,7 +18,6 @@ function MarkIcons({ recipe, size }: { recipe: RecipeSummary; size: number }) {
       {shown.map((mark) => {
         const label = MARK_LABELS[mark]
         if (mark === 'favourite') return <Heart key={mark} filled size={size} aria-label={label} />
-        if (mark === 'kid_approved') return <Kid key={mark} size={size} aria-label={label} />
         return <Bookmark key={mark} filled size={size} aria-label={label} />
       })}
     </span>
