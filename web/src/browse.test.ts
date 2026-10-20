@@ -1,13 +1,16 @@
 import { describe as suite, expect, it } from 'vitest'
 import {
+  addTerm,
   applyBrowse,
   browseQuery,
   CATEGORIES,
   defaultQuery,
   describe,
   facetCounts,
+  haveKey,
   MARK_LABELS,
   parseBrowse,
+  removeTerm,
   type BrowseState,
 } from './browse'
 import type { DrinkBar, DrinkStatus, RecipeSummary } from './types'
@@ -28,7 +31,7 @@ function recipe(over: Partial<RecipeSummary> & { slug: string }): RecipeSummary 
 }
 
 function state(over: Partial<BrowseState> = {}): BrowseState {
-  return { q: '', category: null, marks: [], tags: [], sort: 'name', bar: null, ...over }
+  return { q: '', category: null, marks: [], tags: [], sort: 'name', bar: null, have: [], ...over }
 }
 
 const parse = (side: 'food' | 'drinks', query: string) =>
@@ -363,5 +366,90 @@ suite('the bar filter', () => {
     expect(counts({ category: 'cocktails' })).toEqual({ all: 3, can: 1, fresh: 1 })
     expect(counts({ marks: ['favourite'] })).toEqual({ all: 1, can: 0, fresh: 1 })
     expect(counts({ bar: 'can' })).toEqual({ all: 5, can: 1, fresh: 2 })
+  })
+})
+
+suite('what you have', () => {
+  it('round trips repeatable have params in order', () => {
+    const parsed = parse('food', 'have=chicken&have=leeks')
+    expect(parsed.have).toEqual(['chicken', 'leeks'])
+    expect(browseQuery(parsed)).toBe('have=chicken&have=leeks')
+  })
+
+  it('writes nothing when there are no terms', () => {
+    expect(browseQuery(state())).toBe('')
+  })
+
+  it('ignores have on drinks', () => {
+    expect(parse('drinks', 'have=chicken').have).toEqual([])
+  })
+
+  it('trims terms and drops blanks', () => {
+    expect(parse('food', 'have=&have=%20%20&have=%20leeks%20').have).toEqual(['leeks'])
+  })
+
+  it('keeps the first spelling of terms with the same key', () => {
+    expect(parse('food', 'have=Leeks&have=leeks&have=LEEKS+').have).toEqual(['Leeks'])
+  })
+
+  it('counts at most 20 terms', () => {
+    const query = Array.from({ length: 25 }, (_, i) => `have=item${i}`).join('&')
+    const have = parse('food', query).have
+    expect(have).toHaveLength(20)
+    expect(have[19]).toBe('item19')
+  })
+
+  it('does not cut long terms', () => {
+    const long = 'a'.repeat(80)
+    expect(parse('food', `have=${long}`).have).toEqual([long])
+  })
+
+  it('makes a key that ignores case, accents and extra spaces', () => {
+    expect(haveKey('  Crème   Fraîche ')).toBe('creme fraiche')
+    expect(haveKey('Leeks')).toBe(haveKey('leeks'))
+  })
+
+  it('keeps the API order with terms, even with sort name', () => {
+    const recipes = [recipe({ slug: 'b' }), recipe({ slug: 'a' }), recipe({ slug: 'c' })]
+    const kept = applyBrowse(recipes, state({ have: ['leeks'], sort: 'name' }))
+    expect(kept.map((r) => r.slug)).toEqual(['b', 'a', 'c'])
+  })
+
+  it('still filters by the other filters with terms', () => {
+    const recipes = [recipe({ slug: 'b', category: 'sides' }), recipe({ slug: 'a' })]
+    const kept = applyBrowse(recipes, state({ have: ['leeks'], category: 'mains' }))
+    expect(kept.map((r) => r.slug)).toEqual(['a'])
+  })
+
+  it('describes the order as fewest missing first', () => {
+    expect(describe(state({ have: ['leeks'] }))).toBe('fewest missing first')
+    expect(describe(state({ have: ['leeks'], marks: ['favourite'], sort: 'time' }))).toBe(
+      'Favourite, fewest missing first',
+    )
+  })
+
+  it('says fewest missing first even when searching', () => {
+    expect(describe(state({ have: ['leeks'], q: 'soup' }))).toBe('fewest missing first')
+  })
+
+  it('addTerm trims and appends', () => {
+    expect(addTerm(state({ have: ['chicken'] }), '  leeks ').have).toEqual(['chicken', 'leeks'])
+  })
+
+  it('addTerm ignores blanks and duplicates by key', () => {
+    const base = state({ have: ['Leeks'] })
+    expect(addTerm(base, '   ')).toBe(base)
+    expect(addTerm(base, 'leeks')).toBe(base)
+  })
+
+  it('addTerm stops at 20 terms', () => {
+    const base = state({ have: Array.from({ length: 20 }, (_, i) => `item${i}`) })
+    expect(addTerm(base, 'one more')).toBe(base)
+  })
+
+  it('removeTerm removes by key', () => {
+    const base = state({ have: ['chicken', 'Leeks'] })
+    expect(removeTerm(base, 'leeks').have).toEqual(['chicken'])
+    expect(removeTerm(base, 'bogus')).toBe(base)
   })
 })
