@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 import pytest
@@ -5,6 +6,8 @@ from starlette.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
+from app.recipes.bar import Bar
+from app.recipes.store import RecipeStore
 
 
 @pytest.fixture
@@ -224,3 +227,46 @@ def test_food_writes_carry_no_bar(client):
     )
     assert marked.status_code == 200
     assert "bar" not in marked.json()
+
+
+def test_drinks_list_reads_the_drinks_once(client, monkeypatch):
+    """The list and its bar view share one read of every drink."""
+    lists = []
+    real = RecipeStore.list
+
+    def counted(self, side):
+        lists.append(side)
+        return real(self, side)
+
+    monkeypatch.setattr(RecipeStore, "list", counted)
+    recipes = client.get("/api/recipes?side=drinks&q=rum").json()["recipes"]
+    assert [r["slug"] for r in recipes] == ["daiquiri"]
+    assert recipes[0]["bar"]["status"] == "unsorted"
+    assert lists == ["drinks"]
+
+
+def test_bar_work_runs_off_the_event_loop(client, monkeypatch):
+    """A bar write waits on a lock an MCP call may hold; other requests must not."""
+    calls = []
+
+    def on_loop() -> bool:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return False
+        return True
+
+    for name in ("view", "apply"):
+        real = getattr(Bar, name)
+
+        def watched(self, *args, _real=real, _name=name, **kwargs):
+            calls.append((_name, on_loop()))
+            return _real(self, *args, **kwargs)
+
+        monkeypatch.setattr(Bar, name, watched)
+    assert client.get("/api/bar").status_code == 200
+    assert client.post("/api/bar", json={"have": ["white rum"]}).status_code == 200
+    assert client.get("/api/recipes?side=drinks").status_code == 200
+    assert client.get("/api/recipes/drinks/daiquiri").status_code == 200
+    assert {name for name, _ in calls} == {"view", "apply"}
+    assert [call for call in calls if call[1]] == []

@@ -5,6 +5,7 @@ import threading
 import pytest
 from pydantic import ValidationError
 
+from app.recipes import bar as bar_module
 from app.recipes.bar import (
     Bar,
     BarChanges,
@@ -728,3 +729,70 @@ def test_too_many_names_refused():
 def test_bad_changes_fail_validation(data):
     with pytest.raises(ValidationError):
         BarChanges.model_validate(data)
+
+
+# --- scale ---
+
+
+def count_calls(monkeypatch, module, name) -> list:
+    """Every call of `module.name` from here on, by its arguments."""
+    calls = []
+    real = getattr(module, name)
+
+    def counted(*args, **kwargs):
+        calls.append(args)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(module, name, counted)
+    return calls
+
+
+def count_registries(monkeypatch) -> list:
+    """Every registry built from here on."""
+    builds = []
+
+    class Counted(bar_module._Registry):
+        def __init__(self, *args):
+            builds.append(args)
+            super().__init__(*args)
+
+    monkeypatch.setattr(bar_module, "_Registry", Counted)
+    return builds
+
+
+def test_a_view_compares_names_in_linear_time(monkeypatch, catalog, store, bar):
+    bottles = [f"bottle {i}" for i in range(120)]
+    for i in range(150):
+        drink(store, f"Drink {i}", *(bottles[(i * 7 + j * 13) % 120] for j in range(5)))
+    entries(
+        catalog,
+        *(
+            {"name": name, "kind": "spirits", "aliases": [f"{name} alias"]}
+            for name in bottles[:60]
+        ),
+    )
+    bar.apply(BarChanges(have=bottles[:60], dont_have=bottles[60:]))
+    calls = count_calls(monkeypatch, bar_module, "name_key")
+    view = bar.view()
+    view.json()
+    assert len(view.items) == 120
+    # A handful of comparisons per item, alias and ingredient line, never one
+    # per item per inventory name.
+    assert len(calls) <= 8 * (120 + 60 + 150 * 5)
+
+
+@pytest.mark.parametrize("catalogued", [False, True])
+def test_a_bulk_change_builds_the_registry_a_few_times(
+    monkeypatch, catalog, store, bar, catalogued
+):
+    bottles = [f"bottle {i}" for i in range(100)]
+    for i in range(20):
+        drink(store, f"Drink {i}", *bottles[i * 5 : i * 5 + 5])
+    if catalogued:  # entries without a kind, which the change gives one
+        entries(catalog, *({"name": name} for name in bottles))
+    builds = count_registries(monkeypatch)
+    view = bar.apply(BarChanges(dont_have=bottles))
+    assert len(builds) <= 3
+    assert catalog.raw() == [{"name": name, "kind": "other"} for name in bottles]
+    assert read_inventory(bar)["items"] == dict.fromkeys(bottles, "dont")
+    assert all(i.state == "dont" for i in view.items)

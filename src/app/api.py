@@ -2,9 +2,13 @@
 
 Every write handler is `async def` and calls the synchronous store without
 awaiting between its reads and its write, so the event loop serialises writes
-(one worker). Cross-site forms can only send "simple" content types, so write
-routes refuse everything but JSON (uploads: image types), which a browser will
-only send cross-site after a preflight; the app sends no CORS headers.
+(one worker). The bar is the exception: it has its own lock, shared with the MCP
+tools, so its work (and the bar view the drink reads build) runs in a worker
+thread, and waiting for that lock never stalls other requests.
+
+Cross-site forms can only send "simple" content types, so write routes refuse
+everything but JSON (uploads: image types), which a browser will only send
+cross-site after a preflight; the app sends no CORS headers.
 """
 
 import functools
@@ -14,6 +18,7 @@ from collections.abc import Awaitable, Callable
 from typing import get_args
 
 from pydantic import ValidationError
+from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
 from starlette.routing import Route
@@ -206,6 +211,7 @@ def api_routes(
     store: RecipeStore, catalog: Catalog, uploads: UploadStore, bar: Bar
 ) -> list[Route]:
     def detail(recipe: Recipe) -> dict:
+        """A recipe's JSON. A drink's builds the bar view, which reads every drink."""
         body = recipe.model_dump(mode="json")
         for ingredient in body["ingredients"]:
             ingredient["g_per_tsp"] = catalog.g_per_tsp(ingredient["item"])
@@ -214,23 +220,34 @@ def api_routes(
             body = with_bar(body, recipe, bar.view())
         return body
 
+    def summaries(side: str, query: str) -> list[dict]:
+        everything = store.list(side)
+        # The bar view takes the same read of every drink as the list.
+        view = bar.view(everything) if side == "drinks" else None
+        found = []
+        for r in search(everything, query):
+            summary = {**r.summary(), **store.derived(side, r.slug)}
+            found.append(summary if view is None else with_bar(summary, r, view))
+        return found
+
     async def list_recipes(request: Request) -> JSONResponse:
         side = request.query_params.get("side")
         if side not in SIDES:
             return error("side must be food or drinks", 400)
-        recipes = search(store.list(side), request.query_params.get("q", ""))
-        view = bar.view() if side == "drinks" else None
-        summaries = []
-        for r in recipes:
-            summary = {**r.summary(), **store.derived(side, r.slug)}
-            summaries.append(summary if view is None else with_bar(summary, r, view))
-        return JSONResponse({"recipes": summaries})
+        query = request.query_params.get("q", "")
+        return JSONResponse(
+            {"recipes": await run_in_threadpool(summaries, side, query)}
+        )
+
+    def read_detail(side: str, slug: str) -> dict | None:
+        recipe = store.get(side, slug)
+        return None if recipe is None else detail(recipe)
 
     async def recipe_detail(request: Request) -> JSONResponse:
-        recipe = store.get(request.path_params["side"], request.path_params["slug"])
-        if recipe is None:
-            return not_found()
-        return JSONResponse(detail(recipe))
+        body = await run_in_threadpool(
+            read_detail, request.path_params["side"], request.path_params["slug"]
+        )
+        return not_found() if body is None else JSONResponse(body)
 
     async def recipe_file(request: Request) -> FileResponse | JSONResponse:
         path = store.file_path(
@@ -370,7 +387,7 @@ def api_routes(
 
     @unavailable_as_503
     async def read_bar(request: Request) -> JSONResponse:
-        return JSONResponse(bar.view().json())
+        return JSONResponse(await run_in_threadpool(lambda: bar.view().json()))
 
     @write_route
     @unavailable_as_503
@@ -378,7 +395,8 @@ def api_routes(
         if (refusal := needs_json(request)) is not None:
             return refusal
         changes = bar_changes(await json_object(request))
-        return JSONResponse(bar.apply(changes).json())
+        # In a worker thread: an MCP change may hold the bar's lock for a while.
+        return JSONResponse(await run_in_threadpool(lambda: bar.apply(changes).json()))
 
     async def unknown(request: Request) -> JSONResponse:
         return not_found()

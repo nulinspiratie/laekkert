@@ -15,6 +15,7 @@ to write over a catalog or inventory it cannot read, applies a whole
 from __future__ import annotations
 
 import copy
+import itertools
 import json
 import logging
 import threading
@@ -147,6 +148,39 @@ def _link(recipe: Recipe) -> dict:
     return {"slug": recipe.slug, "name": recipe.name}
 
 
+class _Inventory:
+    """An inventory's items, with each name findable by its key.
+
+    Changes go through `remove` and `set`, so the index stays true to `items`.
+    """
+
+    def __init__(self, items: dict):
+        self.items = items
+        self._order = itertools.count()
+        self._by_key: dict[str, dict[str, int]] = {}  # key -> {name: file order}
+        for name in items:
+            self._index(name)
+
+    def _index(self, name: str) -> None:
+        self._by_key.setdefault(name_key(name), {})[name] = next(self._order)
+
+    def names(self, keys: list[str]) -> list[str]:
+        """The names under any of these keys, in file order."""
+        found: dict[str, int] = {}
+        for key in keys:
+            found.update(self._by_key.get(key, {}))
+        return sorted(found, key=found.__getitem__)
+
+    def remove(self, name: str) -> None:
+        del self.items[name]
+        del self._by_key[name_key(name)][name]
+
+    def set(self, name: str, state: State) -> None:
+        if name not in self.items:
+            self._index(name)  # a new name goes last, as in the dict
+        self.items[name] = state
+
+
 class _Registry:
     """Which item each name means, for catalog entries (None = unreadable) and drinks.
 
@@ -224,17 +258,65 @@ class _Registry:
         entry = self.entry(item)
         return entry is not None and entry.fresh
 
-    def state(self, item: str, inventory: dict) -> State | None:
+    def keys(self, item: str) -> list[str]:
+        """The keys of every name that means this item (`item_key` gives it)."""
+        position = self.by_item.get(item)
+        if position is None:
+            return [item] if item in self.virtual else []
+        entry = self.entries[position]
+        assert entry is not None
+        keys: list[str] = []
+        for name in (entry.name, *entry.aliases):
+            key = name_key(name)
+            if key and key not in keys and self.index.get(key) == position:
+                keys.append(key)
+        return keys
+
+    def state(self, item: str, inventory: _Inventory) -> State | None:
         """The first inventory state under any of the item's names; None if fresh."""
         if self.fresh(item):
             return None
-        for name, state in inventory.items():
-            if state in STATES and self.item_key(name) == item:
+        for name in inventory.names(self.keys(item)):
+            if (state := inventory.items[name]) in STATES:
                 return state
         return None
 
-    def inventory_names(self, item: str, inventory: dict) -> list[str]:
-        return [name for name in inventory if self.item_key(name) == item]
+    def inventory_names(self, item: str, inventory: _Inventory) -> list[str]:
+        return inventory.names(self.keys(item))
+
+    def appended(self, entry: CatalogEntry | None) -> bool:
+        """Take in an entry added at the end of the catalog, as a rebuild would.
+
+        Only an entry whose names all mean one new item is taken in (a virtual
+        item becoming an entry, or a new bottle); for any other, nothing is
+        changed and the answer is False, so the caller rebuilds.
+        """
+        if entry is None:
+            return False
+        own = name_key(entry.name)
+        if not own or own in self.index:
+            return False
+        if any(name_key(alias) not in ("", own) for alias in entry.aliases):
+            return False
+        position = len(self.entries)
+        self.entries.append(entry)
+        self.by_item[own] = self.index[own] = position
+        # Drinks that named it keep it: their ingredients' key is its key.
+        self.virtual.pop(own, None)
+        return True
+
+    def replaced(self, item: str, entry: CatalogEntry | None) -> bool:
+        """Take in a new copy of an item's entry with the same names (a kind or
+        freshness changed); False if its names changed, so the caller rebuilds."""
+        position = self.by_item.get(item)
+        if position is None or entry is None:
+            return False
+        old = self.entries[position]
+        assert old is not None
+        if (entry.name, entry.aliases) != (old.name, old.aliases):
+            return False
+        self.entries[position] = entry
+        return True
 
 
 class BarView:
@@ -245,6 +327,7 @@ class BarView:
     ):
         self._registry = registry = _Registry(list(entries), drinks)
         self._drinks = drinks
+        shelf = _Inventory(inventory)
         syrups: dict[str, Recipe] = {}
         for recipe in drinks:
             if recipe.category == "syrups":
@@ -269,7 +352,7 @@ class BarView:
                 aliases=aliases,
                 kind=(entry.kind if entry else None) or "other",
                 fresh=registry.fresh(key),
-                state=registry.state(key, inventory),
+                state=registry.state(key, shelf),
                 used_in=[_link(r) for r in registry.used_in.get(key, [])],
                 recipe=_link(recipe) if recipe else None,
             )
@@ -344,6 +427,7 @@ class _Draft:
     def __init__(self, raw: list, inventory: dict, drinks: list[Recipe]):
         self.raw = copy.deepcopy(raw)
         self.inventory = dict(inventory)
+        self._shelf = _Inventory(self.inventory)
         self.drinks = drinks
         self._registry: _Registry | None = None
 
@@ -354,7 +438,16 @@ class _Draft:
         return self._registry
 
     def changed(self) -> None:
+        """The entries changed: the registry is built again when next used."""
         self._registry = None
+
+    def updated(self, item: str) -> None:
+        """The item's entry changed, but not its names."""
+        entry = self.raw_entry(item)
+        if self._registry is None or entry is None:
+            self.changed()
+        elif not self._registry.replaced(item, _parse(entry)):
+            self.changed()
 
     def key(self, name: str) -> str:
         """The item a name means, or the key of a name that is new to the bar."""
@@ -376,8 +469,10 @@ class _Draft:
         self.changed()
 
     def add_entry(self, entry: dict) -> dict:
+        registry = self._registry
         self.raw.append(entry)
-        self.changed()
+        if registry is None or not registry.appended(_parse(entry)):
+            self.changed()
         return entry
 
     def touch(self, item: str) -> dict:
@@ -387,25 +482,28 @@ class _Draft:
             return self.add_entry({"name": self.registry.name(item), "kind": "other"})
         if entry.get("kind") is None:
             entry["kind"] = "other"
-            self.changed()
+            self.updated(item)
         return entry
 
     def new_item(self, name: str, **fields) -> str:
         self.add_entry({"name": name.strip(), "kind": "other", **fields})
         return self.key(name)
 
+    def state(self, item: str) -> State | None:
+        return self.registry.state(item, self._shelf)
+
     def clear_state(self, item: str) -> None:
-        for name in self.registry.inventory_names(item, self.inventory):
-            del self.inventory[name]
+        for name in self.registry.inventory_names(item, self._shelf):
+            self._shelf.remove(name)
 
     def set_state(self, item: str, state: State) -> None:
         if self.registry.fresh(item):
             return  # fresh items are never tracked
-        names = self.registry.inventory_names(item, self.inventory)
+        names = self.registry.inventory_names(item, self._shelf)
         if len(names) == 1 and self.inventory[names[0]] == state:
             return
         self.clear_state(item)
-        self.inventory[self.registry.name(item)] = state
+        self._shelf.set(self.registry.name(item), state)
 
 
 def _check_conflicts(changes: BarChanges, draft: _Draft) -> None:
@@ -465,8 +563,8 @@ def _fold(draft: _Draft, source: str, into: str) -> None:
         raise BarError(FOLD_SELF)
     a_entry, a_raw = registry.entry(a), draft.raw_entry(a)
     a_names = [registry.name(a), *registry.aliases(a)]
-    a_state = registry.state(a, draft.inventory)
-    b_state = registry.state(b, draft.inventory)
+    a_state = draft.state(a)
+    b_state = draft.state(b)
     b_raw = draft.raw_entry(b)
     draft.clear_state(a)
     if a_raw is not None:
@@ -539,19 +637,20 @@ def _apply(changes: BarChanges, draft: _Draft) -> None:
         entry = draft.touch(item)
         if entry.get("fresh") is not True:
             entry["fresh"] = True
-            draft.changed()
+            draft.updated(item)
     for name in changes.not_fresh:
         item = draft.bar_item(name)
         draft.clear_state(item)
         entry = draft.touch(item)
         if "fresh" in entry:
             del entry["fresh"]
-            draft.changed()
+            draft.updated(item)
 
     for name, kind in changes.kinds.items():
-        entry = draft.touch(draft.bar_item(name))
+        item = draft.bar_item(name)
+        entry = draft.touch(item)
         entry["kind"] = kind
-        draft.changed()
+        draft.updated(item)
 
     for names, state in ((changes.have, "have"), (changes.dont_have, "dont")):
         for name in names:
@@ -593,10 +692,11 @@ class Bar:
         self._lock = threading.Lock()
         self._cache: tuple[int | None, dict] = (None, {})
 
-    def view(self) -> BarView:
-        return BarView(
-            self._catalog.entries(), self._inventory(), self._store.list("drinks")
-        )
+    def view(self, drinks: list[Recipe] | None = None) -> BarView:
+        """The bar now. `drinks` is every drink, when the caller has just read them."""
+        if drinks is None:
+            drinks = self._store.list("drinks")
+        return BarView(self._catalog.entries(), self._inventory(), drinks)
 
     def apply(self, changes: BarChanges, *, allow_delete: bool = True) -> BarView:
         """Apply the whole change or none of it, and return the bar after it."""
@@ -606,14 +706,15 @@ class Bar:
             raw = self._catalog.raw()
             data = self._read_strict()
             items = data.get("items", {})
-            draft = _Draft(raw, items, self._store.list("drinks"))
+            drinks = self._store.list("drinks")
+            draft = _Draft(raw, items, drinks)
             _check_conflicts(changes, draft)
             _apply(changes, draft)
             if draft.raw != raw:
                 self._catalog.save_raw(draft.raw)
             if draft.inventory != items:
                 self._write({**data, "items": draft.inventory})
-            return self.view()
+            return self.view(drinks)
 
     def _read_strict(self) -> dict:
         """The inventory file as parsed; raises InventoryUnavailable if it is bad."""
