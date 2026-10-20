@@ -48,7 +48,7 @@
   padding: 20px 16px calc(76px + 24px + env(safe-area-inset-bottom));
 }
 
-.ed-phone-title {
+.editor .ed-phone-title {
   margin-bottom: 16px;
   font-size: 32px;
   line-height: 1.1;
@@ -102,11 +102,11 @@
   color: var(--label);
 }
 
-.ed-field--name input {
+.editor .ed-field--name input {
   min-height: 56px;
   border-radius: 12px;
   font-family: var(--font-serif);
-  font-size: 24px;
+  font-size: 22px;
 }
 
 .ed-basics-row {
@@ -159,6 +159,7 @@
   border-radius: 12px;
   background: var(--field-bg);
   color: var(--text);
+  white-space: nowrap;
 }
 
 .ed-add {
@@ -403,8 +404,8 @@
   gap: 8px;
 }
 
-.ed-btn-row .ed-file {
-  flex: 1;
+.ed-btn-row .ed-btn {
+  flex: 1 1 auto;
 }
 
 .ed-hint {
@@ -523,6 +524,10 @@
     border-bottom: 1px solid var(--bar-border);
     background: var(--bar);
     color: var(--bar-ink);
+  }
+
+  .editor .ed-field--name input {
+    font-size: 26px;
   }
 
   .ed-header h1 {
