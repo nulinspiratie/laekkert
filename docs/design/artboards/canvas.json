@@ -15,7 +15,7 @@
       "y": 0,
       "w": 1440,
       "h": 1000,
-      "title": "Food \u00b7 grid \u00b7 desktop",
+      "title": "Food · grid · desktop",
       "expand": "fill",
       "is_interactive": true
     },
@@ -24,7 +24,7 @@
       "y": 0,
       "w": 1440,
       "h": 1000,
-      "title": "Food \u00b7 list \u00b7 desktop",
+      "title": "Food · list · desktop",
       "expand": "fill",
       "is_interactive": true
     },
@@ -33,7 +33,7 @@
       "y": 0,
       "w": 390,
       "h": 844,
-      "title": "Food \u00b7 grid \u00b7 phone",
+      "title": "Food · grid · phone",
       "is_interactive": true
     },
     "FoodListPhone.dc.html": {
@@ -41,7 +41,7 @@
       "y": 0,
       "w": 390,
       "h": 844,
-      "title": "Food \u00b7 list \u00b7 phone",
+      "title": "Food · list · phone",
       "is_interactive": true
     },
     "DrinksDesktop.dc.html": {
@@ -49,7 +49,7 @@
       "y": 1400,
       "w": 1440,
       "h": 1000,
-      "title": "Drinks \u00b7 grid \u00b7 desktop",
+      "title": "Drinks · grid · desktop",
       "expand": "fill",
       "is_interactive": true
     },
@@ -58,7 +58,7 @@
       "y": 1400,
       "w": 390,
       "h": 844,
-      "title": "Drinks \u00b7 grid \u00b7 phone",
+      "title": "Drinks · grid · phone",
       "is_interactive": true
     },
     "RecipeDesktop.dc.html": {
@@ -66,7 +66,7 @@
       "y": 2800,
       "w": 1440,
       "h": 2080,
-      "title": "Recipe page \u00b7 desktop",
+      "title": "Recipe page · desktop",
       "expand": "fill",
       "is_interactive": true
     },
@@ -75,7 +75,7 @@
       "y": 2800,
       "w": 390,
       "h": 2400,
-      "title": "Recipe page \u00b7 phone",
+      "title": "Recipe page · phone",
       "is_interactive": true
     },
     "EditorDesktop.dc.html": {
@@ -83,16 +83,107 @@
       "y": 5600,
       "w": 1440,
       "h": 2100,
-      "title": "Recipe editor \u00b7 desktop",
+      "title": "Recipe editor · desktop",
       "expand": "fill",
       "is_interactive": true
     },
-    "FilterSheetPhone.dc.html": {
+    "EditorPhone.dc.html": {
       "x": 1520,
       "y": 5600,
       "w": 390,
+      "h": 2100,
+      "title": "New recipe · phone",
+      "is_interactive": true
+    },
+    "FilterSheetPhone.dc.html": {
+      "x": 1990,
+      "y": 5600,
+      "w": 390,
       "h": 844,
-      "title": "Filter sheet \u00b7 phone",
+      "title": "Filter sheet · phone",
+      "is_interactive": true
+    },
+    "DrinksNoBarPhone.dc.html": {
+      "x": 1990,
+      "y": 1400,
+      "w": 390,
+      "h": 844,
+      "title": "Drinks · bar never set up · phone",
+      "is_interactive": true
+    },
+    "DrinksFilterEmptyPhone.dc.html": {
+      "x": 2460,
+      "y": 1400,
+      "w": 390,
+      "h": 844,
+      "title": "Drinks · nothing to make now · phone",
+      "is_interactive": true
+    },
+    "DrinksNoBarDesktop.dc.html": {
+      "x": 2930,
+      "y": 1400,
+      "w": 1440,
+      "h": 1000,
+      "title": "Drinks · bar never set up · desktop",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "DrinkRecipeDesktop.dc.html": {
+      "x": 1990,
+      "y": 2800,
+      "w": 1440,
+      "h": 1400,
+      "title": "Drink recipe · desktop",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "DrinkRecipePhone.dc.html": {
+      "x": 3510,
+      "y": 2800,
+      "w": 390,
+      "h": 1500,
+      "title": "Drink recipe · phone",
+      "is_interactive": true
+    },
+    "BarPhone.dc.html": {
+      "x": 0,
+      "y": 8100,
+      "w": 390,
+      "h": 2560,
+      "title": "The bar · everyday · phone",
+      "is_interactive": true
+    },
+    "BarFirstVisitPhone.dc.html": {
+      "x": 470,
+      "y": 8100,
+      "w": 390,
+      "h": 2860,
+      "title": "The bar · first visit · phone",
+      "is_interactive": true
+    },
+    "BarSearchEmptyPhone.dc.html": {
+      "x": 940,
+      "y": 8100,
+      "w": 390,
+      "h": 844,
+      "title": "The bar · search, no match · phone",
+      "is_interactive": true
+    },
+    "BarItemSheetPhone.dc.html": {
+      "x": 1410,
+      "y": 8100,
+      "w": 390,
+      "h": 844,
+      "title": "The bar · item sheet · phone",
+      "is_interactive": true
+    },
+    "BarDesktop.dc.html": {
+      "x": 1880,
+      "y": 8100,
+      "w": 1440,
+      "h": 1500,
+      "title": "The bar · everyday · desktop",
+      "expand": "fill",
       "is_interactive": true
     }
   },
@@ -106,36 +197,54 @@
     "RecipeDesktop.dc.html",
     "RecipePhone.dc.html",
     "EditorDesktop.dc.html",
-    "FilterSheetPhone.dc.html"
+    "EditorPhone.dc.html",
+    "FilterSheetPhone.dc.html",
+    "DrinksNoBarPhone.dc.html",
+    "DrinksFilterEmptyPhone.dc.html",
+    "DrinksNoBarDesktop.dc.html",
+    "DrinkRecipeDesktop.dc.html",
+    "DrinkRecipePhone.dc.html",
+    "BarPhone.dc.html",
+    "BarFirstVisitPhone.dc.html",
+    "BarSearchEmptyPhone.dc.html",
+    "BarItemSheetPhone.dc.html",
+    "BarDesktop.dc.html"
   ],
   "notes": {
     "t1": {
       "x": 0,
       "y": -300,
-      "text": "1 \u00b7 Food browse",
+      "text": "1 · Food browse",
       "kind": "title1",
       "maxW": 3900
     },
     "t2": {
       "x": 0,
       "y": 1100,
-      "text": "2 \u00b7 Drinks browse",
+      "text": "2 · Drinks browse",
       "kind": "title1",
-      "maxW": 1910
+      "maxW": 4370
     },
     "t3": {
       "x": 0,
       "y": 2500,
-      "text": "3 \u00b7 Recipe page",
+      "text": "3 · Recipe page",
       "kind": "title1",
-      "maxW": 1910
+      "maxW": 3900
     },
     "t4": {
       "x": 0,
       "y": 5300,
-      "text": "4\u20135 \u00b7 Editor and phone filters",
+      "text": "4–5 · Add / edit recipe and phone filters",
       "kind": "title1",
-      "maxW": 1910
+      "maxW": 2380
+    },
+    "t5": {
+      "x": 0,
+      "y": 7800,
+      "text": "6 · The bar",
+      "kind": "title1",
+      "maxW": 3320
     }
   },
   "designSystems": []
