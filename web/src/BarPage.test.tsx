@@ -17,7 +17,9 @@ const ITEMS: BarItem[] = [
   item({ name: 'lime juice', tracked: false, untracked_because: 'marked', used_in: [drink('daiquiri', 'Daiquiri')] }),
   item({ name: 'mezcal', kind: 'spirits', state: 'dont', used_in: [drink('naked-and-famous', 'Naked and famous')] }),
   item({ name: 'mint', tracked: false, untracked_because: 'marked', used_in: [drink('mojito', 'Mojito')] }),
-  item({ name: 'orgeat', kind: 'syrups', used_in: [drink('mai-tai', 'Mai tai')] }),
+  item({ name: 'orange cordial', tracked: false, untracked_because: 'recipe', recipe: drink('orange-cordial', 'Orange cordial') }),
+  item({ name: 'orgeat', kind: 'other', used_in: [drink('mai-tai', 'Mai tai')] }),
+  item({ name: 'simple syrup', kind: 'syrups', tracked: false, untracked_because: 'syrups', used_in: [drink('daiquiri', 'Daiquiri')] }),
   item({
     name: 'white rum',
     kind: 'spirits',
@@ -30,13 +32,13 @@ const ITEMS: BarItem[] = [
 const everyday: Bar = {
   items: ITEMS,
   set_up: true,
-  counts: { can_make: 3, missing: 1, unsorted: 2, total: 8 },
+  counts: { can_make: 3, missing: 1, unsorted: 2, total: 6 },
 }
 
 const firstVisit: Bar = {
   items: ITEMS.map((it) => ({ ...it, state: null })),
   set_up: false,
-  counts: { can_make: 0, missing: 0, unsorted: 8, total: 8 },
+  counts: { can_make: 0, missing: 0, unsorted: 6, total: 6 },
 }
 
 /** The bar with one item changed, as the server would send it back. */
@@ -101,7 +103,7 @@ test('shows the everyday subtitle and can-make card', async () => {
   await openBar()
   expect(screen.getByText('One bar for the household · 3 of 6 bottles in')).toBeInTheDocument()
   const card = screen.getByRole('link', { name: 'You can make 3 drinks now' })
-  expect(card).toHaveAttribute('href', '/drinks?bar=can')
+  expect(card).toHaveAttribute('href', '/drinks')
   expect(screen.getByRole('link', { name: 'Drinks' })).toHaveAttribute('href', '/drinks')
   expect(screen.queryByText(/sorted$/)).not.toBeInTheDocument()
   expect(document.documentElement.dataset.side).toBe('drinks')
@@ -109,7 +111,7 @@ test('shows the everyday subtitle and can-make card', async () => {
   const unsorted = screen.getByRole('region', { name: 'Not sorted yet' })
   expect(
     within(unsorted).getByText(
-      'New from drinks you added. Until you sort them, drinks that use them count as missing.',
+      'New from drinks you added. Until you sort them, drinks that use them don\'t show under Can make.',
     ),
   ).toBeInTheDocument()
   expect(within(unsorted).getByText('2')).toBeInTheDocument()
@@ -120,9 +122,19 @@ test('shows the everyday subtitle and can-make card', async () => {
   expect(within(spirits).getByText('Used in 1 drink')).toBeInTheDocument()
   expect(within(screen.getByRole('region', { name: 'Liqueurs' })).getByText('Not in any drink yet')).toBeInTheDocument()
 
-  const fresh = screen.getByRole('region', { name: 'Fresh, so never tracked' })
-  expect(within(fresh).getByRole('button', { name: 'Lime juice' })).toBeInTheDocument()
-  expect(within(fresh).getByText('Open a bottle or a fresh item to move it between the two.')).toBeInTheDocument()
+  const notTracked = screen.getByRole('region', { name: 'Not tracked' })
+  expect(
+    within(notTracked).getByText(
+      'Fresh things, syrups and mixers. Drinks that use them still show under Can make and say what else they need.',
+    ),
+  ).toBeInTheDocument()
+  expect(within(notTracked).getByRole('button', { name: 'Lime juice' })).toBeInTheDocument()
+  expect(within(notTracked).getByText('Open an item to start or stop tracking it.')).toBeInTheDocument()
+  // A syrup is listed here, not in a group of its own, and the "bottles" count leaves it out.
+  expect(within(notTracked).getByRole('button', { name: 'Simple syrup' })).toBeInTheDocument()
+  expect(within(notTracked).getByRole('button', { name: 'Orange cordial' })).toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: 'Syrups' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /^Simple syrup:/ })).not.toBeInTheDocument()
 })
 
 test('shows the first-visit subtitle and progress', async () => {
@@ -230,8 +242,8 @@ test('sorts an unsorted item', async () => {
   fireEvent.click(within(unsorted).getByRole('button', { name: 'Orgeat: have' }))
   expect(posted(fetch)).toEqual([{ have: ['orgeat'] }])
   // It moves into its kind at once.
-  const syrups = await screen.findByRole('region', { name: 'Syrups' })
-  expect(within(syrups).getByRole('button', { name: "Orgeat: have. Tap if you've run out." })).toBeInTheDocument()
+  const other = await screen.findByRole('region', { name: 'Other' })
+  expect(within(other).getByRole('button', { name: "Orgeat: have. Tap if you've run out." })).toBeInTheDocument()
   expect(within(unsorted).getByRole('button', { name: 'Mark it as don’t have' })).toBeInTheDocument()
 })
 
@@ -253,7 +265,7 @@ test('filters by name and alias', async () => {
   expect(within(spirits).getByText('Also called light rum')).toBeInTheDocument()
   expect(screen.queryByText('Mezcal')).not.toBeInTheDocument()
   expect(screen.queryByRole('region', { name: 'Not sorted yet' })).not.toBeInTheDocument()
-  expect(screen.queryByRole('region', { name: 'Fresh, so never tracked' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('region', { name: 'Not tracked' })).not.toBeInTheDocument()
 
   fireEvent.change(search, { target: { value: 'creme' } })
   expect(screen.getByText('Crème de violette')).toBeInTheDocument()
@@ -276,17 +288,57 @@ test('offers to add a bottle with no match', async () => {
   expect(screen.getByRole('button', { name: "Falernum: have. Tap if you've run out." })).toBeInTheDocument()
 })
 
-test('adds a fresh item', async () => {
-  const added = { ...everyday, items: [...ITEMS, item({ name: 'egg white', tracked: false, untracked_because: 'marked' })] }
+test('adds an item without tracking it', async () => {
+  const added = { ...everyday, items: [...ITEMS, item({ name: 'yuzu', tracked: false, untracked_because: 'marked' })] }
   const fetch = stubBar(everyday, () => json(added))
   await openBar()
   const search = screen.getByRole('searchbox', { name: 'Find a bottle' })
-  fireEvent.change(search, { target: { value: 'egg white' } })
-  fireEvent.click(screen.getByRole('button', { name: "It's fresh: add it without tracking" }))
-  expect(posted(fetch)).toEqual([{ fresh: ['egg white'] }])
+  fireEvent.change(search, { target: { value: 'yuzu' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Add it without tracking' }))
+  expect(posted(fetch)).toEqual([{ untrack: ['yuzu'] }])
   await waitFor(() => expect(search).toHaveValue(''))
-  const fresh = screen.getByRole('region', { name: 'Fresh, so never tracked' })
-  expect(within(fresh).getByRole('button', { name: 'Egg white' })).toBeInTheDocument()
+  const notTracked = screen.getByRole('region', { name: 'Not tracked' })
+  expect(within(notTracked).getByRole('button', { name: 'Yuzu' })).toBeInTheDocument()
+})
+
+describe("don't track", () => {
+  const withTonic: Bar = { ...everyday, items: [...ITEMS, item({ name: 'tonic', used_in: [drink('gin-tonic', 'Gin and tonic')] })] }
+  const unsortedTonic = () => within(screen.getByRole('region', { name: 'Not sorted yet' }))
+
+  test("moves a not-sorted item to Not tracked at once", async () => {
+    const answer = deferred<Response>()
+    const fetch = stubBar(withTonic, () => answer.promise)
+    await openBar()
+    fireEvent.click(unsortedTonic().getByRole('button', { name: "Tonic: don't track" }))
+    expect(posted(fetch)).toEqual([{ untrack: ['tonic'] }])
+
+    // Before the server answers: out of the unsorted section, into Not tracked.
+    expect(unsortedTonic().queryByRole('button', { name: 'Tonic: have' })).not.toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Not tracked' })).getByRole('button', { name: 'Tonic' })).toBeInTheDocument()
+
+    const server = withItem(withTonic, 'tonic', { tracked: false, untracked_because: 'marked', state: null })
+    await act(async () => answer.resolve(json(server)))
+    expect(within(screen.getByRole('region', { name: 'Not tracked' })).getByRole('button', { name: 'Tonic' })).toBeInTheDocument()
+    expect(screen.getByText('One bar for the household · 3 of 6 bottles in')).toBeInTheDocument()
+  })
+
+  test('rolls back when the server refuses, saying why in its row', async () => {
+    stubBar(withTonic, refuse)
+    await openBar()
+    fireEvent.click(unsortedTonic().getByRole('button', { name: "Tonic: don't track" }))
+    const pick = await unsortedTonic().findByRole('button', { name: 'Tonic: have' })
+    expect(await within(pick.parentElement!).findByRole('alert')).toHaveTextContent(refusal)
+    expect(within(screen.getByRole('region', { name: 'Not tracked' })).queryByRole('button', { name: 'Tonic' })).not.toBeInTheDocument()
+  })
+})
+
+test('the unsorted help says drinks do not show under Can make', async () => {
+  stubBar(everyday)
+  await openBar()
+  const unsorted = screen.getByRole('region', { name: 'Not sorted yet' })
+  expect(
+    within(unsorted).getByText("New from drinks you added. Until you sort them, drinks that use them don't show under Can make."),
+  ).toBeInTheDocument()
 })
 
 test('add a bottle focuses the search field', async () => {
@@ -303,7 +355,7 @@ test('a desktop says Click and has a More button', async () => {
   expect(screen.getByRole('button', { name: "White rum: have. Click if you've run out." })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: "Mezcal: don't have. Click when you've bought it." })).toBeInTheDocument()
   const aside = screen.getByRole('complementary')
-  expect(within(aside).getByRole('link', { name: /You can make 3 drinks now/ })).toHaveAttribute('href', '/drinks?bar=can')
+  expect(within(aside).getByRole('link', { name: /You can make 3 drinks now/ })).toHaveAttribute('href', '/drinks')
   expect(within(aside).getByText('From this bar')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'More for White rum' }))
   expect(screen.getByRole('dialog', { name: 'White rum' })).toBeInTheDocument()
@@ -329,6 +381,9 @@ test('a desktop says every bottle is sorted when none is left', async () => {
 })
 
 describe('the item sheet', () => {
+  const trackHelp =
+    'Tracked items are bottles: a drink needs them before it shows under Can make. Turn it off for fresh things, syrups and mixers.'
+
   /** The row's name (not its toggle, whose label starts with the name and a colon). */
   const row = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name}(?!:)`) })
 
@@ -426,23 +481,26 @@ describe('the item sheet', () => {
     expect(await within(dialog).findByText('Liqueurs · used in 2 drinks')).toBeInTheDocument()
   })
 
-  test('moves an item to fresh', async () => {
+  test('stops and starts tracking an item', async () => {
     let bar = everyday
     const { fetch, dialog } = await openSheet('White rum', everyday, (body) => {
-      bar = withItem(bar, 'white rum', body.untrack
-          ? { tracked: false, untracked_because: 'marked', state: null }
-          : { tracked: true, untracked_because: null })
+      bar = withItem(
+        bar,
+        'white rum',
+        body.untrack ? { tracked: false, untracked_because: 'marked', state: null } : { tracked: true, untracked_because: null },
+      )
       return json(bar)
     })
-    const fresh = within(dialog).getByRole('switch', { name: 'Fresh item' })
-    expect(fresh).toHaveAttribute('aria-checked', 'false')
-    fireEvent.click(fresh)
-    await waitFor(() => expect(fresh).toHaveAttribute('aria-checked', 'true'))
+    expect(within(dialog).getByText(trackHelp)).toBeInTheDocument()
+    const track = within(dialog).getByRole('switch', { name: 'Track it' })
+    expect(track).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(track)
+    await waitFor(() => expect(track).toHaveAttribute('aria-checked', 'false'))
     expect(within(dialog).queryByRole('radiogroup', { name: 'In the bar' })).not.toBeInTheDocument()
 
-    fireEvent.click(fresh)
-    await waitFor(() => expect(fresh).toHaveAttribute('aria-checked', 'false'))
-    expect(posted(fetch)).toEqual([{ fresh: ['white rum'] }, { not_fresh: ['white rum'] }])
+    fireEvent.click(track)
+    await waitFor(() => expect(track).toHaveAttribute('aria-checked', 'true'))
+    expect(posted(fetch)).toEqual([{ untrack: ['white rum'] }, { track: ['white rum'] }])
   })
 
   test('folds into another item', async () => {
@@ -482,11 +540,49 @@ describe('the item sheet', () => {
     )
   })
 
-  test('a fresh chip opens its sheet without the bar state', async () => {
-    const { dialog } = await openSheet('Lime juice')
+  test('a marked item can be tracked again, and has no bar state until then', async () => {
+    const { fetch, dialog } = await openSheet('Mint', everyday, () =>
+      json(withItem(everyday, 'mint', { tracked: true, untracked_because: null })),
+    )
     expect(within(dialog).queryByRole('radiogroup', { name: 'In the bar' })).not.toBeInTheDocument()
-    expect(within(dialog).getByRole('switch', { name: 'Fresh item' })).toHaveAttribute('aria-checked', 'true')
+    const track = within(dialog).getByRole('switch', { name: 'Track it' })
+    expect(track).toBeEnabled()
+    expect(track).toHaveAttribute('aria-checked', 'false')
+    fireEvent.click(track)
+    expect(posted(fetch)).toEqual([{ track: ['mint'] }])
+    await waitFor(() => expect(track).toHaveAttribute('aria-checked', 'true'))
+    expect(within(dialog).getByRole('radiogroup', { name: 'In the bar' })).toBeInTheDocument()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  test('a syrup can never be tracked', async () => {
+    const { fetch, dialog } = await openSheet('Simple syrup')
+    const track = within(dialog).getByRole('switch', { name: 'Track it' })
+    expect(track).toBeDisabled()
+    expect(track).toHaveAttribute('aria-checked', 'false')
+    expect(track).toHaveAccessibleDescription('Syrups are never tracked.')
+    expect(within(dialog).getByText('Syrups are never tracked.')).toBeInTheDocument()
+    expect(within(dialog).queryByText(trackHelp)).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('radiogroup', { name: 'In the bar' })).not.toBeInTheDocument()
+    fireEvent.click(track)
+    expect(posted(fetch)).toEqual([])
+  })
+
+  test('an item with a recipe can never be tracked', async () => {
+    const { dialog } = await openSheet('Orange cordial')
+    const track = within(dialog).getByRole('switch', { name: 'Track it' })
+    expect(track).toBeDisabled()
+    expect(track).toHaveAttribute('aria-checked', 'false')
+    expect(within(dialog).getByText("Lækkert has a recipe for it, so it's never tracked.")).toBeInTheDocument()
+    expect(within(dialog).queryByRole('radiogroup', { name: 'In the bar' })).not.toBeInTheDocument()
+  })
+
+  test('shows the server refusal when tracking is refused', async () => {
+    const sentence = 'Lækkert has a recipe for ‘mint’, so it isn\'t tracked.'
+    const { dialog } = await openSheet('Mint', everyday, () => json({ error: sentence }, 400))
+    fireEvent.click(within(dialog).getByRole('switch', { name: 'Track it' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(sentence)
+    expect(within(dialog).getByRole('switch', { name: 'Track it' })).toHaveAttribute('aria-checked', 'false')
   })
 })

@@ -331,6 +331,22 @@
   min-width: 104px;
 }
 
+/* Third choice on a not-sorted row. A text button, underlined so it reads as a button
+   without colour; on a phone it wraps to its own line under Have and Don't have. */
+.bar-untrack {
+  flex: none;
+  min-height: 44px;
+  margin-left: auto;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--bar-dont-ink);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .bar-more {
   flex: none;
   display: flex;
@@ -455,9 +471,9 @@
   font-weight: 600;
 }
 
-/* ---- Fresh ---- */
+/* ---- Not tracked ---- */
 
-.bar-fresh {
+.bar-untracked {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -466,27 +482,27 @@
   border-radius: 16px;
 }
 
-.bar-fresh-head {
+.bar-untracked-head {
   display: flex;
   align-items: center;
   gap: 8px;
   color: var(--bar-dont-ink);
 }
 
-.bar-fresh-head h2 {
+.bar-untracked-head h2 {
   margin: 0;
   font-size: 16px;
   font-weight: 700;
 }
 
-.bar-fresh p {
+.bar-untracked p {
   margin: 0;
   font-size: 14px;
   line-height: 1.45;
   color: var(--muted);
 }
 
-.bar-fresh .bar-fresh-foot {
+.bar-untracked .bar-untracked-foot {
   margin-top: 2px;
   font-size: 13px;
   color: var(--label);
@@ -540,7 +556,7 @@
 }
 
 .bar-nomatch-add,
-.bar-nomatch-fresh {
+.bar-nomatch-untracked {
   align-self: stretch;
   display: flex;
   align-items: center;
@@ -559,7 +575,7 @@
   font-weight: 700;
 }
 
-.bar-nomatch-fresh {
+.bar-nomatch-untracked {
   min-height: 48px;
   border: 1px solid var(--bar-quiet-border);
   background: transparent;
@@ -672,7 +688,7 @@
 }
 
 .bar-page--desktop .bar-nomatch-add,
-.bar-page--desktop .bar-nomatch-fresh {
+.bar-page--desktop .bar-nomatch-untracked {
   align-self: flex-start;
   min-height: 48px;
   padding: 0 18px;
@@ -733,7 +749,7 @@
   font-weight: 600;
 }
 
-.bar-aside .bar-fresh {
+.bar-aside .bar-untracked {
   padding: 18px;
 }
 
@@ -980,7 +996,7 @@
   gap: 6px;
 }
 
-.bar-sheet-fresh {
+.bar-sheet-track {
   display: flex;
   align-items: center;
   gap: 14px;
@@ -989,7 +1005,7 @@
   border-bottom: 1px solid var(--bar-row-rule);
 }
 
-.bar-sheet-fresh-text {
+.bar-sheet-track-text {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -999,7 +1015,7 @@
   color: var(--muted);
 }
 
-.bar-sheet-fresh-label {
+.bar-sheet-track-label {
   font-size: 16px;
   font-weight: 600;
   color: var(--text);
@@ -1032,6 +1048,11 @@
   justify-content: flex-end;
   border-color: var(--bar-cta);
   background: var(--bar-cta);
+}
+
+.bar-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .bar-switch-knob {
