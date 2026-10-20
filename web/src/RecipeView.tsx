@@ -1,7 +1,7 @@
 // The recipe page: hero, title block, tags, marks and rating, the ingredients card, the
 // method, the source and the History. Layout follows RecipeDesktop and RecipePhone.
 
-import { useCallback, useEffect, useId, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
 import { addEntry, getRecipe, getTimeline, recipeImageUrl, restoreVersion, setMarks } from './api'
 import { browseQuery, MARK_LABELS, type FilterMark } from './browse'
@@ -96,6 +96,8 @@ function Page({ recipe, onRecipe }: { recipe: Recipe; onRecipe: (recipe: Recipe)
   const [timeline, setTimeline] = useState<Timeline | null>(null)
   const [problem, setProblem] = useState<Problem | null>(null)
   const [busy, setBusy] = useState(false)
+  // The state above disables the buttons; the ref also stops a second call in the same tick.
+  const writing = useRef(false)
 
   const messageOf = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong')
 
@@ -120,6 +122,8 @@ function Page({ recipe, onRecipe }: { recipe: Recipe; onRecipe: (recipe: Recipe)
 
   /** Runs a write; the page takes the recipe it returns and reloads the timeline. */
   const perform = async (area: Problem['area'], request: () => Promise<Recipe>): Promise<boolean> => {
+    if (writing.current) return false
+    writing.current = true
     setBusy(true)
     setProblem(null)
     try {
@@ -130,6 +134,7 @@ function Page({ recipe, onRecipe }: { recipe: Recipe; onRecipe: (recipe: Recipe)
       setProblem({ area, message: messageOf(err) })
       return false
     } finally {
+      writing.current = false
       setBusy(false)
     }
   }
@@ -267,6 +272,7 @@ function Page({ recipe, onRecipe }: { recipe: Recipe; onRecipe: (recipe: Recipe)
           entries={timeline?.entries ?? []}
           currentVersion={timeline?.current_version ?? null}
           compact={!desktop}
+          busy={busy}
           error={problem?.area === 'history' ? problem.message : null}
           onNote={(text) => post('history', { kind: 'note', text })}
           onRestore={(version) => void perform('history', () => restoreVersion(side, slug, version))}

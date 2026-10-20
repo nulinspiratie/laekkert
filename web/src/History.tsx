@@ -79,12 +79,14 @@ function Entry({
   all,
   currentVersion,
   last,
+  busy,
   onRestore,
 }: {
   entry: TimelineEntry
   all: TimelineEntry[]
   currentVersion: number | null
   last: boolean
+  busy: boolean
   onRestore: (version: number) => void
 }) {
   const version = restorableVersion(entry, currentVersion)
@@ -105,7 +107,7 @@ function Entry({
             <strong>{entryTitle(entry, all)}</strong> · <time dateTime={entry.at}>{formatDate(entry.at)}</time>
           </span>
           {version !== null && (
-            <button type="button" className="history-restore" onClick={restore}>
+            <button type="button" className="history-restore" disabled={busy} onClick={restore}>
               <Restore />
               Restore this version
             </button>
@@ -123,6 +125,7 @@ export function History({
   onRestore,
   onNote,
   compact = false,
+  busy = false,
   error = null,
 }: {
   entries: TimelineEntry[]
@@ -132,6 +135,8 @@ export function History({
   onNote: (text: string) => Promise<boolean>
   /** The phone: the newest three entries and a button for the rest. */
   compact?: boolean
+  /** A write is in flight: restoring and adding a note wait for it. */
+  busy?: boolean
   error?: string | null
 }) {
   const headingId = useId()
@@ -165,7 +170,7 @@ export function History({
             onChange={(event) => setText(event.target.value)}
           />
         </label>
-        <button type="submit" className="history-add" disabled={saving || text.trim() === ''}>
+        <button type="submit" className="history-add" disabled={busy || saving || text.trim() === ''}>
           Add note
         </button>
       </form>
@@ -182,6 +187,7 @@ export function History({
             all={entries}
             currentVersion={currentVersion}
             last={i === shown.length - 1}
+            busy={busy}
             onRestore={onRestore}
           />
         ))}

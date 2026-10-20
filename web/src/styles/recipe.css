@@ -177,6 +177,7 @@
 .mark-toggle:disabled,
 .star-btn:disabled,
 .made-it-save:disabled,
+.history-restore:disabled,
 .history-add:disabled {
   opacity: 0.55;
   cursor: default;

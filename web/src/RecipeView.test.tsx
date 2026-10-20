@@ -378,6 +378,18 @@ describe('marks, rating and Made it', () => {
     ])
   })
 
+  test('tapping star 1 when the rating is 1 posts a half star', async () => {
+    const fetch = stubApiWith({
+      recipes: [{ ...traybake, rating: 1 }],
+      post: () => json({ entry: {}, recipe: { ...traybake, rating: 0.5 } }),
+    })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Rate 1 star' }))
+    expect(await screen.findByText('0.5')).toBeInTheDocument()
+    expect(posts(fetch).map((p) => p.body)).toEqual([{ kind: 'rating', rating: 0.5 }])
+  })
+
   test('a failed rating keeps the old rating and shows the error', async () => {
     stubApiWith({
       recipes: [{ ...traybake, rating: 4 }],
@@ -569,6 +581,29 @@ describe('history', () => {
     const timelineGets = () =>
       fetch.mock.calls.filter(([url, init]) => String(url).endsWith('/timeline') && init?.method !== 'POST')
     await waitFor(() => expect(timelineGets()).toHaveLength(2))
+  })
+
+  test('restore and add note wait while another write is in flight', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    let finish: (response: Response) => void = () => {}
+    const fetch = stubApiWith({
+      recipes: [{ ...traybake, marks: [] }],
+      timeline: { entries: [edit, created], current_version: 2 },
+      post: () => new Promise<Response>((resolve) => (finish = resolve)),
+    })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    const restore = await screen.findByRole('button', { name: 'Restore this version' })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Add a note' }), { target: { value: 'Waiting' } })
+    expect(restore).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Favourite' }))
+    await waitFor(() => expect(restore).toBeDisabled())
+    expect(screen.getByRole('button', { name: 'Add note' })).toBeDisabled()
+    fireEvent.click(restore)
+    expect(posts(fetch)).toHaveLength(1)
+    finish(json({ ...traybake, marks: ['favourite', 'tried'] }))
+    await waitFor(() => expect(restore).toBeEnabled())
+    expect(screen.getByRole('button', { name: 'Add note' })).toBeEnabled()
   })
 
   test('a failed note keeps the text and shows the error', async () => {
