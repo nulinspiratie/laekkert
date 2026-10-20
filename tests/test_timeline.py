@@ -145,3 +145,38 @@ def test_atomic_write_failure_leaves_original(tmp_path, monkeypatch):
     assert target.read_bytes() == b"original\n"
     assert [p.name for p in tmp_path.iterdir()] == ["timeline.jsonl"]
     assert not list(tmp_path.glob(".tmp-*"))
+
+
+def test_separator_characters_in_text_do_not_split_entries(tmp_path, caplog):
+    tricky = new_entry(Note, "app", text="a b\u0085c\x0bd\x0ce\x1cf")
+    plain = new_entry(Note, "app", text="plain")
+    append_entries(tmp_path, [tricky, plain])
+
+    with caplog.at_level(logging.WARNING):
+        entries = read_timeline(tmp_path)
+
+    assert entries == [tricky, plain]
+    assert not caplog.records
+
+
+def test_crlf_line_endings_are_read(tmp_path):
+    note = new_entry(Note, "app", text="windows editor")
+    (tmp_path / "timeline.jsonl").write_bytes(note.model_dump_json().encode() + b"\r\n")
+    assert read_timeline(tmp_path) == [note]
+
+
+def test_invalid_utf8_line_is_skipped(tmp_path, caplog):
+    first = new_entry(Note, "app", text="before")
+    last = new_entry(Note, "app", text="after")
+    (tmp_path / "timeline.jsonl").write_bytes(
+        first.model_dump_json().encode()
+        + b"\n\xe9\n"
+        + last.model_dump_json().encode()
+        + b"\n"
+    )
+
+    with caplog.at_level(logging.WARNING):
+        entries = read_timeline(tmp_path)
+
+    assert entries == [first, last]
+    assert len([r for r in caplog.records if r.levelno == logging.WARNING]) == 1

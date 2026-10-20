@@ -115,20 +115,22 @@ _entry_adapter: TypeAdapter[Entry] = TypeAdapter(Entry)
 
 def read_timeline(folder: Path) -> list[Entry]:
     """The recipe's entries, oldest first. A missing file is an empty timeline."""
+    path = Path(folder) / TIMELINE_FILE
     try:
-        text = (Path(folder) / TIMELINE_FILE).read_text(encoding="utf-8")
+        raw = path.read_bytes()
     except FileNotFoundError:
         return []
     entries: list[Entry] = []
-    for number, line in enumerate(text.splitlines(), start=1):
+    # Split on b"\n" only: str.splitlines() would also cut at U+2028, U+0085 and
+    # friends, which JSON output leaves raw inside strings.
+    for number, line in enumerate(raw.split(b"\n"), start=1):
+        line = line.removesuffix(b"\r")
         if not line.strip():
             continue
         try:
             entries.append(_entry_adapter.validate_json(line))
         except ValidationError as err:
-            log.warning(
-                "skipping %s line %d: %s", folder / TIMELINE_FILE, number, _why(err)
-            )
+            log.warning("skipping %s line %d: %s", path, number, _why(err))
     return entries
 
 
