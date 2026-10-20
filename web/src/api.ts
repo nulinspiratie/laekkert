@@ -71,9 +71,11 @@ export async function deleteRecipe(side: Side, slug: string): Promise<void> {
 
 /** Parks a picked photo on the server; the returned name goes in the draft's `image`. */
 export async function uploadImage(file: File): Promise<string> {
+  // Some browsers leave the type of a HEIC photo empty; the server accepts it as image/heic.
+  const heic = !file.type && /\.hei[cf]$/i.test(file.name)
   const response = await fetch('/api/uploads', {
     method: 'POST',
-    headers: { 'Content-Type': file.type },
+    headers: { 'Content-Type': heic ? 'image/heic' : file.type },
     body: file,
   })
   if (!response.ok) throw await failure(response)

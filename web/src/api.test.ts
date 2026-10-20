@@ -102,6 +102,13 @@ test('uploadImage posts the raw file with its type', async () => {
   expect(init?.body).toBe(file)
 })
 
+test('uploadImage sends a HEIC photo with no type as image/heic', async () => {
+  const fetch = stubFetch(() => json({ name: 'abc123.heic' }, 201))
+  const file = new File([new Uint8Array([1])], 'IMG_0001.HEIC', { type: '' })
+  await uploadImage(file)
+  expect(new Headers(fetch.mock.calls[0][1]?.headers).get('Content-Type')).toBe('image/heic')
+})
+
 test('getTimeline reads entries and the current version', async () => {
   const body = { entries: [{ id: 'a'.repeat(12), at: '2026-10-20T10:00:00Z', via: 'app', kind: 'note', text: 'Nice' }], current_version: 2 }
   const fetch = stubFetch(() => json(body))

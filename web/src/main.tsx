@@ -16,6 +16,7 @@ import './styles/base.css'
 import './styles/browse.css'
 import './styles/recipe.css'
 import './styles/history.css'
+import './styles/editor.css'
 import App from './App.tsx'
 
 createRoot(document.getElementById('root')!).render(
