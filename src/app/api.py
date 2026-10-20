@@ -21,7 +21,7 @@ from app.recipes.catalog import Catalog
 from app.recipes.drafts import parse_draft
 from app.recipes.model import SIDES, Mark, Recipe
 from app.recipes.search import search
-from app.recipes.store import RATING_RANGE, RecipeStore
+from app.recipes.store import RATING_RANGE, RecipeStore, SaveIncomplete
 from app.recipes.timeline import current_rating, last_made
 from app.recipes.uploads import (
     IMAGE_TYPES,
@@ -39,6 +39,9 @@ MAX_JSON_BYTES = 1024 * 1024
 log = logging.getLogger("app.api")
 
 SAVE_FAILED = "could not save; nothing was changed"
+SAVE_INCOMPLETE = (
+    "could not save, and the recipe may be partly changed; check its history"
+)
 UNEXPECTED = "something went wrong; nothing was changed"
 JSON_TOO_BIG = "That's too much to save at once"
 PHOTO_TOO_BIG = "That photo is over 20 MB"
@@ -88,6 +91,13 @@ def write_route(
             return error(str(err), 400)
         except BodyTooLarge as err:
             return error(str(err), 413)
+        except SaveIncomplete:
+            log.exception(
+                "write left a recipe partly changed: %s %s",
+                request.method,
+                request.url.path,
+            )
+            return error(SAVE_INCOMPLETE, 503)
         except OSError:
             log.exception("write failed: %s %s", request.method, request.url.path)
             return error(SAVE_FAILED, 503)

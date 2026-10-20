@@ -1,3 +1,4 @@
+import errno
 import json
 import os
 from pathlib import Path
@@ -625,3 +626,67 @@ def test_failed_upload_move_puts_everything_back(store, tmp_path, monkeypatch):
     monkeypatch.undo()
     assert len(moves) == 2
     assert snapshot(tmp_path) == before
+
+
+def fill_disk_at_timeline(monkeypatch):
+    """The timeline write fails, then every write that syncs to disk does too."""
+    full = []
+
+    def boom(path, data):
+        full.append(True)
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    real_fsync = os.fsync
+
+    def fsync(fd):
+        if full:
+            raise OSError(errno.ENOSPC, "No space left on device")
+        return real_fsync(fd)
+
+    monkeypatch.setattr("app.recipes.timeline.atomic_write", boom)
+    monkeypatch.setattr(os, "fsync", fsync)
+
+
+def test_double_failure_keeps_old_recipe_recoverable(store, tmp_path, monkeypatch):
+    # The first edit of a legacy recipe on a full disk: rolling back must not
+    # need a single free byte, or the baseline is the only copy left of the old.
+    seed = store.get("drinks", "daiquiri")
+    old = raw(store, "drinks", "daiquiri")
+    before = snapshot(tmp_path)
+    fill_disk_at_timeline(monkeypatch)
+    with pytest.raises(OSError):
+        store.update("drinks", "daiquiri", draft_of(seed, servings=2), "app")
+    monkeypatch.undo()
+    assert raw(store, "drinks", "daiquiri") == old
+    assert not (folder(store, "drinks", "daiquiri") / "versions").exists()
+    assert not list(tmp_path.rglob(".tmp-*"))
+    assert snapshot(tmp_path) == before
+
+
+def test_rollback_failure_keeps_baseline_and_raises_incomplete(
+    store, tmp_path, monkeypatch
+):
+    from app.recipes.store import SaveIncomplete
+
+    seed = store.get("drinks", "daiquiri")
+    old = raw(store, "drinks", "daiquiri")
+    fill_disk_at_timeline(monkeypatch)
+    real = os.replace
+
+    def replace(src, dst):
+        if str(src).endswith(".bak"):
+            raise OSError(errno.EIO, "I/O error")
+        return real(src, dst)
+
+    monkeypatch.setattr(os, "replace", replace)
+    with pytest.raises(SaveIncomplete) as caught:
+        store.update("drinks", "daiquiri", draft_of(seed, servings=2), "app")
+    monkeypatch.undo()
+    assert isinstance(caught.value, OSError)
+    assert caught.value.__cause__.errno == errno.ENOSPC
+    where = folder(store, "drinks", "daiquiri")
+    assert raw(store, "drinks", "daiquiri", "versions/0001.json") == old
+    assert raw(store, "drinks", "daiquiri") != old
+    backups = list(where.glob(".tmp-*.bak"))
+    assert len(backups) == 1 and backups[0].read_bytes() == old
+    assert set(tmp_path.rglob(".tmp-*")) == set(backups)

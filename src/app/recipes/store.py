@@ -6,9 +6,10 @@ instead of taking the whole list down, since files on the NAS can be edited by
 hand.
 
 Writes are one transaction per change over the version file(s), `recipe.json`,
-`timeline.jsonl` and any photo moved in from the uploads. The old bytes are kept
-and put back if any step fails, so a failed save changes nothing. Callers must
-not run writes concurrently (the API's handlers are all `async def`).
+`timeline.jsonl` and any photo moved in from the uploads. The old files are kept
+as hard links and renamed back if any step fails, so a failed save changes
+nothing and putting things back needs no free space. Callers must not run writes
+concurrently (the API's handlers are all `async def`).
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import shutil
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -75,9 +77,9 @@ NOTE_TOO_LONG = "A note can be at most 2000 characters"
 
 _VERSION_FILE = re.compile(r"^(\d{4,})\.json$")
 
-# Rollback must not be affected by a test or caller that swaps `atomic_write`
-# to inject a failure into the forward writes.
-_restore_file = atomic_write
+
+class SaveIncomplete(OSError):
+    """A save failed and the rollback could not put everything back."""
 
 
 def _ordered(marks) -> list[Mark]:
@@ -115,6 +117,20 @@ def _entry(kind_model, via: Via, **fields) -> Entry:
         raise ValueError(NOTE_TOO_LONG) from None
 
 
+def _backup_link(path: Path) -> Path | None:
+    """Keep `path`'s current file as a hard link beside it, or None if it is absent.
+
+    A link takes no data blocks, and the atomic write that replaces `path`
+    leaves the old file under the backup name.
+    """
+    backup = path.parent / f".tmp-{secrets.token_hex(6)}.bak"
+    try:
+        os.link(path, backup)
+    except FileNotFoundError:
+        return None
+    return backup
+
+
 def _rollback(
     folder: Path,
     *,
@@ -122,29 +138,47 @@ def _rollback(
     had_versions_dir: bool,
     written: list[Path],
     moved: list[tuple[Path, Path]],
-    old: list[tuple[Path, bytes | None]],
-) -> None:
-    """Undo a failed `_commit`: put every file and upload back as it was."""
+    backups: list[tuple[Path, Path | None]],
+) -> list[Path]:
+    """Undo a failed `_commit`: put every file and upload back as it was.
+
+    Returns the files that could not be put back; their backup links are left
+    where they are, and so are the version files, which may then hold the only
+    other copy of the old recipe.
+    """
     for src, dst in reversed(moved):
         with contextlib.suppress(OSError):
             os.replace(dst, src)
     if new_folder:
         shutil.rmtree(folder, ignore_errors=True)
-        return
-    for path, content in old:
+        return []
+    failed: list[Path] = []
+    for path, backup in backups:
         try:
-            if content is None:
+            if backup is None:
                 path.unlink(missing_ok=True)
             else:
-                _restore_file(path, content)
+                os.replace(backup, path)
+                # Renaming a file onto its own link does nothing, so a file this
+                # save never got to replace still has its backup name.
+                with contextlib.suppress(OSError):
+                    backup.unlink(missing_ok=True)
         except OSError:
-            log.exception("could not restore %s after a failed save", path)
+            failed.append(path)
+            log.exception(
+                "could not restore %s after a failed save; its old content is in %s",
+                path,
+                backup,
+            )
+    if failed:
+        return failed
     for path in written:
         with contextlib.suppress(OSError):
             path.unlink()
     if not had_versions_dir:
         with contextlib.suppress(OSError):
             (folder / "versions").rmdir()
+    return []
 
 
 class RecipeStore:
@@ -450,8 +484,6 @@ class RecipeStore:
         recipe_path = folder / "recipe.json"
         timeline_path = folder / TIMELINE_FILE
         versions_dir = folder / "versions"
-        old_recipe = _read_or_none(recipe_path)
-        old_timeline = _read_or_none(timeline_path)
         had_versions_dir = versions_dir.is_dir()
         data = _dump(recipe)
         files: list[tuple[int, bytes]] = []
@@ -459,6 +491,17 @@ class RecipeStore:
             files.append((1, baseline))
         if new_version is not None:
             files.append((new_version, data))
+        # Linked before anything is written, so a failure here changes nothing.
+        backups: list[tuple[Path, Path | None]] = []
+        try:
+            for path in (recipe_path, timeline_path):
+                backups.append((path, _backup_link(path)))
+        except OSError:
+            for _, backup in backups:
+                if backup is not None:
+                    with contextlib.suppress(OSError):
+                        backup.unlink()
+            raise
         written: list[Path] = []
         moved: list[tuple[Path, Path]] = []
         try:
@@ -472,19 +515,23 @@ class RecipeStore:
             for src, dst in moves:
                 os.replace(src, dst)
                 moved.append((src, dst))
-        except BaseException:
-            _rollback(
+        except BaseException as err:
+            failed = _rollback(
                 folder,
                 new_folder=new_folder,
                 had_versions_dir=had_versions_dir,
                 written=written,
                 moved=moved,
-                old=[(recipe_path, old_recipe), (timeline_path, old_timeline)],
+                backups=backups,
             )
+            if failed and isinstance(err, Exception):
+                names = ", ".join(path.name for path in failed)
+                raise SaveIncomplete(f"could not restore {names} in {folder}") from err
             raise
-
-            with contextlib.suppress(OSError):
-                os.replace(dst, src)
+        for _, backup in backups:
+            if backup is not None:
+                with contextlib.suppress(OSError):
+                    backup.unlink()
 
     def _load(self, side: Side, slug: str) -> Recipe | None:
         path = self.recipes_dir / side / slug / "recipe.json"

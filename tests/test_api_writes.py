@@ -400,6 +400,25 @@ def test_write_failure_is_503(client, tmp_path, monkeypatch):
     assert snapshot(tmp_path) == before
 
 
+def test_incomplete_save_is_503_with_its_own_sentence(client, monkeypatch):
+    from app.recipes.store import SaveIncomplete
+
+    create(client)
+
+    def partly(*args, **kwargs):
+        raise SaveIncomplete("could not restore recipe.json")
+
+    monkeypatch.setattr("app.recipes.store.RecipeStore.update", partly)
+    response = post_json(
+        client, "/api/recipes/drinks/margarita", {**DRAFT, "steps": ["x"]}, "put"
+    )
+    assert response.status_code == 503
+    assert response.json() == {
+        "error": "could not save, and the recipe may be partly changed; "
+        "check its history"
+    }
+
+
 def test_upload_write_failure_is_503(client, monkeypatch):
     def fail(*args, **kwargs):
         raise OSError("disk full")
