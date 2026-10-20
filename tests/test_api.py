@@ -22,6 +22,19 @@ def test_list_food_returns_seeds(client):
 def test_list_returns_summaries(client):
     first = client.get("/api/recipes?side=drinks").json()["recipes"][0]
     assert first["slug"] == "daiquiri" and "ingredients" not in first
+    assert set(first) == {
+        "slug",
+        "name",
+        "side",
+        "category",
+        "time_minutes",
+        "tags",
+        "marks",
+        "image",
+        "rating",
+        "last_made",
+    }
+    assert first["rating"] is None and first["last_made"] is None
 
 
 @pytest.mark.parametrize("query", ["", "?side=bar"])
