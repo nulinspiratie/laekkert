@@ -50,6 +50,8 @@ A personal food and drinks recipe app for Serwan and his partner, self-hosted, w
 
 ## Not in V1 (later)
 
+This list as written for V1. The current list of ideas is `docs/ideas.md`.
+
 - Smart tags: rule-based tags (e.g. vegetarian from ingredient flags, mocktail from no alcohol, under 30 minutes). Any manual tag can be turned smart; once smart, the rule takes over completely. Needs a migration path from simple tags.
 - Kitchen mode (screen stays awake, large text, step-by-step). High priority follow-up.
 - Shopping list.
