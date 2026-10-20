@@ -121,6 +121,14 @@ def _backup_link(path: Path) -> Path | None:
         os.link(path, backup)
     except FileNotFoundError:
         return None
+    except OSError:
+        # No link allowed (a file someone else owns, under protected_hardlinks,
+        # or a filesystem without links): copy it, still before anything changes.
+        try:
+            content = path.read_bytes()
+        except FileNotFoundError:
+            return None
+        atomic_write(backup, content)
     return backup
 
 

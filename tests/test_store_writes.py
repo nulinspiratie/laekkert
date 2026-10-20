@@ -690,3 +690,34 @@ def test_rollback_failure_keeps_baseline_and_raises_incomplete(
     backups = list(where.glob(".tmp-*.bak"))
     assert len(backups) == 1 and backups[0].read_bytes() == old
     assert set(tmp_path.rglob(".tmp-*")) == set(backups)
+
+
+def no_hard_links(monkeypatch):
+    # Another owner's file under fs.protected_hardlinks, or a filesystem
+    # without links.
+    def link(src, dst, **kwargs):
+        raise PermissionError(errno.EACCES, "Permission denied")
+
+    monkeypatch.setattr(os, "link", link)
+
+
+def test_edit_works_without_hard_links(store, tmp_path, monkeypatch):
+    seed = store.get("drinks", "daiquiri")
+    no_hard_links(monkeypatch)
+    store.update("drinks", "daiquiri", draft_of(seed, servings=2), "app")
+    assert store.get("drinks", "daiquiri").servings == 2
+    assert not list(tmp_path.rglob(".tmp-*"))
+
+
+def test_failed_write_without_hard_links_changes_nothing(store, tmp_path, monkeypatch):
+    seed = store.get("drinks", "daiquiri")
+    old = raw(store, "drinks", "daiquiri")
+    before = snapshot(tmp_path)
+    no_hard_links(monkeypatch)
+    fill_disk_at_timeline(monkeypatch)
+    with pytest.raises(OSError):
+        store.update("drinks", "daiquiri", draft_of(seed, servings=2), "app")
+    monkeypatch.undo()
+    assert raw(store, "drinks", "daiquiri") == old
+    assert not list(tmp_path.rglob(".tmp-*"))
+    assert snapshot(tmp_path) == before
