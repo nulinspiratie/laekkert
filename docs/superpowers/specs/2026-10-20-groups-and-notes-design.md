@@ -13,7 +13,7 @@ with one step count, the rejected per-group count, and a recipe with no groups.
   serve") rather than by *what*. It depends on the recipe, so the app doesn't decide.
 - **Notes.** Some things aren't steps: what keeps, what to make ahead, a swap that
   worked, a warning. They belong at the bottom of the recipe, written with line breaks and
-  the odd bold word.
+  the odd bold or italic word, and sometimes a short list.
 
 ## What Serwan decided
 
@@ -23,7 +23,8 @@ with one step count, the rejected per-group count, and a recipe with no groups.
   Ingredients may be grouped by thing and steps by time, or both by thing, or only one of
   the two grouped.
 - Many recipes have no groups, and must look exactly as they do today.
-- A note at the bottom of the recipe, supporting new lines and bold text.
+- A note at the bottom of the recipe, supporting new lines and bold text. After reading
+  the spec he added italics and bullets.
 
 Agreed from the mockups (proposed by Claude, accepted with "looks good"):
 
@@ -36,15 +37,15 @@ Agreed from the mockups (proposed by Claude, accepted with "looks good"):
 ## Goals
 
 - A recipe can group its ingredient rows and, separately, its steps under short headings.
-- A recipe can have notes: plain text, line breaks kept, `**bold**` shown bold.
+- A recipe can have notes: plain text with line breaks kept, `**bold**`, `*italic*` and
+  bullet lines (see "Notes formatting").
 - The app's editor and Claude's tools can set both; history shows the changes.
 - Existing recipes on the NAS keep working with no manual step.
 
 ## Non-goals
 
-- Any formatting in notes besides line breaks and `**bold**`: no italics, links,
-  headings, lists syntax or Markdown in general. (A line starting with "- " just shows as
-  written.)
+- Any formatting in notes besides line breaks, bold, italics and bullets: no links,
+  headings, numbered lists, nested lists or Markdown in general.
 - Formatting in steps or ingredient notes.
 - Nested groups, collapsible groups, group-level scaling or "make only the sauce".
 - Linking an ingredient group to a step group.
@@ -118,7 +119,8 @@ In `src/app/recipes/drafts.py`:
     group's rows together; rows without a group come first. An ingredient used in two
     parts gets a row in each.
   - **Notes**: what isn't a step (storage, make-ahead, swaps, serving). Line breaks are
-    kept; `**bold**` is the only formatting. Empty when there's nothing to say.
+    kept; `**bold**`, `*italic*` and "- " bullet lines are the only formatting. Empty
+    when there's nothing to say.
 
 ## History (the readable diff)
 
@@ -151,9 +153,26 @@ Matches the mockup's Main artboard.
 - **Method.** Same runs and headings; one `ol` per run, numbered continuously through the
   method (`ol start`, or the existing number badge carrying the overall count).
 - **Notes.** A section after Method and before Source, headed "Notes", shown only when
-  `notes` is not empty. Text keeps its line breaks (`white-space: pre-line` or one
-  element per line). `**text**` on one line becomes `<strong>`; an unmatched `**` shows
-  as written. Built from React text nodes only: never `dangerouslySetInnerHTML`.
+  `notes` is not empty, rendered as in "Notes formatting" below.
+
+### Notes formatting
+
+Notes are stored as the text typed; formatting is applied only when shown. The rules,
+line by line:
+
+- **Bullets.** A line starting with `- ` (also `* ` or `• `, after optional spaces) is a
+  bullet; the marker is dropped. Consecutive bullet lines form one `ul`. No nesting:
+  indented bullets are the same level.
+- **Paragraphs.** Other lines are text. Consecutive text lines form one paragraph with
+  their line breaks kept; a blank line separates paragraphs. A blank line between bullets
+  ends one list and starts another.
+- **Inline, within one line:** `**text**` is bold (`<strong>`), `*text*` is italic
+  (`<em>`), and `***text***` is both. Bold is matched first, then italics. A marker
+  only counts when the text inside is not empty and doesn't start or end with a space,
+  so `2 * 3 * 4` and a lone `*` stay as written. An unmatched marker shows as written.
+- Built from React elements and text nodes only: never `dangerouslySetInnerHTML`, and no
+  Markdown library. A pure function (text → blocks of inline runs) carries the rules, so
+  they're tested without rendering.
 
 ## The editor
 
@@ -176,9 +195,15 @@ mockup for the editor; this is Claude's call, built from the editor's existing p
 - **Numbering in the form** (labels such as "Ingredient 3", "Step 2", error messages)
   counts ingredient rows and steps only, never headings.
 - **Notes.** A "Notes" card after Steps (desktop: in the main column; phone: after Steps):
-  a textarea several lines tall, a "Bold" button that wraps the selected text in `**`
-  (or inserts `****` with the caret in the middle), and a one-line hint: "New lines are
-  kept. **Bold** with two stars."
+  a textarea several lines tall, and a small toolbar above it:
+  - **Bold** and **Italic** wrap the selected text in `**` / `*` (with nothing selected,
+    they insert the pair with the caret in the middle).
+  - **List** puts `- ` at the start of every selected line, or takes it off when all of
+    them already have it.
+  - Each keeps the selection on the same text and focus in the textarea; the change is
+    one ordinary edit of the text.
+  - A one-line hint under it: "New lines are kept. \*\*bold\*\*, \*italic\*, and - at
+    the start of a line for a bullet."
 - `isDirty`, `stateFromRecipe`, `toDraft` and `validate` cover the new state. The editor
   sends steps as `{text, group}` objects and always sends `notes`.
 
@@ -209,9 +234,9 @@ skips those lines; they stay in the file and come back on rolling forward). Acce
   (strings and objects), diff lines (move, rename, notes), seed files load as format 3.
   Existing tests that build `Recipe(...)` or compare `steps` with strings are updated.
 - Web: grouped and ungrouped ingredient lists (food and drinks), continuous numbering
-  across method groups, notes rendering (bold, unmatched `**`, line breaks, no HTML
-  injection), editor headings (add, move, remove, blank, load and save round trip), the
-  Bold button, `timeline.ts` section wording.
+  across method groups, notes formatting (bold, italic, both, unmatched and spaced
+  markers, bullets and paragraphs, line breaks, no HTML injection), editor headings (add, move, remove, blank, load and save round trip), the
+  Bold, Italic and List buttons, `timeline.ts` section wording.
 - `just lint` and `just test` pass. Before the PR, a phone and desktop screenshot of a
   grouped recipe and the editor, added to `docs/design/screenshots/` like earlier
   milestones.
