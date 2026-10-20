@@ -96,13 +96,6 @@ def _content(recipe: Recipe) -> dict:
     return recipe.model_dump(exclude={"marks", "format_version"})
 
 
-def _read_or_none(path: Path) -> bytes | None:
-    try:
-        return path.read_bytes()
-    except FileNotFoundError:
-        return None
-
-
 def _entry(kind_model, via: Via, **fields) -> Entry:
     """A new timeline entry; bad values become one plain sentence."""
     try:
