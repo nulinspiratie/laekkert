@@ -13,6 +13,7 @@ from starlette.routing import Route
 from app.api import api_routes
 from app.config import Settings, load_settings
 from app.mcp_server import build_mcp
+from app.recipes.bar import Bar
 from app.recipes.catalog import Catalog
 from app.recipes.fetch import Fetcher
 from app.recipes.store import RecipeStore
@@ -40,6 +41,7 @@ def create_app(
     catalog = Catalog(data_dir)
     uploads = UploadStore(data_dir)
     store = RecipeStore(data_dir, catalog, uploads)
+    bar = Bar(data_dir, catalog, store)
     server = build_mcp(store, uploads, fetcher or Fetcher())
     mcp_app = server.streamable_http_app(
         streamable_http_path="/mcp",
@@ -65,7 +67,7 @@ def create_app(
     return Starlette(
         routes=[
             Route("/healthz", healthz),
-            *api_routes(store, catalog, uploads),
+            *api_routes(store, catalog, uploads, bar),
             *mcp_app.routes,
             *web_routes(static_dir),
         ],

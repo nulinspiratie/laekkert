@@ -34,6 +34,7 @@ def test_list_returns_summaries(client):
         "rating",
         "last_made",
         "version",
+        "bar",
     }
     assert first["rating"] is None and first["last_made"] is None
     assert first["version"] == 0

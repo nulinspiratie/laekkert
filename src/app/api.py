@@ -13,11 +13,13 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import get_args
 
+from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
 from starlette.routing import Route
 
-from app.recipes.catalog import Catalog
+from app.recipes.bar import Bar, BarChanges, BarView, InventoryUnavailable
+from app.recipes.catalog import Catalog, CatalogUnavailable
 from app.recipes.drafts import parse_draft
 from app.recipes.model import SIDES, Mark, Recipe
 from app.recipes.search import search
@@ -141,6 +143,39 @@ async def json_object(request: Request) -> dict:
     return body
 
 
+def unavailable_as_503(
+    handler: Callable[[Request], Awaitable[Response]],
+) -> Callable[[Request], Awaitable[Response]]:
+    """Answer a catalog or inventory file that can't be read with its sentence, 503.
+
+    Only those two: any other OSError is left to the route's own handling.
+    """
+
+    @functools.wraps(handler)
+    async def wrapper(request: Request) -> Response:
+        try:
+            return await handler(request)
+        except (CatalogUnavailable, InventoryUnavailable) as err:
+            return error(str(err), 503)
+
+    return wrapper
+
+
+def bar_changes(body: dict) -> BarChanges:
+    """The change a bar request asks for; raises ValueError with one sentence."""
+    try:
+        return BarChanges.model_validate(body)
+    except ValidationError as err:
+        first = err.errors()[0]
+        if first["type"] == "extra_forbidden":
+            raise ValueError(
+                f"The change has an unknown field: {first['loc'][-1]}"
+            ) from None
+        if first["type"] == "value_error":
+            raise ValueError(str(first["ctx"]["error"])) from None
+        raise ValueError("The change isn't valid") from None
+
+
 def needs_json(request: Request) -> JSONResponse | None:
     if media_type(request) != "application/json":
         return error("Send application/json", 415)
@@ -156,27 +191,40 @@ def mark_list(body: dict, key: str) -> list[Mark]:
     return value
 
 
+def with_bar(body: dict, recipe: Recipe, view: BarView) -> dict:
+    """A drink's JSON with its bar status, and each ingredient's if it has some.
+
+    The one place the drinks' `bar` shape is made, for summaries and details.
+    """
+    body["bar"] = view.status(recipe)
+    for ingredient in body.get("ingredients", []):
+        ingredient["bar"] = view.ingredient(ingredient["item"])
+    return body
+
+
 def api_routes(
-    store: RecipeStore, catalog: Catalog, uploads: UploadStore
+    store: RecipeStore, catalog: Catalog, uploads: UploadStore, bar: Bar
 ) -> list[Route]:
     def detail(recipe: Recipe) -> dict:
         body = recipe.model_dump(mode="json")
         for ingredient in body["ingredients"]:
             ingredient["g_per_tsp"] = catalog.g_per_tsp(ingredient["item"])
-        return {**body, **store.derived(recipe.side, recipe.slug)}
+        body = {**body, **store.derived(recipe.side, recipe.slug)}
+        if recipe.side == "drinks":
+            body = with_bar(body, recipe, bar.view())
+        return body
 
     async def list_recipes(request: Request) -> JSONResponse:
         side = request.query_params.get("side")
         if side not in SIDES:
             return error("side must be food or drinks", 400)
         recipes = search(store.list(side), request.query_params.get("q", ""))
-        return JSONResponse(
-            {
-                "recipes": [
-                    {**r.summary(), **store.derived(side, r.slug)} for r in recipes
-                ]
-            }
-        )
+        view = bar.view() if side == "drinks" else None
+        summaries = []
+        for r in recipes:
+            summary = {**r.summary(), **store.derived(side, r.slug)}
+            summaries.append(summary if view is None else with_bar(summary, r, view))
+        return JSONResponse({"recipes": summaries})
 
     async def recipe_detail(request: Request) -> JSONResponse:
         recipe = store.get(request.path_params["side"], request.path_params["slug"])
@@ -320,6 +368,18 @@ def api_routes(
             return error(str(err), 413)
         return JSONResponse({"name": name}, status_code=201)
 
+    @unavailable_as_503
+    async def read_bar(request: Request) -> JSONResponse:
+        return JSONResponse(bar.view().json())
+
+    @write_route
+    @unavailable_as_503
+    async def change_bar(request: Request) -> JSONResponse:
+        if (refusal := needs_json(request)) is not None:
+            return refusal
+        changes = bar_changes(await json_object(request))
+        return JSONResponse(bar.apply(changes).json())
+
     async def unknown(request: Request) -> JSONResponse:
         return not_found()
 
@@ -335,6 +395,8 @@ def api_routes(
         Route(f"{recipe}/timeline", timeline),
         Route(f"{recipe}/timeline", add_entry, methods=["POST"]),
         Route(f"{recipe}/files/{{name}}", recipe_file),
+        Route("/api/bar", read_bar),
+        Route("/api/bar", change_bar, methods=["POST"]),
         Route("/api/uploads", upload_image, methods=["POST"]),
         # Without this, unknown /api paths would fall through to the SPA.
         Route("/api/{rest:path}", unknown, methods=ALL_METHODS),
