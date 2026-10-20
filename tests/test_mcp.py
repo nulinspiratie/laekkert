@@ -191,10 +191,29 @@ def test_search_sorts_by_name_and_breaks_ties_by_name(client, store):
     assert slugs(search(client, sort="rating")) == names
 
 
-def test_search_relevance_keeps_search_order(client):
-    # A name hit beats an ingredient hit, whatever the name order.
-    res = search(client, query="chicken")
-    assert slugs(res)[0] == "chicken-leek-traybake"
+def test_search_relevance_keeps_search_order(client, store):
+    # Matches "chicken" through an ingredient only, and sorts first by name.
+    draft = RecipeDraft(
+        name="Apple bake",
+        category="desserts",
+        servings=2,
+        time_minutes=30,
+        ingredients=[{"amount": 300, "unit": "g", "item": "chicken"}],
+        steps=["Bake."],
+        source=None,
+        tags=[],
+        image=None,
+    )
+    store.create("food", draft, "app")
+    # A name hit ranks above an ingredient hit, whatever the name order.
+    assert slugs(search(client, query="chicken")) == [
+        "chicken-leek-traybake",
+        "apple-bake",
+    ]
+    assert slugs(search(client, query="chicken", sort="name")) == [
+        "apple-bake",
+        "chicken-leek-traybake",
+    ]
 
 
 def test_search_entries_match_list_recipes(client):
