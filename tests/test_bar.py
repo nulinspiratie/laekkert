@@ -357,9 +357,18 @@ def test_untracked_because_order(bar, store, catalog):
     assert items["simple syrup"].untracked_because == "syrups"
     assert items["orgeat"].untracked_because == "recipe"
     assert items["mint"].untracked_because == "marked"
-    assert all(
-        not items[n].tracked and items[n].state is None for n in items if n != "sugar"
-    )
+    assert "sugar" not in items and "almonds" not in items
+    assert all(not i.tracked and i.state is None for i in items.values())
+
+
+def test_a_recipe_beats_marked(bar, store, catalog):
+    entries(catalog, {"name": "orgeat", "fresh": True}, {"name": "oleo", "fresh": True})
+    drink(store, "Orgeat", "almonds", category="syrups")
+    drink(store, "Oleo", "lemon peel", category="prep")
+    drink(store, "Mai tai", "orgeat", "oleo")
+    items = {i.name: i for i in bar.view().items}
+    assert items["orgeat"].untracked_because == "recipe"
+    assert items["oleo"].untracked_because == "recipe"
 
 
 def test_syrup_word_rule(bar, store):
@@ -471,7 +480,20 @@ def test_status_of_a_recipe_saved_since_the_view(bar, store, catalog):
     }
 
 
-# --- changes: states and fresh ---
+def test_status_of_a_recipe_saved_since_the_view_knows_made_recipes(bar, store):
+    drink(store, "Orgeat", "almonds", category="syrups")
+    drink(store, "Gin shot", "gin")
+    view = bar.view()
+    later = drink(store, "Mai tai", "gin", "Orgeat")
+    assert view.status(later) == {
+        "status": "unsorted",
+        "missing": [],
+        "unsorted": ["gin"],
+        "untracked": ["Orgeat"],
+    }
+
+
+# --- changes: states and tracking ---
 
 
 def test_have_unknown_name_adds_item(catalog, bar):
@@ -493,8 +515,8 @@ def test_inventory_file_has_sorted_keys(bar):
     assert text.endswith("\n")
 
 
-def test_fresh_unknown_name_adds_fresh_item(catalog, bar):
-    view = bar.apply(BarChanges(fresh=["Orange juice"]))
+def test_untrack_unknown_name_adds_untracked_item(catalog, bar):
+    view = bar.apply(BarChanges(untrack=["Orange juice"]))
     juice = item(view, "Orange juice")
     assert (juice.tracked, juice.state, juice.kind) == (False, None, "other")
     assert raw_named(catalog, "Orange juice") == [
@@ -503,23 +525,23 @@ def test_fresh_unknown_name_adds_fresh_item(catalog, bar):
     assert not bar.inventory_path.exists()
 
 
-def test_fresh_unknown_name_drops_a_stale_inventory_key(catalog, bar):
+def test_untrack_unknown_name_drops_a_stale_inventory_key(catalog, bar):
     write_inventory(bar, {"Orange juice": "have", "gin": "have"})
-    bar.apply(BarChanges(fresh=["orange juice"]))
+    bar.apply(BarChanges(untrack=["orange juice"]))
     assert read_inventory(bar)["items"] == {"gin": "have"}
 
 
-def test_fresh_clears_state_and_not_fresh_is_unsorted(catalog, store, bar):
+def test_untrack_clears_state_and_track_is_unsorted(catalog, store, bar):
     drink(store, "Paloma", "tequila", "grapefruit juice")
     bar.apply(BarChanges(have=["grapefruit juice", "tequila"]))
-    view = bar.apply(BarChanges(fresh=["Grapefruit juice"]))
+    view = bar.apply(BarChanges(untrack=["Grapefruit juice"]))
     juice = item(view, "grapefruit juice")
     assert (juice.tracked, juice.state) == (False, None)
     assert read_inventory(bar)["items"] == {"tequila": "have"}
-    # A state for a fresh item is never stored.
+    # A state for an untracked item is never stored.
     bar.apply(BarChanges(have=["grapefruit juice"]))
     assert read_inventory(bar)["items"] == {"tequila": "have"}
-    view = bar.apply(BarChanges(not_fresh=["grapefruit juice"]))
+    view = bar.apply(BarChanges(track=["grapefruit juice"]))
     juice = item(view, "grapefruit juice")
     assert (juice.tracked, juice.state) == (True, None)
 
@@ -531,7 +553,7 @@ def test_unsorted_clears_state(store, bar):
     assert item(view, "gin").state is None
     assert read_inventory(bar)["items"] == {}
     refused(bar, "There is no ‘vodka’ in the bar.", unsorted=["vodka"])
-    refused(bar, "There is no ‘vodka’ in the bar.", not_fresh=["vodka"])
+    refused(bar, "There is no ‘vodka’ in the bar.", track=["vodka"])
 
 
 def test_state_is_found_under_any_name(catalog, store, bar):
@@ -571,6 +593,120 @@ def test_unchanged_files_are_not_rewritten(catalog, store, bar):
     bar.apply(BarChanges(have=["gin"], kinds={"gin": "spirits"}))
     after = (catalog.path.stat().st_mtime_ns, bar.inventory_path.stat().st_mtime_ns)
     assert before == after
+
+
+def test_old_states_of_untracked_items_are_dropped_on_next_write(
+    bar, store, catalog, tmp_path
+):
+    entries(
+        catalog,
+        {"name": "simple syrup", "kind": "syrups"},
+        {"name": "gin", "kind": "spirits"},
+    )
+    drink(store, "X", "simple syrup", "gin")
+    path = tmp_path / "inventory.json"
+    path.write_text('{"format_version": 1, "items": {"simple syrup": "have"}}')
+    bar.apply(BarChanges(have=["gin"]))
+    assert json.loads(path.read_text())["items"] == {"gin": "have"}
+
+
+def test_track_refused_for_a_syrup_marked_fresh(bar, store, catalog):
+    entries(catalog, {"name": "simple syrup", "kind": "syrups", "fresh": True})
+    drink(store, "X", "simple syrup")
+    before = catalog.raw()
+    with pytest.raises(
+        BarError, match="Syrups aren't tracked. Give ‘simple syrup’ another kind first."
+    ):
+        bar.apply(BarChanges(track=["simple syrup"]))
+    assert catalog.raw() == before
+
+
+def test_track_refused_for_an_item_with_a_recipe(bar, store):
+    drink(store, "Orgeat", "almonds", category="syrups")
+    drink(store, "Mai tai", "orgeat")
+    with pytest.raises(
+        BarError, match="Lækkert has a recipe for ‘orgeat’, so it isn't tracked."
+    ):
+        bar.apply(BarChanges(track=["orgeat"]))
+
+
+def test_track_with_a_new_kind_in_the_same_change(bar, store, catalog):
+    entries(catalog, {"name": "grenadine", "kind": "syrups", "fresh": True})
+    drink(store, "X", "grenadine")
+    view = bar.apply(BarChanges(track=["grenadine"], kinds={"grenadine": "other"}))
+    assert item(view, "grenadine").tracked
+    refused(
+        bar,
+        "Syrups aren't tracked. Give ‘grenadine’ another kind first.",
+        track=["grenadine"],
+        kinds={"grenadine": "syrups"},
+    )
+
+
+def test_have_on_new_syrup_word_item_makes_a_syrup(bar, catalog):
+    view = bar.apply(BarChanges(have=["passion fruit syrup"]))
+    assert catalog.raw()[-1] == {"name": "passion fruit syrup", "kind": "syrups"}
+    (item,) = view.items
+    assert item.state is None and not item.tracked
+
+
+def test_touch_and_fold_write_the_effective_kind(bar, store, catalog):
+    entries(catalog, {"name": "honey syrup"})
+    drink(store, "X", "honey syrup", "Ginger syrup", "ginger syrup (homemade)")
+    bar.apply(BarChanges(have=["honey syrup"]))
+    assert raw_named(catalog, "honey syrup") == [
+        {"name": "honey syrup", "kind": "syrups"}
+    ]
+    bar.apply(BarChanges(fold={"ginger syrup (homemade)": "Ginger syrup"}))
+    assert raw_named(catalog, "Ginger syrup") == [
+        {
+            "name": "Ginger syrup",
+            "kind": "syrups",
+            "aliases": ["ginger syrup (homemade)"],
+        }
+    ]
+    assert not bar.inventory_path.exists()
+
+
+def test_have_skips_untracked_but_sets_the_rest(bar, store, catalog):
+    entries(
+        catalog,
+        {"name": "lime juice", "fresh": True},
+        {"name": "rum", "kind": "spirits"},
+    )
+    drink(store, "X", "lime juice", "rum")
+    view = bar.apply(BarChanges(have=["lime juice", "rum"]))
+    assert {i.name: i.state for i in view.items} == {"lime juice": None, "rum": "have"}
+
+
+def test_kind_syrups_clears_state(bar, store, catalog):
+    entries(catalog, {"name": "grenadine", "kind": "other"})
+    drink(store, "X", "grenadine")
+    bar.apply(BarChanges(have=["grenadine"]))
+    (item,) = bar.apply(BarChanges(kinds={"grenadine": "syrups"})).items
+    assert item.state is None and item.untracked_because == "syrups"
+    assert read_inventory(bar)["items"] == {}
+
+
+def test_untrack_then_track(bar, store, catalog):
+    entries(catalog, {"name": "tonic", "kind": "other"})
+    drink(store, "G&T", "tonic")
+    bar.apply(BarChanges(have=["tonic"]))
+    assert (
+        bar.apply(BarChanges(untrack=["tonic"])).items[0].untracked_because == "marked"
+    )
+    item = bar.apply(BarChanges(track=["tonic"])).items[0]
+    assert item.tracked and item.state is None
+
+
+def test_untrack_and_track_conflict(bar):
+    with pytest.raises(BarError, match="can't be changed two ways"):
+        bar.apply(BarChanges(untrack=["x"], track=["x"]))
+
+
+def test_old_field_names_are_refused():
+    with pytest.raises(ValidationError):
+        BarChanges.model_validate({"fresh": ["lime"]})
 
 
 # --- changes: names ---
@@ -748,8 +884,9 @@ def test_delete_rules(catalog, store, bar):
         ({"have": ["gin"], "dont_have": ["Gin"]}, "gin"),
         ({"have": ["light rum"], "dont_have": ["white rum"]}, "light rum"),
         ({"dont_have": ["gin"], "unsorted": ["gin"]}, "gin"),
-        ({"fresh": ["lime"], "not_fresh": ["lime"]}, "lime"),
-        ({"have": ["lime"], "fresh": ["Lime"]}, "lime"),
+        ({"untrack": ["lime"], "track": ["lime"]}, "lime"),
+        ({"have": ["lime"], "untrack": ["Lime"]}, "lime"),
+        ({"dont_have": ["gin"], "untrack": ["GIN"]}, "gin"),
         ({"kinds": {"gin": "spirits"}, "delete": ["gin"]}, "gin"),
         ({"fold": {"gin": "white rum"}, "delete": ["white rum"]}, "white rum"),
         ({"add_names": {"gin": ["x"]}, "remove_names": {"gin": ["X"]}}, "x"),
@@ -779,7 +916,7 @@ def test_refused_change_writes_nothing(catalog, store, bar):
         "Only items no drink uses can be deleted.",
         fold={"rhum agricole": "white rum"},
         add_names={"white rum": ["light rum"]},
-        fresh=["lime"],
+        untrack=["lime"],
         kinds={"white rum": "other"},
         have=["campari"],
         delete=["falernum"],

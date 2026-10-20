@@ -122,6 +122,25 @@ def test_merge_refusals_are_sentences(client, tmp_path):
     assert catalog_bytes(tmp_path) == before
 
 
+def test_merge_names_only_a_syrups_recipe_uses(client):
+    syrup = {**recipe("Simple syrup", "sugar", "water"), "category": "syrups"}
+    res = call(client, "add_recipe", {"side": "drinks", "recipe": syrup})
+    assert res["isError"] is False, res
+    add(client, "Cake", "caster sugar")
+    assert merge(client, separate=["caster sugar"])["isError"] is False
+    res = merge(client, merges={"caster sugar": "sugar"})
+    assert res["isError"] is False, res
+    assert merge(client, separate=["caster sugar"])["isError"] is False
+    res = merge(client, merges={"sugar": "caster sugar"})
+    assert res["isError"] is False, res
+    # A cocktail's ingredient is on the bar, tracked or not.
+    res = merge(client, merges={"lime juice": "caster sugar"})
+    assert (
+        text(res)
+        == "‘lime juice’ is on the bar. Fold it there instead (manage_inventory)."
+    )
+
+
 def test_merge_refuses_too_many_names(client, tmp_path):
     before = catalog_bytes(tmp_path)
     res = merge(client, merges={f"a{n}": f"b{n}" for n in range(101)})
