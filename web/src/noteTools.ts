@@ -27,7 +27,8 @@ export function toggleBullets(text: string, start: number, end: number): Edit {
   // The lines the selection touches; one that it only reaches the very start of is not.
   const reach = end > start && text[end - 1] === '\n' ? end - 1 : end
   const lines: { at: number; text: string }[] = []
-  let at = text.lastIndexOf('\n', start - 1) + 1
+  // lastIndexOf with -1 would clamp to 0 and find a newline at the very start.
+  let at = start === 0 ? 0 : text.lastIndexOf('\n', start - 1) + 1
   for (;;) {
     const stop = text.indexOf('\n', at)
     const lineEnd = stop === -1 ? text.length : stop

@@ -44,4 +44,8 @@ describe('toggleBullets', () => {
     expect(toggleBullets('- x\n\n- y', 0, 8)).toEqual({ text: 'x\n\ny', start: 0, end: 4 })
     expect(toggleBullets('x\n  \ny', 0, 6)).toEqual({ text: '- x\n  \n- y', start: 0, end: 10 })
   })
+
+  test('a blank first line stays blank when the caret is at the very start', () => {
+    expect(toggleBullets('\nx', 0, 0)).toEqual({ text: '\nx', start: 0, end: 0 })
+  })
 })
