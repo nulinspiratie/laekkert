@@ -25,9 +25,6 @@ function withPatches(bar: Bar, patches: ReadonlyMap<string, Patch>): Bar {
   }
 }
 
-/** What a rollback restores for a name the bar no longer has: an unsorted, tracked item. */
-const UNSORTED: Patch = { state: null, tracked: true, untracked_because: null }
-
 /** An item the person stopped tracking, as the server will return it. */
 const UNTRACKED: Patch = { state: null, tracked: false, untracked_because: 'marked' }
 
@@ -100,13 +97,12 @@ export function BarPage() {
   /** Optimistic: the rows change at once and roll back if the server refuses. */
   const write = (names: string[], send: (free: string[]) => BarChanges, patch: Patch, at: string) => {
     if (!bar) return
-    const free = names.filter((name) => !pending.current.has(name))
+    const free = names.filter((name) => !pending.current.has(name) && bar.items.some((item) => item.name === name))
     if (free.length === 0) return
     const previous = new Map<string, Patch>()
-    for (const name of free) {
-      const { state, tracked, untracked_because } = bar.items.find((item) => item.name === name) ?? UNSORTED
-      previous.set(name, { state, tracked, untracked_because })
-      pending.current.set(name, patch)
+    for (const item of bar.items.filter((item) => free.includes(item.name))) {
+      previous.set(item.name, { state: item.state, tracked: item.tracked, untracked_because: item.untracked_because })
+      pending.current.set(item.name, patch)
     }
     setProblem(null)
     const optimistic = new Map(pending.current)

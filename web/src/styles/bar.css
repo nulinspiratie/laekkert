@@ -456,6 +456,13 @@
   padding: 0;
 }
 
+/* A real basis for the name: with 0 it would shrink to nothing beside Have, Don't have and
+   Don't track. Once the row is narrower than the name plus the three buttons, the name takes
+   a line and the buttons wrap under it. */
+.bar-row--unsorted .bar-row-name {
+  flex: 1 1 160px;
+}
+
 .bar-row--unsorted .bar-row-title {
   font-size: 16px;
 }

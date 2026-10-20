@@ -329,6 +329,7 @@ describe("don't track", () => {
     const pick = await unsortedTonic().findByRole('button', { name: 'Tonic: have' })
     expect(await within(pick.parentElement!).findByRole('alert')).toHaveTextContent(refusal)
     expect(within(screen.getByRole('region', { name: 'Not tracked' })).queryByRole('button', { name: 'Tonic' })).not.toBeInTheDocument()
+    expect(screen.getByText('One bar for the household · 3 of 7 bottles in')).toBeInTheDocument()
   })
 })
 
