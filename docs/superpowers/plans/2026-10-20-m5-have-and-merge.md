@@ -212,7 +212,7 @@ header button and card badges.
     (`{"cumin": "ground cumin"}` with the alias) → `‘cumin’ and ‘ground cumin’ are already the same ingredient.`;
     A used by a drink or with a `kind` → `‘white rum’ is on the bar. Fold it there instead (manage_inventory).`;
     `{"a": "b", "b": "c"}` → `Chains aren't allowed in one call: ‘b’ is merged and merged into.`;
-    `{"Leeks": "leek", "leeks ": "onion"}` → `‘leeks ’ is merged twice.` (second spelling);
+    `{"Leeks": "leek", "leeks": "onion"}` → `‘leeks’ is merged twice.` (second spelling; names are stripped first);
     merge and separate of one name → `‘leeks’ can't be merged and separated in one call.`;
     `{"": "x"}` → `A name can't be empty.`; empty call → `Nothing to change.`.
     After each refusal the catalog file is unchanged.
