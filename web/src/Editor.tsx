@@ -198,7 +198,8 @@ function Form({ side, recipe }: { side: Side; recipe: Recipe | null }) {
     setProblems([])
     try {
       const draft = toDraft(next)
-      const saved = recipe && slug ? await updateRecipe(side, slug, draft) : await createRecipe(side, draft)
+      const saved =
+        recipe && slug ? await updateRecipe(side, slug, draft, recipe.version) : await createRecipe(side, draft)
       // Left set: the form is going away, and a second tap must not save again.
       leave(`/${side}/${encodeURIComponent(saved.slug)}`, true)
     } catch (err) {

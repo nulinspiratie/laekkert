@@ -61,8 +61,14 @@ export async function createRecipe(side: Side, draft: RecipeDraft): Promise<Reci
   return (await send('/api/recipes', 'POST', { side, ...draft })).json()
 }
 
-export async function updateRecipe(side: Side, slug: string, draft: RecipeDraft): Promise<Recipe> {
-  return (await send(recipeUrl(side, slug), 'PUT', draft)).json()
+/** `baseVersion` is the version the edit started from; the server refuses it (409) if it has moved on. */
+export async function updateRecipe(
+  side: Side,
+  slug: string,
+  draft: RecipeDraft,
+  baseVersion: number,
+): Promise<Recipe> {
+  return (await send(recipeUrl(side, slug), 'PUT', { ...draft, base_version: baseVersion })).json()
 }
 
 export async function deleteRecipe(side: Side, slug: string): Promise<void> {

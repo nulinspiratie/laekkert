@@ -26,6 +26,7 @@ const traybake: Recipe = {
   image: null,
   rating: null,
   last_made: null,
+  version: 0,
 }
 
 const daiquiri: Recipe = {

@@ -7,6 +7,7 @@ from starlette.testclient import TestClient
 from app.api import MAX_JSON_BYTES
 from app.config import Settings
 from app.main import create_app
+from app.recipes.store import VERSION_CONFLICT
 from app.recipes.uploads import MAX_UPLOAD_BYTES
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
@@ -93,6 +94,43 @@ def test_update_and_timeline_newest_first(client):
     assert body["entries"][0]["changes"]
     assert body["entries"][0]["restored_from"] is None
     assert body["current_version"] == 2
+
+
+def test_put_with_stale_base_version_is_409(client, tmp_path):
+    create(client)
+    changed = {**DRAFT, "steps": ["Shake hard."]}
+    ok = post_json(
+        client, "/api/recipes/drinks/margarita", {**changed, "base_version": 1}, "put"
+    )
+    assert ok.status_code == 200 and ok.json()["version"] == 2
+    before = snapshot(tmp_path)
+    stale = post_json(
+        client,
+        "/api/recipes/drinks/margarita",
+        {**DRAFT, "steps": ["Stir."], "base_version": 1},
+        "put",
+    )
+    assert stale.status_code == 409
+    assert stale.json() == {"error": VERSION_CONFLICT}
+    assert snapshot(tmp_path) == before
+
+
+@pytest.mark.parametrize("bad", ["x", True, 1.5, None])
+def test_put_with_bad_base_version_is_400(client, bad):
+    create(client)
+    response = post_json(
+        client, "/api/recipes/drinks/margarita", {**DRAFT, "base_version": bad}, "put"
+    )
+    assert response.status_code == 400
+    assert response.json() == {"error": "The version must be a whole number"}
+
+
+def test_put_without_base_version_saves(client):
+    create(client)
+    changed = {**DRAFT, "steps": ["Shake hard."]}
+    response = post_json(client, "/api/recipes/drinks/margarita", changed, "put")
+    assert response.status_code == 200
+    assert response.json()["version"] == 2
 
 
 def test_validation_error_is_400_sentence(client):

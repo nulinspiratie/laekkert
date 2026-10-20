@@ -39,13 +39,13 @@ afterEach(() => {
 
 test('updateRecipe sends JSON PUT', async () => {
   const fetch = stubFetch(() => json({ slug: 'daiquiri', name: 'Daiquiri' }))
-  const recipe = await updateRecipe('drinks', 'daiquiri', draft)
+  const recipe = await updateRecipe('drinks', 'daiquiri', draft, 4)
   expect(recipe.slug).toBe('daiquiri')
   const [url, init] = fetch.mock.calls[0]
   expect(url).toBe('/api/recipes/drinks/daiquiri')
   expect(init?.method).toBe('PUT')
   expect(new Headers(init?.headers).get('Content-Type')).toBe('application/json')
-  expect(JSON.parse(init?.body as string)).toEqual(draft)
+  expect(JSON.parse(init?.body as string)).toEqual({ ...draft, base_version: 4 })
 })
 
 test('createRecipe posts the draft with its side', async () => {
@@ -68,13 +68,13 @@ test('ApiError carries the server sentence', async () => {
 
 test('ApiError falls back to the status when the body is not the error shape', async () => {
   stubFetch(() => new Response('<html>Bad gateway</html>', { status: 502 }))
-  const failure = await updateRecipe('food', 'x', draft).catch((err: unknown) => err)
+  const failure = await updateRecipe('food', 'x', draft, 0).catch((err: unknown) => err)
   expect(failure).toBeInstanceOf(ApiError)
   expect((failure as ApiError).message).toBe('Something went wrong (status 502)')
   expect((failure as ApiError).status).toBe(502)
 
   stubFetch(() => json({ error: 42 }, 500))
-  const other = await updateRecipe('food', 'x', draft).catch((err: unknown) => err)
+  const other = await updateRecipe('food', 'x', draft, 0).catch((err: unknown) => err)
   expect((other as ApiError).message).toBe('Something went wrong (status 500)')
 })
 

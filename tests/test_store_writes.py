@@ -1,13 +1,15 @@
 import errno
 import json
 import os
+import threading
+import time
 from pathlib import Path
 
 import pytest
 
 from app.recipes.catalog import Catalog
 from app.recipes.drafts import parse_draft
-from app.recipes.store import RecipeStore
+from app.recipes.store import RecipeStore, VersionConflict
 from app.recipes.uploads import UploadStore
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
@@ -136,6 +138,87 @@ def test_update_writes_next_version_and_diff(store):
         ("details", "servings 1 → 2")
     ]
     assert store.current_version("drinks", "zombie") == 2
+
+
+def test_update_with_current_base_version_saves(store):
+    seed = store.get("drinks", "daiquiri")
+    assert store.derived("drinks", "daiquiri")["version"] == 0
+    updated = store.update(
+        "drinks", "daiquiri", draft_of(seed, servings=2), "app", base_version=0
+    )
+    assert updated.servings == 2
+    # The baseline is 1 and the edit is 2.
+    assert store.derived("drinks", "daiquiri")["version"] == 2
+
+
+def test_update_with_stale_base_version_refused(store):
+    seed = store.get("drinks", "daiquiri")
+    store.update(
+        "drinks", "daiquiri", draft_of(seed, servings=2), "app", base_version=0
+    )
+    before = (
+        raw(store, "drinks", "daiquiri"),
+        raw(store, "drinks", "daiquiri", "timeline.jsonl"),
+        versions(store, "drinks", "daiquiri"),
+    )
+    with pytest.raises(VersionConflict) as caught:
+        store.update(
+            "drinks", "daiquiri", draft_of(seed, servings=3), "app", base_version=0
+        )
+    assert caught.value.current == 2
+    # Refused even when the draft changes nothing.
+    with pytest.raises(VersionConflict):
+        store.update(
+            "drinks", "daiquiri", draft_of(store.get("drinks", "daiquiri")), "app", 0
+        )
+    after = (
+        raw(store, "drinks", "daiquiri"),
+        raw(store, "drinks", "daiquiri", "timeline.jsonl"),
+        versions(store, "drinks", "daiquiri"),
+    )
+    assert after == before
+
+
+def test_update_without_base_version_still_saves(store):
+    seed = store.get("drinks", "daiquiri")
+    store.update("drinks", "daiquiri", draft_of(seed, servings=2), "app")
+    again = store.get("drinks", "daiquiri")
+    assert store.update("drinks", "daiquiri", draft_of(again, servings=3), "app")
+    assert store.derived("drinks", "daiquiri")["version"] == 3
+
+
+def test_concurrent_updates_one_conflict(store, monkeypatch):
+    seed = store.get("drinks", "daiquiri")
+    commit = store._commit
+
+    def slow_commit(*args, **kwargs):
+        time.sleep(0.05)
+        return commit(*args, **kwargs)
+
+    monkeypatch.setattr(store, "_commit", slow_commit)
+    outcomes: list[object] = []
+
+    def attempt(name):
+        try:
+            outcomes.append(
+                store.update(
+                    "drinks",
+                    "daiquiri",
+                    draft_of(seed, name=name),
+                    "app",
+                    base_version=0,
+                )
+            )
+        except VersionConflict as err:
+            outcomes.append(err)
+
+    threads = [threading.Thread(target=attempt, args=(n,)) for n in ("One", "Two")]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    conflicts = [o for o in outcomes if isinstance(o, VersionConflict)]
+    assert len(conflicts) == 1 and len(outcomes) == 2
 
 
 def test_update_unknown_recipe_is_none(store):

@@ -33,8 +33,10 @@ def test_list_returns_summaries(client):
         "image",
         "rating",
         "last_made",
+        "version",
     }
     assert first["rating"] is None and first["last_made"] is None
+    assert first["version"] == 0
 
 
 @pytest.mark.parametrize("query", ["", "?side=bar"])
@@ -47,6 +49,7 @@ def test_list_requires_valid_side(client, query):
 def test_detail(client):
     body = client.get("/api/recipes/drinks/daiquiri").json()
     assert body["format_version"] == 2 and body["ingredients"][0]["unit"] == "ml"
+    assert body["version"] == 0
 
 
 def test_detail_adds_g_per_tsp(client):

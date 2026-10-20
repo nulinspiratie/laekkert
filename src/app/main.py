@@ -14,6 +14,7 @@ from app.api import api_routes
 from app.config import Settings, load_settings
 from app.mcp_server import build_mcp
 from app.recipes.catalog import Catalog
+from app.recipes.fetch import Fetcher
 from app.recipes.store import RecipeStore
 from app.recipes.uploads import UploadStore
 from app.web import web_routes
@@ -28,6 +29,7 @@ def create_app(
     *,
     data_dir: Path | None = None,
     static_dir: Path | None = None,
+    fetcher: Fetcher | None = None,
 ) -> Starlette:
     settings = settings or load_settings()
     version = os.environ.get("APP_VERSION", "dev")
@@ -38,7 +40,7 @@ def create_app(
     catalog = Catalog(data_dir)
     uploads = UploadStore(data_dir)
     store = RecipeStore(data_dir, catalog, uploads)
-    server = build_mcp(store)
+    server = build_mcp(store, uploads, fetcher or Fetcher())
     mcp_app = server.streamable_http_app(
         streamable_http_path="/mcp",
         stateless_http=True,

@@ -84,6 +84,23 @@ class UploadStore:
             raise ImageTooLarge("That photo is over 20 MB")
         if _extension(body) != ext:
             raise UnsupportedImage("That file isn't the kind of photo it says it is")
+        return self._park(ext, body)
+
+    def save_detected(self, body: bytes) -> str:
+        """Park an image whose type is read from its first bytes; return its name.
+
+        For fetched photos, whose content type we don't trust. Raises
+        UnsupportedImage or ImageTooLarge.
+        """
+        ext = _extension(body)
+        if ext is None:
+            raise UnsupportedImage("That link isn't a supported photo")
+        if len(body) > MAX_UPLOAD_BYTES:
+            raise ImageTooLarge("That photo is over 20 MB")
+        return self._park(ext, body)
+
+    def _park(self, ext: str, body: bytes) -> str:
+        """Write a checked image under a fresh name and return the name."""
         self._remove_old()
         name = f"img-{secrets.token_hex(8)}{ext}"
         atomic_write(self.dir / name, body)

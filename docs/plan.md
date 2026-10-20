@@ -21,7 +21,7 @@ Everything else in V1 comes after the PoC.
 - **Backend:** the template's Starlette app, plus `pydantic` (recipe format), `rapidfuzz`
   (typo- and word-order-tolerant search), the official `mcp` SDK (2.x, `MCPServer`)
   mounted at `/mcp` in the same process (stateless streamable HTTP, JSON responses), and
-  `httpx` for image fetching. One process; at a few hundred recipes no database is
+  `httpx2` for image fetching. One process; at a few hundred recipes no database is
   needed.
 - **Frontend:** Vite + React + TypeScript in `web/`, built to static files that Starlette
   serves (the "mixed" archetype in `docs/dockerfile-archetypes.md`). No Node at runtime.
@@ -39,6 +39,14 @@ Everything else in V1 comes after the PoC.
 - **Seed data:** the app ships a few example recipes and copies them into `/data` the
   first time it starts with no recipes (`seed_examples` in `config.toml`). Bar Book
   recipes come later through the Claude import flow.
+- **Photos on import:** the app is only for Serwan and his partner, behind Cloudflare
+  Access, so no photo is republished and any photo is fine. A URL import keeps the source
+  page's own photo (`og:image`) next to the source link; a recipe with no source may get
+  any photo from the web that shows the dish well. The server does not check licences.
+- **Photos from the chat:** an MCP tool receives JSON only, so Claude can read a photo in
+  the chat (a cookbook page, a handwritten card) but cannot hand its bytes to the app.
+  There is no upload tool; Claude transcribes the recipe and the photo is added with the
+  app's upload button. The style guide says so.
 - **Design:** the Claude Design session's output is migrated at the start of M1. Its
   export format (HTML artboards) is kept as a snapshot and rebuilt as components; see
   `docs/design/README.md`.
@@ -123,8 +131,22 @@ Drag handles and avatars are not built. Screenshots are in `docs/design/screensh
 ### M3: Claude integration
 
 `search_recipes`, `add_recipe`, `edit_recipe` on top of M0's read tools; style guide in
-`docs/style-guide.md`, also served as an MCP resource/prompt; URL import (Claude fetches
+`src/app/style_guide.md`, also served as an MCP resource/prompt; URL import (Claude fetches
 and converts, the server stores `source_url` and grabs `og:image`).
+
+**Done** (2026-10-20): Claude can search, add and edit recipes over MCP. `search_recipes`
+filters by side, text, category, tags and marks and sorts like the browse page;
+`list_recipes` and `read_recipe` now include rating, last made and version. The style
+guide (`src/app/style_guide.md`) is served as the `get_style_guide` tool, the
+`laekkert://style-guide` resource and the `import_recipe` prompt. `add_recipe` saves
+`source_url` and takes the page's `og:image` (or a given `image_url`), refuses a link a
+recipe on that side already has, and saves without a photo, with a warning, when the
+photo can't be fetched. Page and photo fetches refuse private and local addresses, odd
+ports and oversized bodies. `edit_recipe` changes only the fields it is given and needs
+the `version` from `read_recipe`; the app's editor sends its version too, so a stale edit
+from either side is refused instead of overwriting the other. Claude's writes show as
+`via: "claude"` in the timeline. Claude can't set marks or ratings, add notes, delete or
+restore.
 
 ### After the PoC (rest of V1)
 
@@ -134,5 +156,4 @@ with illustration fallback; offline PWA.
 
 ## Open questions
 
-- Image licensing on import (M3).
-- Whether claude.ai can pass a chat-attached photo to an MCP tool (M3).
+None at the moment.

@@ -49,6 +49,8 @@ export interface Recipe extends RecipeSummary {
   ingredients: RecipeIngredient[]
   steps: string[]
   source: Source | null
+  /** Counts saved changes; 0 for a recipe that predates versions. Sent back with an edit. */
+  version: number
 }
 
 export function isSide(value: string | undefined): value is Side {

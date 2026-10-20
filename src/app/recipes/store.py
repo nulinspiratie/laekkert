@@ -8,20 +8,22 @@ hand.
 Writes are one transaction per change over the version file(s), `recipe.json`,
 `timeline.jsonl` and any photo moved in from the uploads. The old files are kept
 as hard links and renamed back if any step fails, so a failed save changes
-nothing and putting things back needs no free space. Callers must not run writes
-concurrently (the API's handlers are all `async def`).
+nothing and putting things back needs no free space. Writes run one at a time under
+a lock held by the store, so a version check and the write it guards cannot be split.
 """
 
 from __future__ import annotations
 
 import contextlib
+import functools
 import json
 import logging
 import os
 import re
 import secrets
 import shutil
-from collections.abc import Sequence
+import threading
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -52,6 +54,7 @@ from app.recipes.timeline import (
     Via,
     append_entries,
     current_rating,
+    last_made,
     new_entry,
     read_timeline,
 )
@@ -71,15 +74,43 @@ MARK_ORDER: tuple[Mark, ...] = ("favourite", "try_next", "tried")
 # `/:side/new` is the editor, so no recipe may have this slug.
 RESERVED_SLUGS = {"new"}
 
+
+def already_saved(slug: str) -> str:
+    return f"Already in Lækkert as {slug}; use edit_recipe to change it"
+
+
 PHOTO_GONE = "That photo is no longer available; pick it again"
 RATING_RANGE = "Ratings go from 0.5 to 5 in half stars"
 NOTE_TOO_LONG = "A note can be at most 2000 characters"
+VERSION_CONFLICT = (
+    "This recipe was changed somewhere else since you opened it; "
+    "reload it to see the change"
+)
 
 _VERSION_FILE = re.compile(r"^(\d{4,})\.json$")
 
 
 class SaveIncomplete(OSError):
     """A save failed and the rollback could not put everything back."""
+
+
+class VersionConflict(ValueError):
+    """An edit was made on a version that is no longer the current one."""
+
+    def __init__(self, current: int):
+        super().__init__(VERSION_CONFLICT)
+        self.current = current
+
+
+def _locked(method: Callable) -> Callable:
+    """Run a write method under the store's lock."""
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return wrapper
 
 
 def _ordered(marks) -> list[Mark]:
@@ -189,6 +220,7 @@ class RecipeStore:
         self.trash_dir = self.data_dir / "trash"
         self._catalog = catalog
         self._uploads = uploads
+        self._lock = threading.RLock()
 
     def list(self, side: Side) -> list[Recipe]:
         side_dir = self.recipes_dir / side
@@ -270,11 +302,56 @@ class RecipeStore:
                     numbers.append(int(match.group(1)))
         return max(numbers, default=None)
 
-    def create(self, side: Side, draft: RecipeDraft, via: Via) -> Recipe:
+    def derived(self, side: str, slug: str) -> dict:
+        """What the timeline and versions say about a recipe, for the API."""
+        entries = self.timeline(side, slug) or []
+        return {
+            "rating": current_rating(entries),
+            "last_made": last_made(entries),
+            "version": self.current_version(side, slug) or 0,
+        }
+
+    def _validated(self, side: Side, draft: RecipeDraft) -> tuple[str, Recipe]:
+        """The free slug and the cleaned-up recipe; raises ValueError (a sentence)."""
         if side not in SIDES:
             raise ValueError("Pick food or drinks")
         slug = self._free_slug(side, draft.name)
         recipe = to_recipe(draft, side=side, slug=slug, marks=[], catalog=self._catalog)
+        return slug, recipe
+
+    def check(self, side: Side, draft: RecipeDraft, slug: str | None = None) -> None:
+        """Raise the ValueError a save would raise for this draft, saving nothing.
+
+        With `slug`, the draft is checked as an edit of that recipe; without
+        it, as a new one.
+        """
+        if slug is None:
+            self._validated(side, draft)
+            return
+        to_recipe(draft, side=side, slug=slug, marks=[], catalog=self._catalog)
+
+    def with_source(self, side: Side, url: str) -> Recipe | None:
+        """The recipe on this side that came from this exact link, if any."""
+        for recipe in self.list(side):
+            if recipe.source and recipe.source.url == url:
+                return recipe
+        return None
+
+    @_locked
+    def create(
+        self,
+        side: Side,
+        draft: RecipeDraft,
+        via: Via,
+        *,
+        unique_source: bool = False,
+    ) -> Recipe:
+        """Save a new recipe; with `unique_source`, not if its link is already saved."""
+        slug, recipe = self._validated(side, draft)
+        if unique_source and recipe.source and recipe.source.url:
+            existing = self.with_source(side, recipe.source.url)
+            if existing is not None:
+                raise ValueError(already_saved(existing.slug))
         moves = self._photo_moves(side, slug, recipe)
         entry = new_entry(Created, via, version=1)
         self._commit(
@@ -287,12 +364,23 @@ class RecipeStore:
         )
         return recipe
 
+    @_locked
     def update(
-        self, side: str, slug: str, draft: RecipeDraft, via: Via
+        self,
+        side: str,
+        slug: str,
+        draft: RecipeDraft,
+        via: Via,
+        base_version: int | None = None,
     ) -> Recipe | None:
+        """Save an edit; with `base_version`, only if that is still the version."""
         current = self.get(side, slug)
         if current is None:
             return None
+        if base_version is not None:
+            latest = self.current_version(side, slug) or 0
+            if base_version != latest:
+                raise VersionConflict(latest)
         recipe = to_recipe(
             draft,
             side=current.side,
@@ -332,6 +420,7 @@ class RecipeStore:
         )
         return recipe
 
+    @_locked
     def restore(self, side: str, slug: str, version: int, via: Via) -> Recipe | None:
         """Write version `version` as a new version; the marks stay as they are."""
         current = self.get(side, slug)
@@ -365,6 +454,7 @@ class RecipeStore:
         self._commit(folder, recipe, [entry], new_version=number)
         return recipe
 
+    @_locked
     def delete(self, side: str, slug: str) -> bool:
         """Move the recipe's folder to trash/<side>/<slug>-<UTC stamp>/."""
         if self.get(side, slug) is None:
@@ -379,6 +469,7 @@ class RecipeStore:
         shutil.move(self.recipes_dir / side / slug, target)
         return True
 
+    @_locked
     def set_marks(
         self, side: str, slug: str, add: list[Mark], remove: list[Mark], via: Via
     ) -> Recipe | None:
@@ -409,6 +500,7 @@ class RecipeStore:
         self._commit(self.recipes_dir / side / slug, recipe, [entry])
         return recipe
 
+    @_locked
     def add_note(self, side: str, slug: str, text: str, via: Via) -> Entry | None:
         if self.get(side, slug) is None:
             return None
@@ -417,6 +509,7 @@ class RecipeStore:
         append_entries(self.recipes_dir / side / slug, [entry])
         return entry
 
+    @_locked
     def add_rating(self, side: str, slug: str, rating: float, via: Via) -> Entry | None:
         if self.get(side, slug) is None:
             return None
@@ -425,6 +518,7 @@ class RecipeStore:
         self._taste(side, slug, entry)
         return entry
 
+    @_locked
     def add_made(
         self, side: str, slug: str, rating: float | None, note: str, via: Via
     ) -> Entry | None:
