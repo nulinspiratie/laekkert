@@ -64,7 +64,10 @@ Every other item is **tracked**, kind Other included. An item with no catalog en
 entry with no kind, counts as kind `syrups` when its name contains the word `syrup` or
 `syrups` (by `search.words()`, so `ginger syrup` and `Syrup, honey` count, `syrupy` does
 not), and as `other` otherwise. So a new drink that uses `passion fruit syrup` doesn't
-ask to be sorted. A kind set on the catalog entry always wins over this rule.
+ask to be sorted. A kind set on the catalog entry always wins over this rule. Whenever the
+bar creates or touches a catalog entry that has no kind (M4's `touch`, `new_item`, fold,
+`untrack` of an unknown name), it writes this effective kind (`syrups` or `other`), never
+a bare `other`, so a word-rule syrup stays a syrup.
 
 A not-tracked item's state is always `null`. Its inventory entry, if any, is ignored when
 reading and dropped on the next bar write.
@@ -77,12 +80,17 @@ The bar covers **cocktails and mocktails**. Syrups and prep are things you make,
 drinks you mix from the bar:
 
 - The bar's items are the ingredients of every cocktail and mocktail, plus every catalog
-  entry with a kind (as in M4). An ingredient used only by syrups and prep recipes (the
+  entry with a kind (as in M4). This needs its own index next to `used_in`, which keeps
+  every drink. An ingredient used only by syrups and prep recipes (the
   sugar and ginger in ginger syrup) is not on the bar.
 - Syrups and prep recipes have no bar status: `bar` is `null` on their summaries and
   recipe pages, and they are not in the bar's counts.
 - `used_in` still lists every drink that uses the item, whatever its category, so
   "Delete" stays safe.
+- M5's merge refuses to merge away an item that is on the bar. "On the bar" follows this
+  section: used by a cocktail or mocktail, or a catalog entry with a kind or a state.
+- The client's copy of the status rule (`drinkBar` and `withBar` in `web/src/bar.ts`)
+  follows the same rules, so a bar write never gives a syrup or prep page a `bar`.
 
 ## A drink's status
 
@@ -104,7 +112,7 @@ M4's change model, with the fresh fields renamed:
 | Field | Meaning |
 | --- | --- |
 | `untrack` | Was `fresh`. Sets `fresh: true` on the entry and clears the state. An unknown name is added as a not-tracked item, kind `other`. |
-| `track` | Was `not_fresh`. Clears `fresh`; the item is back on the shelf, not sorted. Refused for an item that is not tracked for another reason: "Syrups aren't tracked. Give ‘X’ another kind first." / "Lækkert has a recipe for ‘X’, so it isn't tracked." |
+| `track` | Was `not_fresh`. Clears `fresh`; the item is back on the shelf, not sorted. Refused, with nothing written, when the item would still not be tracked because of its kind or a recipe: "Syrups aren't tracked. Give ‘X’ another kind first." / "Lækkert has a recipe for ‘X’, so it isn't tracked." |
 
 - Setting a kind to `syrups` clears the item's state.
 - `have` or `dont_have` on a not-tracked item is skipped silently, as M4 does for fresh
@@ -118,8 +126,9 @@ M4's change model, with the fresh fields renamed:
 
 - `GET /api/bar` → `{items, set_up, counts: {can_make, missing, unsorted, total}}`.
   `total` counts cocktails and mocktails. Each item gains `tracked: bool` and
-  `untracked_because: "marked" | "syrups" | "recipe" | null` (`null` when tracked; when
-  more than one applies, the first in that order), and drops `fresh`. The kind shown is
+  `untracked_because: "syrups" | "recipe" | "marked" | null` (`null` when tracked; when
+  more than one applies, the first in that order, so a syrup that M4 marked fresh reports
+  `syrups`), and drops `fresh`. The kind shown is
   the effective one (the `syrup` word rule applied).
 - `POST /api/bar` takes the renamed fields.
 - Drinks summaries: `bar` as above, `null` for syrups and prep.
@@ -133,7 +142,8 @@ M4's change model, with the fresh fields renamed:
 - `manage_inventory(have, dont_have, untrack, track, kinds, add_names, remove_names,
   fold)`: `fresh` and `not_fresh` are renamed. The docstring says what is tracked.
 - `search_recipes(bar=...)` takes `"can_make"` or `None`. `"fresh_only"` is gone. With
-  `bar`, syrups and prep are left out.
+  `bar`, syrups and prep are left out. Its docstring says mocktails are a category
+  (`category="mocktails"`), not a tag.
 - `list_recipes` and `search_recipes` entries carry the new `bar` shape.
 - `INSTRUCTIONS`: the bar sentence becomes "The drinks side has a bar (read_bar,
   manage_inventory). Only bottles are tracked; fresh items, syrups and mixers never are,
@@ -142,11 +152,13 @@ M4's change model, with the fresh fields renamed:
 
 ## Tags that repeat the category
 
-A recipe's tags never include its own category. When a recipe is read (`parse_recipe`),
-any tag whose catalog key equals the category's key, or the category without its final
+A recipe's tags never include its own category. When a recipe is read (`parse_recipe`)
+and when it is saved (the store's tag cleaning, `_normal_tags`, used by the app and by
+Claude), any tag whose catalog key equals the category's key, or the category without its final
 `s`, is dropped: `mocktail` and `mocktails` on a mocktail, `dessert` on a dessert. Both
-sides. No format version bump: files keep the tag until they are next saved, and an older
-image still reads them.
+sides. No format version bump: untouched files keep the tag until they are next saved, and
+an older image still reads them. Since read and save drop it alike, resending the tag in
+an edit is no change and writes no new version.
 
 A tag that names a *different* category is kept (a cocktail tagged `mocktail`), because
 it may mean the recipe is filed in the wrong place. The filters show it, so it can be
@@ -171,8 +183,13 @@ drinks side. Food is unchanged.
 
 - **Can make is the default**, so `/drinks` opens on it. Old links still work: `bar=can`
   and `bar=fresh` open Can make, `cat=cocktails` All drinks, `cat=mocktails` Mocktails,
-  `cat=syrups` and `cat=prep` Syrups & prep. When `show=` is present it wins, and the old
-  params are dropped from the URL on the next change.
+  `cat=syrups` and `cat=prep` Syrups & prep. `show=` wins over `cat=`, and `cat=` wins
+  over `bar=` (so `bar=can&cat=mocktails` opens Mocktails). The old params are dropped
+  from the URL on the next change.
+- **Bar not set up:** Can make still lists the drinks with no tracked bottle (often only
+  mocktails), so it is rarely empty. Above the list it shows M4's "Set up your bar first"
+  box (same copy and buttons) for as long as the bar isn't set up, not only when the list
+  is empty.
 - If the bar fails to load, Can make can't be worked out: the view is hidden and the page
   falls back to All drinks, as M4 hides its bar filter.
 - **Phone:** the chip row under the heading becomes `Can make {n}`, `All {n}`,
@@ -187,9 +204,14 @@ drinks side. Food is unchanged.
 - Desktop result line: Can make "Can make · {N drinks}"; All drinks "{N} drinks · {M} you
   can make"; Mocktails "Mocktails · {N drinks}"; Syrups & prep "Syrups & prep · {N
   recipes}".
-- **Search inside a view:** the view still filters. When it hides some matches, a line
-  under the results says "{k} more in All drinks" and links there (or "in Syrups & prep"
-  when that's where they are; All drinks when both have some).
+- **Search inside a view:** the view still filters. While a search is typed, if the view
+  hides matches that All drinks would show, a line under the results says "{k} more in All
+  drinks" (k = those matches) and links there. If it hides none of those but hides syrups
+  or prep matches, it says "{k} more in Syrups & prep" instead. Marks and tags alone don't
+  show the line.
+- Links into the drinks list from elsewhere: the recipe page's tag links go to All drinks
+  (`show=all&tag=…`), so a drink you can't make isn't filtered out of its own tag. "Clear
+  filters" clears the search, marks and tags and keeps the view.
 
 ### Cards
 
@@ -205,8 +227,7 @@ Syrups and prep cards have no bar badge.
 
 ### Empty states
 
-- Can make, bar not set up: M4's "Set up your bar first" (unchanged copy), with "Set up
-  the bar" and "Show all {N} drinks".
+- Can make, bar not set up and nothing listed: the set-up box above is all there is.
 - Can make, set up, nothing makeable: "Nothing to make yet", "Every drink is missing a
   bottle or uses one not sorted yet.", "Open the bar", "Show all {N} drinks".
 - M4's fresh-only empty states go.
@@ -296,7 +317,11 @@ Syrups and prep recipe pages show no bar summary and no state buttons.
 - Kind Other stays tracked (see "Existing data"); mixers are untracked one by one or by
   Claude. Syrups are never tracked, and neither is anything Lækkert has a recipe for.
 - New items with "syrup" in the name start as Syrups, so they never ask to be sorted.
-- Only tags that repeat the recipe's *own* category are dropped, on read, with no format
-  bump.
+- Only tags that repeat the recipe's *own* category are dropped, on read and on save,
+  with no format bump.
+- While the bar isn't set up, Can make shows the set-up box above its list rather than
+  the page starting on All drinks.
+- A syrup that M4 marked fresh reports "syrups" as its reason, and the sheet disables its
+  switch.
 - The stored `fresh` field keeps its name; the API, MCP and screens say "tracked".
 - Syrups and prep recipes get no bar status, and their ingredients don't fill the bar.
