@@ -32,7 +32,7 @@ def test_manage_inventory_sets_state(client, tmp_path):
     res = manage(
         client,
         have=["white rum"],
-        dont_have=["simple syrup"],
+        dont_have=["campari"],
         kinds={"white rum": "spirits"},
         add_names={"white rum": ["rum"]},
     )
@@ -45,20 +45,41 @@ def test_manage_inventory_sets_state(client, tmp_path):
     assert bar["set_up"] is True
     assert bar == call(client, "read_bar", {})["structuredContent"]
     stored = json.loads((tmp_path / "inventory.json").read_text(encoding="utf-8"))
-    assert stored["items"] == {"white rum": "have", "simple syrup": "dont"}
+    assert stored["items"] == {"white rum": "have", "campari": "dont"}
 
 
-def test_manage_inventory_fresh_items_are_never_tracked(client, tmp_path):
-    res = manage(client, have=["white rum"], fresh=["lime juice", "mint"])
+def test_manage_inventory_untracked_items_are_never_tracked(client, tmp_path):
+    res = manage(client, have=["white rum"], untrack=["lime juice", "mint"])
     bar = res["structuredContent"]
     lime = next(i for i in bar["items"] if i["name"] == "lime juice")
-    assert (lime["fresh"], lime["state"]) == (True, None)
-    # An unknown name is added, and a fresh one is not put in the inventory.
-    res = manage(client, fresh=["tonic"], have=["campari"], dont_have=["falernum"])
+    assert (lime["tracked"], lime["state"]) == (False, None)
+    # An unknown name is added, and an untracked one is not put in the inventory.
+    res = manage(client, untrack=["tonic"], have=["campari"], dont_have=["falernum"])
     names = {i["name"] for i in res["structuredContent"]["items"]}
     assert {"tonic", "campari", "falernum"} <= names
     stored = json.loads((tmp_path / "inventory.json").read_text(encoding="utf-8"))
     assert set(stored["items"]) == {"white rum", "campari", "falernum"}
+    # Syrups are skipped silently, in the same call as the bottles.
+    res = manage(client, have=["simple syrup", "gin"])
+    assert res["isError"] is False
+    syrup = next(
+        i for i in res["structuredContent"]["items"] if i["name"] == "simple syrup"
+    )
+    assert (syrup["tracked"], syrup["state"]) == (False, None)
+
+
+def test_manage_inventory_track_undoes_untrack(client):
+    manage(client, untrack=["white rum"])
+    res = manage(client, track=["white rum"])
+    rum = next(i for i in res["structuredContent"]["items"] if i["name"] == "white rum")
+    assert (rum["tracked"], rum["state"]) == (True, None)
+
+
+def test_manage_inventory_track_refusal_is_a_sentence(client):
+    res = manage(client, track=["simple syrup"])
+    assert text(res) == (
+        "Syrups aren't tracked. Give ‘simple syrup’ another kind first."
+    )
 
 
 def test_manage_inventory_refusal_is_tool_error(client, tmp_path):
@@ -102,8 +123,8 @@ def test_manage_inventory_has_no_delete(client):
     assert set(schema["properties"]) == {
         "have",
         "dont_have",
-        "fresh",
-        "not_fresh",
+        "untrack",
+        "track",
         "kinds",
         "add_names",
         "remove_names",
@@ -119,17 +140,39 @@ def test_manage_inventory_has_no_delete(client):
 
 
 def test_search_recipes_bar_filter(client):
-    assert drinks(client, "search_recipes", bar="can_make") == {}
-    manage(
-        client,
-        have=["white rum", "simple syrup", "lime juice"],
-        not_fresh=["lime juice"],
-    )
-    assert set(drinks(client, "search_recipes", bar="can_make")) == {"daiquiri"}
-    assert set(drinks(client, "search_recipes", bar="fresh_only")) == {"virgin-mojito"}
-    assert set(drinks(client, "search_recipes")) == {"daiquiri", "virgin-mojito"}
-    both = drinks(client, "search_recipes", bar="can_make", query="mojito")
+    # Out of the box only the mocktail has no tracked bottle to wait for.
+    assert set(drinks(client, "search_recipes", bar="can_make")) == {"virgin-mojito"}
+    manage(client, have=["white rum"])
+    assert set(drinks(client, "search_recipes", bar="can_make")) == {
+        "daiquiri",
+        "virgin-mojito",
+    }
+    manage(client, dont_have=["white rum"])
+    assert set(drinks(client, "search_recipes", bar="can_make")) == {"virgin-mojito"}
+    both = drinks(client, "search_recipes", bar="can_make", query="daiquiri")
     assert both == {}
+
+
+def test_search_recipes_bar_filter_leaves_out_syrups_and_prep(client):
+    detail = client.get("/api/recipes/drinks/daiquiri").json()
+    keep = "name category servings time_minutes ingredients steps source tags image"
+    draft = {key: detail[key] for key in keep.split()}
+    draft["ingredients"] = [
+        {k: v for k, v in i.items() if k not in ("g_per_tsp", "bar")}
+        for i in detail["ingredients"]
+    ]
+    for name, category in (("Honey syrup", "syrups"), ("Lime cordial", "prep")):
+        body = {**draft, "side": "drinks", "name": name, "category": category}
+        assert client.post("/api/recipes", json=body).status_code == 201
+    made = drinks(client)
+    assert made["honey-syrup"]["bar"] is None and made["lime-cordial"]["bar"] is None
+    found = drinks(client, "search_recipes", bar="can_make")
+    assert set(found) == {"virgin-mojito"}
+
+
+def test_search_recipes_bar_filter_rejects_fresh_only(client):
+    res = call(client, "search_recipes", {"side": "drinks", "bar": "fresh_only"})
+    assert res["isError"] is True
 
 
 def test_search_recipes_bar_filter_food_refused(client):
@@ -147,8 +190,8 @@ def test_list_recipes_drinks_have_bar(client):
     assert listed["daiquiri"]["bar"] == {
         "status": "unsorted",
         "missing": [],
-        "unsorted": ["white rum", "simple syrup"],
-        "fresh": ["lime juice"],
+        "unsorted": ["white rum"],
+        "untracked": ["lime juice", "simple syrup"],
     }
     assert "bar" in drinks(client, "search_recipes")["daiquiri"]
     food = call(client, "list_recipes", {"side": "food"})["structuredContent"]["result"]
@@ -171,6 +214,7 @@ def test_instructions_mention_bar(client):
     )
     instructions = r.json()["result"]["instructions"]
     assert (
-        " Drinks have a bar of bottles the household has or doesn't have "
-        "(read_bar, manage_inventory); fresh items such as limes are never tracked."
+        " The drinks side has a bar (read_bar, manage_inventory). Only bottles are "
+        "tracked; fresh items, syrups and mixers never are, and ‘can make’ means "
+        "every tracked bottle is in."
     ) in instructions

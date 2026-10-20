@@ -621,13 +621,16 @@ def test_track_refused_for_a_syrup_marked_fresh(bar, store, catalog):
     assert catalog.raw() == before
 
 
-def test_track_refused_for_an_item_with_a_recipe(bar, store):
+def test_track_refused_for_an_item_with_a_recipe(bar, store, catalog):
     drink(store, "Orgeat", "almonds", category="syrups")
     drink(store, "Mai tai", "orgeat")
+    before = catalog.raw()
     with pytest.raises(
         BarError, match="Lækkert has a recipe for ‘orgeat’, so it isn't tracked."
     ):
         bar.apply(BarChanges(track=["orgeat"]))
+    assert catalog.raw() == before
+    assert not bar.inventory_path.exists()
 
 
 def test_track_with_a_new_kind_in_the_same_change(bar, store, catalog):
@@ -835,6 +838,19 @@ def test_fold_into_virtual_item_creates_entry(catalog, store, bar):
     assert len(falernum.used_in) == 2
     assert catalog.raw() == [
         {"name": "Falernum", "kind": "liqueurs", "aliases": ["velvet falernum"]}
+    ]
+
+
+def test_fold_into_a_kindless_syrup_word_entry_stores_syrups(catalog, store, bar):
+    entries(catalog, {"name": "honey syrup"})
+    drink(store, "X", "honey syrup", "honey syrup (homemade)")
+    bar.apply(BarChanges(fold={"honey syrup (homemade)": "honey syrup"}))
+    assert raw_named(catalog, "honey syrup") == [
+        {
+            "name": "honey syrup",
+            "kind": "syrups",
+            "aliases": ["honey syrup (homemade)"],
+        }
     ]
 
 

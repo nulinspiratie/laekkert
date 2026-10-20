@@ -201,10 +201,13 @@ def with_bar(body: dict, recipe: Recipe, view: BarView) -> dict:
     """A drink's JSON with its bar status, and each ingredient's if it has some.
 
     The one place the drinks' `bar` shape is made, for summaries and details.
+    Syrups and prep have no status: their `bar` and their ingredients' are null.
     """
-    body["bar"] = view.status(recipe)
+    body["bar"] = status = view.status(recipe)
     for ingredient in body.get("ingredients", []):
-        ingredient["bar"] = view.ingredient(ingredient["item"])
+        ingredient["bar"] = (
+            None if status is None else view.ingredient(ingredient["item"])
+        )
     return body
 
 
