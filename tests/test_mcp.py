@@ -1,4 +1,5 @@
 import importlib.resources
+import json
 
 import pytest
 from conftest import HEADERS, call, rpc
@@ -41,6 +42,20 @@ def test_tools_listed(client):
         "edit_recipe",
         "get_style_guide",
     }
+
+
+def test_write_tool_schemas_mention_groups_and_notes(client):
+    tools = rpc(client, 2, "tools/list").json()["result"]["tools"]
+    schemas = {t["name"]: json.dumps(t["inputSchema"]) for t in tools}
+    for name in ("add_recipe", "edit_recipe"):
+        assert '"group"' in schemas[name], name
+        assert '"notes"' in schemas[name], name
+
+
+def test_style_guide_has_groups_and_notes(client):
+    text = call(client, "get_style_guide", {})["content"][0]["text"]
+    assert "\n## Groups\n" in text
+    assert "\n## Notes\n" in text
 
 
 def test_list_recipes_tool(client):

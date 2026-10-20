@@ -386,28 +386,73 @@ def test_edit_recipe_changes_only_given_fields(client, dal):
     assert after["image"] == before["image"]
 
 
-def test_edit_recipe_keeps_groups_and_notes(client, dal):
-    body = {
-        "name": "Quick dal",
-        "category": "mains",
-        "servings": 2,
-        "time_minutes": None,
-        "ingredients": [
-            {"amount": 200, "unit": "g", "item": "red lentils", "group": "Dal"}
-        ],
-        "steps": [{"text": "Simmer.", "group": "Cook"}],
-        "notes": "Keeps *well*.",
-        "source": None,
-        "tags": [],
-        "image": None,
-        "base_version": 1,
-    }
-    assert client.put("/api/recipes/food/quick-dal", json=body).status_code == 200
-    saved(edit(client, dal, 2, {"servings": 4}))
-    after = read(client, "food", dal)
+GROUPED = {
+    **RECIPE,
+    "ingredients": [
+        {"amount": 200, "unit": "g", "item": "red lentils", "group": "Dal"},
+        {"amount": 1, "unit": "tsp", "item": "salt"},
+    ],
+    "steps": ["Boil.", {"text": "Serve.", "group": "To serve"}],
+    "notes": "**Keeps** 3 days.",
+}
+
+
+def test_add_with_groups_and_notes(client):
+    saved(call(client, "add_recipe", {"side": "food", "recipe": GROUPED}))
+    shown = read(client, "food", "quick-dal")
+    assert [i["group"] for i in shown["ingredients"]] == ["Dal", ""]
+    assert shown["steps"] == [
+        {"text": "Boil.", "group": ""},
+        {"text": "Serve.", "group": "To serve"},
+    ]
+    assert shown["notes"] == "**Keeps** 3 days."
+
+
+@pytest.fixture
+def grouped(client):
+    saved(call(client, "add_recipe", {"side": "food", "recipe": GROUPED}))
+    return "quick-dal"
+
+
+def test_edit_notes_keeps_groups(client, grouped):
+    before = read(client, "food", grouped)
+    saved(edit(client, grouped, 1, {"notes": "x"}))
+    after = read(client, "food", grouped)
+    assert after["notes"] == "x"
+    assert after["ingredients"] == before["ingredients"]
+    assert after["steps"] == before["steps"]
+    saved(edit(client, grouped, 2, {"name": "New"}))
+    after = read(client, "food", grouped)
+    assert after["name"] == "New"
+    assert after["notes"] == "x"
+    assert after["ingredients"] == before["ingredients"]
+    assert after["steps"] == before["steps"]
+
+
+def test_edit_other_field_keeps_groups_and_notes(client, grouped):
+    before = read(client, "food", grouped)
+    saved(edit(client, grouped, 1, {"servings": 4}))
+    after = read(client, "food", grouped)
+    assert after["servings"] == 4
     assert after["ingredients"][0]["group"] == "Dal"
-    assert after["steps"] == [{"text": "Simmer.", "group": "Cook"}]
-    assert after["notes"] == "Keeps *well*."
+    assert after["steps"] == before["steps"]
+    assert after["notes"] == before["notes"]
+
+
+def test_edit_notes_empty_clears(client, grouped):
+    saved(edit(client, grouped, 1, {"notes": ""}))
+    after = read(client, "food", grouped)
+    assert after["notes"] == ""
+    assert after["steps"][1]["group"] == "To serve"
+
+
+def test_edit_steps_with_groups(client, dal):
+    steps = [{"text": "Rinse.", "group": "Prep"}, "Simmer."]
+    saved(edit(client, dal, 1, {"steps": steps}))
+    assert read(client, "food", dal)["steps"] == [
+        {"text": "Rinse.", "group": "Prep"},
+        {"text": "Simmer.", "group": ""},
+    ]
 
 
 def test_edit_recipe_replaces_whole_lists_and_renames_without_moving(client, dal):

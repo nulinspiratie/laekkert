@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.api import SAVE_FAILED, SAVE_INCOMPLETE, bar_changes, with_bar
 from app.recipes.bar import MAX_NAMES, TOO_MANY, Bar, BarView, InventoryUnavailable
 from app.recipes.catalog import KINDS, Catalog, CatalogUnavailable
-from app.recipes.drafts import DraftIngredient, RecipeDraft, parse_draft
+from app.recipes.drafts import DraftIngredient, DraftStep, RecipeDraft, parse_draft
 from app.recipes.fetch import Fetcher, FetchError
 from app.recipes.have import HAVE_FOOD_ONLY, clean_terms, rank
 from app.recipes.model import Mark, Recipe
@@ -73,9 +73,19 @@ class NewRecipe(BaseModel):
     ingredients: list[DraftIngredient] = Field(
         description="Ingredients in metric units only (see the style guide for units)"
     )
-    steps: list[str] = Field(
+    steps: list[str | DraftStep] = Field(
         default_factory=list,
-        description="The method, one short step each (see the style guide)",
+        description=(
+            "The method, one short step each: a string, or text and group for a "
+            "recipe in parts (see the style guide)"
+        ),
+    )
+    notes: str = Field(
+        default="",
+        description=(
+            "Shown under the method: tips, variations, storage; new lines are "
+            "kept, **bold**, *italic* and '- ' bullets (see the style guide)"
+        ),
     )
     tags: list[str] = Field(
         default_factory=list,
@@ -86,8 +96,8 @@ class NewRecipe(BaseModel):
 class RecipeChanges(BaseModel):
     """What to change in a recipe. A field you leave out stays as it is.
 
-    A list (ingredients, steps, tags) replaces the whole list, so send all of
-    it. Follow the style guide (get_style_guide).
+    A list (ingredients, steps, tags) replaces the whole list, groups
+    included, so send all of it. Follow the style guide (get_style_guide).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -113,8 +123,20 @@ class RecipeChanges(BaseModel):
             "(see the style guide for units)"
         ),
     )
-    steps: list[str] = Field(
-        default=None, description="All the steps, replacing the old ones"
+    steps: list[str | DraftStep] = Field(
+        default=None,
+        description=(
+            "All the steps, replacing the old ones: each a string, or text and "
+            "group for a recipe in parts"
+        ),
+    )
+    notes: str = Field(
+        default=None,
+        description=(
+            "Shown under the method: tips, variations, storage; new lines are "
+            "kept, **bold**, *italic* and '- ' bullets; replacing the old ones; "
+            "an empty string clears them"
+        ),
     )
     tags: list[str] = Field(
         default=None, description="All the tags, replacing the old ones"
@@ -257,8 +279,10 @@ def build_mcp(
     def read_recipe(side: Literal["food", "drinks"], slug: str) -> dict[str, Any]:
         """Read one recipe in full: servings, ingredients (metric), steps, source.
 
-        Also has rating, last_made and version. Pass version to edit_recipe, so an
-        edit made on an old copy is refused.
+        Ingredients and steps each have a group ("" for none), the part of the
+        recipe they belong to. notes are tips shown under the method ("" for
+        none). Also has rating, last_made and version. Pass version to
+        edit_recipe, so an edit made on an old copy is refused.
         """
         recipe = store.get(side, slug)
         if recipe is None:

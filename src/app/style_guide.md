@@ -57,6 +57,18 @@ One row per ingredient, in the order they're used.
 - **no_scale:** true for things that don't grow with the servings: a pinch, salt to
   taste, one lemon for the whole tray, oil for frying.
 
+## Groups
+
+Most recipes have none. Use them only when a recipe has distinct parts.
+
+- Ingredient groups and step groups are separate. Group ingredients by what they are for
+  ("Marinade", "Sauce"); group steps by what or by when ("Sauce", "The day before").
+- Short names in sentence case, without "For the": "Marinade", not "For the marinade".
+- Keep a group's rows together. Rows without a group come first.
+- An ingredient used in two parts gets a row in each, with the amount for that part.
+- Pass a step as a string, or as `text` and `group` when it has one. Leave `group` out
+  for none.
+
 ## Method
 
 - One step per action or stage, as full sentences in the imperative: "Heat the oven to
@@ -65,6 +77,15 @@ One row per ingredient, in the order they're used.
 - Temperatures in °C. Give the fan setting when it matters: "200 °C (180 °C fan)".
 - Times in the step that needs them ("Simmer for 20 minutes, until thick").
 - Leave out the story, tips about the author's life, and anything that isn't cooking.
+
+## Notes
+
+Shown under the method. For what isn't a step: storage, make-ahead, swaps, serving.
+
+- Short and plain. Leave `notes` empty when there's nothing to say.
+- Line breaks are kept. `**bold**`, `*italic*` and "- " bullet lines are the only
+  formatting; nothing else.
+- To clear the notes when editing, send an empty string.
 
 ## Tags
 
