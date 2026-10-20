@@ -5,6 +5,7 @@ import shutil
 
 import pytest
 
+from app.recipes import catalog as catalog_module
 from app.recipes.catalog import (
     KINDS,
     SEED_CATALOG,
@@ -216,3 +217,27 @@ def test_save_into_missing_file_writes_it(tmp_path):
         "ingredients": [{"name": "Crème de cassis"}],
     }
     assert "Crème" in catalog.path.read_text(encoding="utf-8")
+
+
+def test_a_reload_swaps_the_lookup_in_one_step(tmp_path, monkeypatch):
+    """A reader on another thread sees the old names or the new, never a part."""
+    catalog = Catalog(tmp_path)
+    write_catalog(catalog, [{"name": "gin", "g_per_tsp": 1.0}])
+    assert catalog.g_per_tsp("gin") == 1.0
+    write_catalog(catalog, [{"name": "gin", "g_per_tsp": 1.0}, {"name": "tonic"}])
+    moved = catalog.path.stat().st_mtime_ns + 1_000_000
+    os.utime(catalog.path, ns=(moved, moved))
+    seen = []
+    real = catalog_module.name_key
+
+    def watched(name):
+        # What entry("gin") on another thread would get at this moment.
+        seen.append(catalog._entries.get("gin"))
+        return real(name)
+
+    monkeypatch.setattr(catalog_module, "name_key", watched)
+    catalog.entries()  # reloads
+    monkeypatch.undo()
+    assert seen
+    assert None not in seen
+    assert catalog.entry("tonic") is not None

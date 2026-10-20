@@ -155,11 +155,14 @@ class Catalog:
         except OSError:
             mtime_ns = None
         if mtime_ns != self._mtime_ns:
-            self._ordered = self._load() if mtime_ns is not None else []
-            self._entries = {}
-            for entry in self._ordered:
+            # Built aside and swapped in whole: readers on other threads (the MCP
+            # tools, the API's worker threads) see the old lookup or the new one.
+            ordered = self._load() if mtime_ns is not None else []
+            entries: dict[str, CatalogEntry] = {}
+            for entry in ordered:
                 for name in (entry.name, *entry.aliases):
-                    self._entries.setdefault(name_key(name), entry)
+                    entries.setdefault(name_key(name), entry)
+            self._ordered, self._entries = ordered, entries
             self._mtime_ns = mtime_ns
 
     def _load(self) -> list[CatalogEntry]:
