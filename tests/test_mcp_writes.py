@@ -1,3 +1,5 @@
+import re
+
 import httpx2
 import pytest
 from conftest import call, rpc
@@ -56,9 +58,8 @@ def saved(res):
 def text(res):
     """The sentence of a tool error; the SDK puts its own prefix before it."""
     assert res["isError"] is True
-    prefix = "Error executing tool add_recipe: "
     message = res["content"][0]["text"]
-    return message.removeprefix(prefix)
+    return re.sub(r"^Error executing tool \w+: ", "", message)
 
 
 def read(client, side, slug):
@@ -330,3 +331,261 @@ def test_add_recipe_refuses_a_duplicate_made_during_the_fetch(client, routes, st
     assert text(res) == "Already in Lækkert as quick-dal; use edit_recipe to change it"
     sources = [r.source.url for r in store.list("food") if r.source]
     assert sources == [PAGE]
+
+
+# edit_recipe
+
+
+def edit(client, slug, version, changes=None, side="food", **arguments):
+    return call(
+        client,
+        "edit_recipe",
+        {
+            "side": side,
+            "slug": slug,
+            "version": version,
+            "changes": changes or {},
+            **arguments,
+        },
+    )
+
+
+def stale_sentence(version):
+    return (
+        f"The recipe changed since you read it (it is now version {version}); "
+        "read it again and redo the change"
+    )
+
+
+@pytest.fixture
+def dal(client):
+    """Quick dal, saved with a page, a tag, a time and a photo."""
+    recipe = {**RECIPE, "time_minutes": 30, "tags": ["vegan"]}
+    res = call(
+        client,
+        "add_recipe",
+        {"side": "food", "recipe": recipe, "source_url": PAGE, "image_url": PHOTO},
+    )
+    assert saved(res)["version"] == 1
+    return "quick-dal"
+
+
+def test_edit_recipe_changes_only_given_fields(client, dal):
+    before = read(client, "food", dal)
+    assert before["image"].startswith("img-")
+    result = saved(edit(client, dal, 1, {"servings": 4}))
+    assert result["version"] == 2
+    assert result["path"] == "/food/quick-dal"
+    assert result["photo"] is True
+    assert result["warnings"] == []
+    after = read(client, "food", dal)
+    assert after["servings"] == 4
+    assert after["version"] == 2
+    for kept in ("name", "ingredients", "steps", "tags", "time_minutes", "source"):
+        assert after[kept] == before[kept]
+    assert after["image"] == before["image"]
+
+
+def test_edit_recipe_replaces_whole_lists_and_renames_without_moving(client, dal):
+    changes = {
+        "name": "Better dal",
+        "tags": ["quick"],
+        "steps": ["Rinse.", "Simmer."],
+        "ingredients": [{"amount": 1, "unit": "tsp", "item": "salt"}],
+    }
+    result = saved(edit(client, dal, 1, changes))
+    assert result["slug"] == "quick-dal"
+    after = read(client, "food", dal)
+    assert after["name"] == "Better dal"
+    assert after["tags"] == ["quick"]
+    assert after["steps"] == ["Rinse.", "Simmer."]
+    assert [(i["amount"], i["unit"]) for i in after["ingredients"]] == [(6, "g")]
+
+
+def test_edit_recipe_clears_time_with_null(client, dal):
+    saved(edit(client, dal, 1, {"time_minutes": None}))
+    assert read(client, "food", dal)["time_minutes"] is None
+
+
+def test_edit_recipe_leaving_time_out_keeps_it(client, dal):
+    saved(edit(client, dal, 1, {"name": "Dal"}))
+    assert read(client, "food", dal)["time_minutes"] == 30
+
+
+def test_edit_recipe_source_url_set_and_cleared(client, dal):
+    saved(edit(client, dal, 1, {"source_url": "https://example.com/other"}))
+    assert read(client, "food", dal)["source"]["url"] == "https://example.com/other"
+    saved(edit(client, dal, 2, {"source_url": None}))
+    assert read(client, "food", dal)["source"] is None
+
+
+def test_edit_recipe_javascript_source_refused(client, dal):
+    res = edit(client, dal, 1, {"source_url": "javascript:alert(1)"})
+    assert text(res) == "The source link must start with http:// or https://"
+
+
+@pytest.mark.parametrize("field", ["name", "servings", "ingredients"])
+def test_edit_recipe_null_for_a_required_field_refused(client, dal, field):
+    res = edit(client, dal, 1, {field: None})
+    assert res["isError"] is True
+    assert read(client, "food", dal)["version"] == 1
+
+
+def test_edit_recipe_timeline_via_claude(client, store, dal):
+    saved(edit(client, dal, 1, {"servings": 4, "tags": ["vegan", "quick"]}))
+    entries = store.timeline("food", dal)
+    assert [e.kind for e in entries] == ["created", "edit"]
+    last = entries[-1]
+    assert last.via == "claude"
+    assert last.version == 2
+    assert [(c.section, c.kind, c.text) for c in last.changes] == [
+        ("details", "changed", "servings 2 → 4"),
+        ("tags", "added", "“quick”"),
+    ]
+
+
+def test_edit_recipe_stale_version_refused(client, dal):
+    shown = read(client, "food", dal)
+    body = {
+        key: shown[key]
+        for key in (
+            "name",
+            "category",
+            "servings",
+            "time_minutes",
+            "ingredients",
+            "steps",
+            "source",
+            "tags",
+            "image",
+        )
+    }
+    api = client.put(
+        "/api/recipes/food/quick-dal", json={**body, "name": "Dal!", "base_version": 1}
+    )
+    assert api.status_code == 200
+    res = edit(client, dal, 1, {"servings": 9})
+    assert text(res) == stale_sentence(2)
+    after = read(client, "food", dal)
+    assert after["name"] == "Dal!"
+    assert after["servings"] == 2
+    assert after["version"] == 2
+
+
+def test_edit_recipe_conflict_inside_the_store_gives_the_same_sentence(
+    client, dal, monkeypatch
+):
+    from app.recipes.store import VersionConflict
+
+    def lost(self, *args, **kwargs):
+        raise VersionConflict(7)
+
+    monkeypatch.setattr(RecipeStore, "update", lost)
+    assert text(edit(client, dal, 1, {"servings": 3})) == stale_sentence(7)
+
+
+def test_edit_recipe_stale_version_does_not_fetch(client, routes, dal):
+    seen = []
+    routes[OTHER_PHOTO] = lambda request: seen.append(request) or image()
+    res = edit(client, dal, 5, image_url=OTHER_PHOTO)
+    assert text(res) == stale_sentence(1)
+    assert seen == []
+
+
+def test_edit_recipe_unknown_slug(client):
+    res = edit(client, "nope", 1, {"servings": 3})
+    assert text(res) == "No recipe 'nope' on the food side"
+    res = edit(client, "quick-dal", 1, {"servings": 3}, side="drinks")
+    assert text(res) == "No recipe 'quick-dal' on the drinks side"
+
+
+def test_edit_recipe_invalid_change_does_not_fetch(client, routes, dal):
+    seen = []
+    routes[OTHER_PHOTO] = lambda request: seen.append(request) or image()
+    res = edit(client, dal, 1, {"category": "cocktails"}, image_url=OTHER_PHOTO)
+    assert text(res) == (
+        "Category for food must be one of mains, sides, desserts, sauces, prep"
+    )
+    res = edit(client, dal, 1, {"servings": 0}, image_url=OTHER_PHOTO)
+    assert text(res) == "Servings must be at least 1"
+    assert seen == []
+
+
+def test_edit_recipe_rejects_unknown_field(client, dal):
+    res = edit(client, dal, 1, {"colour": "red"})
+    assert "colour" in text(res)
+
+
+def test_edit_recipe_new_image_url(client, routes, dal):
+    routes[OTHER_PHOTO] = image(PNG + b"other")
+    old = read(client, "food", dal)["image"]
+    result = saved(edit(client, dal, 1, image_url=OTHER_PHOTO))
+    assert result["version"] == 2
+    assert result["photo"] is True
+    assert result["warnings"] == []
+    new = read(client, "food", dal)["image"]
+    assert new.startswith("img-")
+    assert new != old
+
+
+def test_edit_recipe_remove_image(client, dal):
+    result = saved(edit(client, dal, 1, remove_image=True))
+    assert result["photo"] is False
+    assert result["version"] == 2
+    assert read(client, "food", dal)["image"] is None
+
+
+def test_edit_recipe_image_url_and_remove_image_refused(client, routes, dal):
+    seen = []
+    routes[OTHER_PHOTO] = lambda request: seen.append(request) or image()
+    res = edit(client, dal, 1, image_url=OTHER_PHOTO, remove_image=True)
+    assert text(res) == "Pass image_url or remove_image, not both"
+    assert seen == []
+    assert read(client, "food", dal)["version"] == 1
+
+
+def test_edit_recipe_bad_image_keeps_old_photo(client, dal):
+    old = read(client, "food", dal)["image"]
+    result = saved(
+        edit(client, dal, 1, {"servings": 3}, image_url="https://example.com/gone.jpg")
+    )
+    assert result["photo"] is True
+    assert result["version"] == 2
+    assert result["warnings"] == ["Saved without the new photo: the site answered 404"]
+    after = read(client, "food", dal)
+    assert after["image"] == old
+    assert after["servings"] == 3
+
+
+def test_edit_recipe_no_change_is_ok(client, store, dal):
+    result = saved(edit(client, dal, 1))
+    assert result["version"] == 1
+    assert result["warnings"] == []
+    assert [e.kind for e in store.timeline("food", dal)] == ["created"]
+
+
+def test_edit_recipe_same_values_is_no_change(client, dal):
+    assert saved(edit(client, dal, 1, {"servings": 2}))["version"] == 1
+
+
+def test_edit_recipe_save_failures(client, dal, monkeypatch):
+    def broken(self, *args, **kwargs):
+        raise OSError("disk full")
+
+    def half(self, *args, **kwargs):
+        raise SaveIncomplete("rollback failed")
+
+    monkeypatch.setattr(RecipeStore, "update", broken)
+    assert text(edit(client, dal, 1, {"servings": 3})) == SAVE_FAILED
+    monkeypatch.setattr(RecipeStore, "update", half)
+    assert text(edit(client, dal, 1, {"servings": 3})) == SAVE_INCOMPLETE
+
+
+def test_edit_recipe_disk_error_while_parking_is_not_a_warning(
+    client, dal, monkeypatch
+):
+    def full(self, body):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(UploadStore, "save_detected", full)
+    assert text(edit(client, dal, 1, image_url=OTHER_PHOTO)) == SAVE_FAILED

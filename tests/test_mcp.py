@@ -34,6 +34,7 @@ def test_tools_listed(client):
         "read_recipe",
         "search_recipes",
         "add_recipe",
+        "edit_recipe",
         "get_style_guide",
     }
 

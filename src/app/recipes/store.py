@@ -319,9 +319,16 @@ class RecipeStore:
         recipe = to_recipe(draft, side=side, slug=slug, marks=[], catalog=self._catalog)
         return slug, recipe
 
-    def check(self, side: Side, draft: RecipeDraft) -> None:
-        """Raise the ValueError `create` would raise for this draft, saving nothing."""
-        self._validated(side, draft)
+    def check(self, side: Side, draft: RecipeDraft, slug: str | None = None) -> None:
+        """Raise the ValueError a save would raise for this draft, saving nothing.
+
+        With `slug`, the draft is checked as an edit of that recipe; without
+        it, as a new one.
+        """
+        if slug is None:
+            self._validated(side, draft)
+            return
+        to_recipe(draft, side=side, slug=slug, marks=[], catalog=self._catalog)
 
     def with_source(self, side: Side, url: str) -> Recipe | None:
         """The recipe on this side that came from this exact link, if any."""

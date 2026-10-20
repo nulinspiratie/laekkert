@@ -10,11 +10,16 @@ from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api import SAVE_FAILED, SAVE_INCOMPLETE
-from app.recipes.drafts import DraftIngredient, parse_draft
+from app.recipes.drafts import DraftIngredient, RecipeDraft, parse_draft
 from app.recipes.fetch import Fetcher, FetchError
 from app.recipes.model import Mark, Recipe
 from app.recipes.search import search
-from app.recipes.store import RecipeStore, SaveIncomplete, already_saved
+from app.recipes.store import (
+    RecipeStore,
+    SaveIncomplete,
+    VersionConflict,
+    already_saved,
+)
 from app.recipes.uploads import ImageTooLarge, UnsupportedImage, UploadStore
 
 INSTRUCTIONS = (
@@ -65,6 +70,51 @@ class NewRecipe(BaseModel):
     tags: list[str] = Field(
         default_factory=list,
         description="Tags, reusing the ones already in use (see the style guide)",
+    )
+
+
+class RecipeChanges(BaseModel):
+    """What to change in a recipe. A field you leave out stays as it is.
+
+    A list (ingredients, steps, tags) replaces the whole list, so send all of
+    it. Follow the style guide (get_style_guide).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # The defaults are never used: `model_fields_set` tells a field that was
+    # left out from one that was sent, so null is refused where it is no value.
+    name: str = Field(default=None, description="The new name, in sentence case")
+    category: str = Field(
+        default=None,
+        description=(
+            "Food: mains, sides, desserts, sauces or prep. "
+            "Drinks: cocktails, mocktails, syrups or prep."
+        ),
+    )
+    servings: int = Field(default=None, description="How many it serves")
+    time_minutes: int | None = Field(
+        default=None, description="Total time in minutes, or null to clear it"
+    )
+    ingredients: list[DraftIngredient] = Field(
+        default=None,
+        description=(
+            "All the ingredients, replacing the old ones; metric units only "
+            "(see the style guide for units)"
+        ),
+    )
+    steps: list[str] = Field(
+        default=None, description="All the steps, replacing the old ones"
+    )
+    tags: list[str] = Field(
+        default=None, description="All the tags, replacing the old ones"
+    )
+    source_url: str | None = Field(
+        default=None,
+        description=(
+            "The web page the recipe comes from, or null to remove the link "
+            "(a source photo stays)"
+        ),
     )
 
 
@@ -175,7 +225,9 @@ def build_mcp(store: RecipeStore, uploads: UploadStore, fetcher: Fetcher) -> MCP
         return {**result, "photo": recipe.image is not None, "warnings": warnings}
 
     async def fetch_photo(
-        source_url: str | None, image_url: str | None
+        source_url: str | None,
+        image_url: str | None,
+        lead: str = "Saved without a photo",
     ) -> tuple[str | None, list[str]]:
         """Fetch and park a photo; the name, and a warning if there is none."""
         if not (image_url or source_url):
@@ -185,15 +237,15 @@ def build_mcp(store: RecipeStore, uploads: UploadStore, fetcher: Fetcher) -> MCP
             if url is None and source_url is not None:
                 url = await fetcher.page_image_url(source_url)
             if url is None:
-                return None, [f"Saved without a photo: {NO_PHOTO}"]
+                return None, [f"{lead}: {NO_PHOTO}"]
             return uploads.save_detected(await fetcher.image(url)), []
         except (FetchError, UnsupportedImage, ImageTooLarge) as err:
-            return None, [f"Saved without a photo: {lower_first(str(err))}"]
+            return None, [f"{lead}: {lower_first(str(err))}"]
         except OSError:
             raise  # the disk would fail the save too: SAVE_FAILED
         except Exception:
             log.exception("fetching a recipe photo failed")
-            return None, [f"Saved without a photo: {PHOTO_FAILED}"]
+            return None, [f"{lead}: {PHOTO_FAILED}"]
 
     @server.tool()
     async def add_recipe(
@@ -240,6 +292,79 @@ def build_mcp(store: RecipeStore, uploads: UploadStore, fetcher: Fetcher) -> MCP
         except OSError:
             raise ToolError(SAVE_FAILED) from None
         return saved(created, ctx, warnings)
+
+    def merged(
+        current: Recipe, changes: RecipeChanges, image: str | None
+    ) -> RecipeDraft:
+        """The recipe as an editor draft, with only the given fields changed."""
+        fields = {
+            **current.model_dump(exclude={"slug", "side", "marks", "format_version"}),
+            "image": image,
+        }
+        for name in changes.model_fields_set - {"source_url"}:
+            fields[name] = getattr(changes, name)
+        if "source_url" in changes.model_fields_set:
+            url = (changes.source_url or "").strip() or None
+            photo = current.source.photo if current.source else None
+            fields["source"] = {"url": url, "photo": photo} if url or photo else None
+        return parse_draft(fields)
+
+    @server.tool()
+    async def edit_recipe(
+        side: Literal["food", "drinks"],
+        slug: str,
+        version: int,
+        changes: RecipeChanges,
+        ctx: Context,
+        image_url: str | None = None,
+        remove_image: bool = False,
+    ) -> dict[str, Any]:
+        """Edit a recipe. Read it first with read_recipe and pass its version.
+
+        Read the style guide first and follow it. changes holds only the fields
+        to change; a field you leave out stays as it is, and a list replaces the
+        whole list. If the recipe was changed since you read it the edit is
+        refused: read it again and redo the change. image_url replaces the
+        photo with the one at that link (if it cannot be fetched the old photo
+        stays, with a warning); remove_image removes the photo. Use one of them
+        at most.
+        """
+        image_url = (image_url or "").strip() or None
+        if image_url and remove_image:
+            raise ToolError("Pass image_url or remove_image, not both")
+        current = store.get(side, slug)
+        if current is None:
+            raise ToolError(f"No recipe {slug!r} on the {side} side")
+        try:
+            latest = store.derived(side, slug)["version"]
+            if version != latest:
+                # Early, to skip the fetch; update checks again under its lock.
+                raise VersionConflict(latest)
+            draft = merged(current, changes, None if remove_image else current.image)
+            # Everything the store would refuse is refused before any fetch.
+            store.check(side, draft, slug)
+            warnings: list[str] = []
+            if image_url:
+                name, warnings = await fetch_photo(
+                    None, image_url, lead="Saved without the new photo"
+                )
+                if name is not None:
+                    draft = draft.model_copy(update={"image": name})
+            updated = store.update(side, slug, draft, "claude", base_version=version)
+            if updated is None:
+                raise ToolError(f"No recipe {slug!r} on the {side} side")
+        except VersionConflict as err:
+            raise ToolError(
+                f"The recipe changed since you read it (it is now version "
+                f"{err.current}); read it again and redo the change"
+            ) from None
+        except ValueError as err:
+            raise ToolError(str(err)) from None
+        except SaveIncomplete:
+            raise ToolError(SAVE_INCOMPLETE) from None
+        except OSError:
+            raise ToolError(SAVE_FAILED) from None
+        return saved(updated, ctx, warnings)
 
     @server.tool()
     def get_style_guide() -> str:
