@@ -156,6 +156,12 @@ suite('defaultQuery', () => {
     expect(defaultQuery('food')).toBe('sort=time')
     expect(defaultQuery('drinks')).toBe('')
   })
+
+  it('keeps the drinks view when given one', () => {
+    expect(defaultQuery('drinks', 'mocktails')).toBe('show=mocktails')
+    expect(defaultQuery('drinks', 'can')).toBe('')
+    expect(defaultQuery('food', 'all')).toBe('sort=time')
+  })
 })
 
 suite('applyBrowse', () => {
@@ -367,6 +373,11 @@ suite('drinks views', () => {
     expect(browseQuery({ ...old, show: 'can' })).toBe('')
   })
 
+  it('never writes cat on drinks, whatever the state holds', () => {
+    expect(browseQuery(state({ category: 'cocktails', show: 'all' }))).toBe('show=all')
+    expect(browseQuery(state({ category: 'cocktails', show: 'can' }))).toBe('')
+  })
+
   it('round-trips through the query', () => {
     const query = 'mark=favourite&tag=sour&sort=rating&show=syrups'
     expect(browseQuery(parse('drinks', query))).toBe(query)
@@ -401,6 +412,8 @@ suite('drinks views', () => {
     })
     expect(facetCounts('drinks', drinks()).views).toEqual({ can: 2, all: 3, mocktails: 1, syrups: 2 })
     expect(facetCounts('drinks', []).views).toEqual({ can: 0, all: 0, mocktails: 0, syrups: 0 })
+    // Views are a drinks thing: food reports none, even when its recipes would fit.
+    expect(facetCounts('food', drinks()).views).toEqual({ can: 0, all: 0, mocktails: 0, syrups: 0 })
     expect(facetCounts('drinks', drinks(), state({ marks: ['favourite'] })).views).toEqual({
       can: 0,
       all: 1,

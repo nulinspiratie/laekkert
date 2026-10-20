@@ -65,18 +65,22 @@ export function nameList(names: string[], max = 2): string {
 
 /**
  * The line a drink's card shows about the bar; `also` is a drink you can make that uses untracked
- * items. The text is the same on a phone and a desktop now, so `_phone` is unused.
+ * items. `text` is the one-line version (two names and "+N"); `label` names everything.
  */
-export function badge(bar: DrinkBar, _phone?: boolean): { kind: DrinkStatus | 'also'; text: string } {
+export function badge(bar: DrinkBar): { kind: DrinkStatus | 'also'; text: string; label: string } {
+  const named = (prefix: string, names: string[]) => ({
+    text: `${prefix}: ${nameList(names)}`,
+    label: `${prefix}: ${names.join(', ')}`,
+  })
   switch (bar.status) {
     case 'can_make':
       return bar.untracked.length > 0
-        ? { kind: 'also', text: `Also needs: ${nameList(bar.untracked)}` }
-        : { kind: 'can_make', text: 'Can make now' }
+        ? { kind: 'also', ...named('Also needs', bar.untracked) }
+        : { kind: 'can_make', text: 'Can make now', label: 'Can make now' }
     case 'missing':
-      return { kind: 'missing', text: `Missing: ${nameList(bar.missing)}` }
+      return { kind: 'missing', ...named('Missing', bar.missing) }
     case 'unsorted':
-      return { kind: 'unsorted', text: `Not sorted: ${nameList(bar.unsorted)}` }
+      return { kind: 'unsorted', ...named('Not sorted', bar.unsorted) }
   }
 }
 

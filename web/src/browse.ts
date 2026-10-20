@@ -19,6 +19,11 @@ export const VIEW_LABELS: Record<DrinksView, string> = {
   syrups: 'Syrups & prep',
 }
 
+/** The views the page offers: all of them, or without Can make when the bar could not be read. */
+export function availableViews(canMake: boolean): DrinksView[] {
+  return DRINKS_VIEWS.filter((view) => canMake || view !== 'can')
+}
+
 /** Phone chip labels; the chips append the count. */
 export const VIEW_CHIP_LABELS: Record<DrinksView, string> = {
   can: 'Can make',
@@ -149,7 +154,8 @@ export function parseBrowse(side: Side, params: URLSearchParams): BrowseState {
 export function browseQuery(state: BrowseState): string {
   const params = new URLSearchParams()
   if (state.q) params.append('q', state.q)
-  if (state.category) params.append('cat', state.category)
+  // Drinks pick a view instead of a category, so `cat=` is food's alone.
+  if (state.category && state.show === null) params.append('cat', state.category)
   for (const mark of state.marks) params.append('mark', mark)
   for (const tag of state.tags) params.append('tag', tag)
   if (state.sort !== 'name') params.append('sort', state.sort)
@@ -158,8 +164,10 @@ export function browseQuery(state: BrowseState): string {
   return params.toString()
 }
 
-export function defaultQuery(side: Side): string {
-  return side === 'food' ? 'sort=time' : ''
+/** The query a reset goes to; drinks keep the view they are on. */
+export function defaultQuery(side: Side, show: DrinksView | null = null): string {
+  if (side === 'food') return 'sort=time'
+  return show && show !== 'can' ? `show=${show}` : ''
 }
 
 const byName = (a: RecipeSummary, b: RecipeSummary) =>
@@ -229,7 +237,7 @@ export function describe(state: BrowseState): string {
 
 /**
  * The facets of a side's recipes. The view counts follow the other filters in `state`
- * (not the view itself), so each view shows what it would leave.
+ * (not the view itself), so each view shows what it would leave. On food the view counts are 0.
  */
 export function facetCounts(
   side: Side,
@@ -250,8 +258,10 @@ export function facetCounts(
   const tags = [...tagCounts.keys()].sort(
     (a, b) => tagCounts.get(b)! - tagCounts.get(a)! || a.localeCompare(b),
   )
+  // Views are a drinks thing; food reports none.
   const candidates = state ? recipes.filter((r) => matchesOtherFilters(r, state)) : recipes
-  const count = (view: DrinksView) => candidates.filter((r) => inView(r, view)).length
+  const count = (view: DrinksView) =>
+    side === 'drinks' ? candidates.filter((r) => inView(r, view)).length : 0
   const views = { can: count('can'), all: count('all'), mocktails: count('mocktails'), syrups: count('syrups') }
   return { categories, tags, views }
 }

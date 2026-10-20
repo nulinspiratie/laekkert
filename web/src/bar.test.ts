@@ -159,31 +159,39 @@ describe('nameList', () => {
 
 describe('badge', () => {
   it('says a drink can be made', () => {
-    expect(badge(drinkBar(), false)).toEqual({ kind: 'can_make', text: 'Can make now' })
-    expect(badge(drinkBar(), true)).toEqual({ kind: 'can_make', text: 'Can make now' })
+    expect(badge(drinkBar())).toEqual({ kind: 'can_make', text: 'Can make now', label: 'Can make now' })
   })
 
   it('says Also needs when untracked items are left', () => {
-    expect(badge(drinkBar({ untracked: ['lime juice', 'mint', 'soda'] }), false)).toEqual({
+    expect(badge(drinkBar({ untracked: ['lime juice', 'mint', 'soda'] }))).toEqual({
       kind: 'also',
       text: 'Also needs: lime juice, mint +1',
+      label: 'Also needs: lime juice, mint, soda',
     })
-    expect(badge(drinkBar({ untracked: ['limes'] }), true)).toEqual({ kind: 'also', text: 'Also needs: limes' })
+    expect(badge(drinkBar({ untracked: ['limes'] }))).toEqual({
+      kind: 'also',
+      text: 'Also needs: limes',
+      label: 'Also needs: limes',
+    })
   })
 
   it('names what is missing', () => {
     const bar = drinkBar({ status: 'missing', missing: ['orgeat', 'rum', 'lime'] })
-    expect(badge(bar, false)).toEqual({ kind: 'missing', text: 'Missing: orgeat, rum +1' })
+    expect(badge(bar)).toEqual({
+      kind: 'missing',
+      text: 'Missing: orgeat, rum +1',
+      label: 'Missing: orgeat, rum, lime',
+    })
   })
 
   it('names what is not sorted', () => {
     const bar = drinkBar({ status: 'unsorted', unsorted: ['falernum'] })
-    expect(badge(bar, true)).toEqual({ kind: 'unsorted', text: 'Not sorted: falernum' })
+    expect(badge(bar)).toEqual({ kind: 'unsorted', text: 'Not sorted: falernum', label: 'Not sorted: falernum' })
   })
 
   it('keeps missing ahead of untracked items', () => {
     const bar = drinkBar({ status: 'missing', missing: ['rum'], untracked: ['limes'] })
-    expect(badge(bar, false).kind).toBe('missing')
+    expect(badge(bar).kind).toBe('missing')
   })
 })
 

@@ -14,9 +14,10 @@ const daiquiri = {
   rating: null,
   last_made: null,
   image: null,
+  bar: { status: 'can_make', missing: [], unsorted: [], untracked: [] },
 }
 
-const NO_COUNTS = { can_make: 0, fresh_only: 0, missing: 0, unsorted: 0, total: 0 }
+const NO_COUNTS = { can_make: 0, missing: 0, unsorted: 0, total: 0 }
 
 function stubFetch(status: number, body: unknown) {
   const fetch = vi.fn(async () => new Response(JSON.stringify(body), { status }))
