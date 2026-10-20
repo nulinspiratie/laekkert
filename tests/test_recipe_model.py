@@ -152,3 +152,24 @@ def test_summary_keys():
         "marks",
         "image",
     }
+
+
+def test_tags_repeating_the_category_are_dropped():
+    r = parse_recipe(
+        valid(category="mocktails", tags=["Mocktail", "mocktails", "summer"])
+    )
+    assert r.tags == ["summer"]
+
+
+def test_singular_tag_is_dropped_for_other_categories():
+    r = parse_recipe(
+        valid(
+            side="food", category="desserts", tags=["dessert"], slug="cake", name="Cake"
+        )
+    )
+    assert r.tags == []
+
+
+def test_tag_naming_a_different_category_is_kept():
+    r = parse_recipe(valid(category="cocktails", tags=["mocktail"]))
+    assert r.tags == ["mocktail"]

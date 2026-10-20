@@ -11,6 +11,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.recipes.catalog import name_key
+
 FORMAT_VERSION = 2
 
 Side = Literal["food", "drinks"]
@@ -95,6 +97,11 @@ class Recipe(BaseModel):
         if self.category not in CATEGORIES[self.side]:
             allowed = ", ".join(CATEGORIES[self.side])
             raise ValueError(f"category for {self.side} must be one of {allowed}")
+        # "mocktails" is the category; a tag saying it again adds nothing.
+        own = {name_key(self.category)}
+        if self.category.endswith("s"):
+            own.add(name_key(self.category[:-1]))
+        self.tags = [t for t in self.tags if name_key(t) not in own]
         return self
 
     def summary(self) -> dict:
