@@ -119,6 +119,15 @@ export function Bookmark({ filled, ...props }: IconProps & { filled?: boolean })
   )
 }
 
+/** The rating star; solid when `filled` (a rating shown on a card). */
+export function Star({ filled, ...props }: IconProps & { filled?: boolean }) {
+  return (
+    <Svg {...(filled ? { fill: 'currentColor', strokeWidth: 1.5 } : {})} {...props}>
+      <path d="m12 4 2.4 5 5.4.6-4 3.7 1.1 5.3L12 16l-4.9 2.6 1.1-5.3-4-3.7 5.4-.6z" />
+    </Svg>
+  )
+}
+
 export function Clock(props: IconProps) {
   return (
     <Svg size={16} {...props}>

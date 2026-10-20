@@ -11,6 +11,8 @@ const daiquiri = {
   time_minutes: 5,
   tags: [],
   marks: ['favourite'],
+  rating: null,
+  last_made: null,
   image: null,
 }
 

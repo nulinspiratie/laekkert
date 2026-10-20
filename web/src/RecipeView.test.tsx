@@ -24,6 +24,8 @@ const traybake: Recipe = {
   tags: ['batch cook', 'kid approved'],
   marks: ['tried'],
   image: null,
+  rating: null,
+  last_made: null,
 }
 
 const daiquiri: Recipe = {

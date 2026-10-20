@@ -4,7 +4,7 @@
 import { Link, useLocation } from 'react-router'
 import { MARK_LABELS, type FilterMark } from './browse'
 import { capitalise, formatTime } from './format'
-import { Bookmark, Chevron, Clock, Heart } from './icons'
+import { Bookmark, Chevron, Clock, Heart, Star } from './icons'
 import { PhotoTile } from './PhotoTile'
 import type { RecipeSummary } from './types'
 
@@ -20,6 +20,18 @@ function MarkIcons({ recipe, size }: { recipe: RecipeSummary; size: number }) {
         if (mark === 'favourite') return <Heart key={mark} filled size={size} aria-label={label} />
         return <Bookmark key={mark} filled size={size} aria-label={label} />
       })}
+    </span>
+  )
+}
+
+/** The star and rating, "4.5"; nothing when the recipe is unrated. */
+function RatingBadge({ rating, size }: { rating: number | null; size: number }) {
+  if (rating === null) return null
+  const text = rating.toFixed(1)
+  return (
+    <span className="recipe-rating" role="img" aria-label={`Rated ${text} out of 5`}>
+      <Star filled size={size} />
+      {text}
     </span>
   )
 }
@@ -53,6 +65,7 @@ export function RecipeCard({ recipe }: { recipe: RecipeSummary }) {
               {formatTime(recipe.time_minutes)}
             </span>
           )}
+          <RatingBadge rating={recipe.rating} size={16} />
           <span className="recipe-card-spacer" />
           <MarkIcons recipe={recipe} size={18} />
         </div>
@@ -75,9 +88,10 @@ export function RecipeRow({ recipe }: { recipe: RecipeSummary }) {
       />
       <div className="recipe-row-text">
         <span className="recipe-row-name">{recipe.name}</span>
-        {recipe.time_minutes !== null && (
-          <span className="recipe-row-time">{formatTime(recipe.time_minutes)}</span>
-        )}
+        <span className="recipe-row-sub">
+          {recipe.time_minutes !== null && <span>{formatTime(recipe.time_minutes)}</span>}
+          <RatingBadge rating={recipe.rating} size={14} />
+        </span>
       </div>
       <MarkIcons recipe={recipe} size={18} />
     </Link>
@@ -98,7 +112,10 @@ export function RecipeTableRow({ recipe }: { recipe: RecipeSummary }) {
       />
       <div className="recipe-table-name">
         <span>{recipe.name}</span>
-        <span className="recipe-table-category">{capitalise(recipe.category)}</span>
+        <span className="recipe-table-sub">
+          <span>{capitalise(recipe.category)}</span>
+          <RatingBadge rating={recipe.rating} size={14} />
+        </span>
       </div>
       <span className="recipe-time">
         {recipe.time_minutes !== null && (

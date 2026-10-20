@@ -3,7 +3,7 @@
 import type { Mark, RecipeSummary, Side } from './types'
 
 export type FilterMark = Extract<Mark, 'favourite' | 'try_next'>
-export type SortKey = 'time' | 'name'
+export type SortKey = 'time' | 'rating' | 'made' | 'name'
 
 export interface BrowseState {
   q: string
@@ -16,6 +16,8 @@ export interface BrowseState {
 /** The sort choices the browse page offers, in display order. */
 export const SORT_OPTIONS: readonly { key: SortKey; label: string }[] = [
   { key: 'time', label: 'Cooking time' },
+  { key: 'rating', label: 'Rating' },
+  { key: 'made', label: 'Recently made' },
   { key: 'name', label: 'A–Z' },
 ]
 
@@ -40,7 +42,7 @@ export function parseBrowse(side: Side, params: URLSearchParams): BrowseState {
     category: cat && CATEGORIES[side].includes(cat) ? cat : null,
     marks: FILTER_MARKS.filter((mark) => picked.includes(mark)),
     tags: [...new Set(params.getAll('tag').filter((tag) => tag !== ''))],
-    sort: params.get('sort') === 'time' ? 'time' : 'name',
+    sort: SORT_OPTIONS.find(({ key }) => key === params.get('sort'))?.key ?? 'name',
   }
 }
 
@@ -68,6 +70,29 @@ const byTime = (a: RecipeSummary, b: RecipeSummary) => {
   return a.time_minutes - b.time_minutes || byName(a, b)
 }
 
+// Highest first; unrated last.
+const byRating = (a: RecipeSummary, b: RecipeSummary) => {
+  if (a.rating === b.rating) return byName(a, b)
+  if (a.rating === null) return 1
+  if (b.rating === null) return -1
+  return b.rating - a.rating || byName(a, b)
+}
+
+// Newest first; never made last. The timestamps are UTC ISO 8601, so strings compare in time order.
+const byMade = (a: RecipeSummary, b: RecipeSummary) => {
+  if (a.last_made === b.last_made) return byName(a, b)
+  if (a.last_made === null) return 1
+  if (b.last_made === null) return -1
+  return a.last_made < b.last_made ? 1 : -1
+}
+
+const SORTERS: Record<SortKey, (a: RecipeSummary, b: RecipeSummary) => number> = {
+  time: byTime,
+  rating: byRating,
+  made: byMade,
+  name: byName,
+}
+
 export function applyBrowse(recipes: RecipeSummary[], state: BrowseState): RecipeSummary[] {
   const kept = recipes.filter(
     (recipe) =>
@@ -77,13 +102,20 @@ export function applyBrowse(recipes: RecipeSummary[], state: BrowseState): Recip
   )
   // A search keeps the API's relevance order.
   if (state.q) return kept
-  return kept.sort(state.sort === 'time' ? byTime : byName)
+  return kept.sort(SORTERS[state.sort])
+}
+
+const SORT_DESCRIPTIONS: Record<SortKey, string> = {
+  time: 'quickest first',
+  rating: 'highest rated first',
+  made: 'recently made first',
+  name: 'A to Z',
 }
 
 export function describe(state: BrowseState): string {
   const parts: string[] = state.marks.map((mark) => MARK_LABELS[mark])
   if (state.q) parts.push('best match first')
-  else parts.push(state.sort === 'time' ? 'quickest first' : 'A to Z')
+  else parts.push(SORT_DESCRIPTIONS[state.sort])
   return parts.join(', ')
 }
 

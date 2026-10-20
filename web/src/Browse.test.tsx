@@ -12,6 +12,8 @@ function recipe(over: Partial<RecipeSummary> & Pick<RecipeSummary, 'slug' | 'nam
     tags: [],
     marks: [],
     image: null,
+    rating: null,
+    last_made: null,
     ...over,
   }
 }
@@ -99,7 +101,7 @@ const recipeNames = () =>
   screen
     .getAllByRole('link')
     .map((link) => link.getAttribute('href') ?? '')
-    .filter((href) => /^\/(food|drinks)\/[^?]+$/.test(href))
+    .filter((href) => /^\/(food|drinks)\/(?!new$)[^?]+$/.test(href))
 
 afterEach(() => {
   vi.useRealTimers()
@@ -384,12 +386,65 @@ test('drinks has the bar heading, its own categories and the same two marks', as
   expect(within(card).getByRole('img', { name: 'Favourite' })).toBeInTheDocument()
 })
 
-test('M1 leaves out ratings, avatar and recipe creation', async () => {
+test('the sort select offers cooking time, rating, recently made and A to Z', async () => {
   stubFetch()
   renderAt('/food')
   await screen.findByText('A to Z · 4 recipes')
-  expect(screen.queryByText(/rating|recently made|new recipe|cook with what you have/i)).toBeNull()
-  expect(screen.queryByRole('option', { name: /rating/i })).toBeNull()
+  const options = within(screen.getByRole('combobox', { name: 'Sort' })).getAllByRole('option')
+  expect(options.map((option) => option.textContent)).toEqual(['Cooking time', 'Rating', 'Recently made', 'A–Z'])
+  expect(screen.queryByText(/cook with what you have/i)).toBeNull()
+})
+
+test('sorting by rating and recently made reorders the list and the subtitle', async () => {
+  stubFetch([
+    { ...traybake, rating: 4, last_made: '2026-10-01T18:00:00Z' },
+    { ...dal, rating: 5, last_made: '2026-08-01T18:00:00Z' },
+    brownies,
+  ])
+  renderAt('/food')
+  await screen.findByText('A to Z · 3 recipes')
+  fireEvent.change(screen.getByRole('combobox', { name: 'Sort' }), { target: { value: 'rating' } })
+  expect(location()).toBe('/food?sort=rating')
+  expect(await screen.findByText('highest rated first · 3 recipes')).toBeInTheDocument()
+  expect(recipeNames()).toEqual(['/food/red-lentil-dal', '/food/chicken-leek-traybake', '/food/brownies'])
+  fireEvent.change(screen.getByRole('combobox', { name: 'Sort' }), { target: { value: 'made' } })
+  expect(await screen.findByText('recently made first · 3 recipes')).toBeInTheDocument()
+  expect(recipeNames()).toEqual(['/food/chicken-leek-traybake', '/food/red-lentil-dal', '/food/brownies'])
+})
+
+test('card shows rating', async () => {
+  stubFetch([{ ...traybake, rating: 4.5 }, { ...dal, rating: 4 }, brownies])
+  renderAt('/food')
+  await screen.findByText('A to Z · 3 recipes')
+  const rated = screen.getByRole('link', { name: /Chicken and leek traybake/ })
+  const label = within(rated).getByLabelText('Rated 4.5 out of 5')
+  expect(label).toHaveTextContent('4.5')
+  expect(within(screen.getByRole('link', { name: /Red lentil dal/ })).getByLabelText('Rated 4.0 out of 5')).toHaveTextContent('4.0')
+  const unrated = screen.getByRole('link', { name: /Brownies/ })
+  expect(within(unrated).queryByLabelText(/^Rated/)).not.toBeInTheDocument()
+})
+
+test('list views show the rating too', async () => {
+  stubFetch([{ ...traybake, rating: 3.5 }])
+  localStorage.setItem('laekkert.view', 'list')
+  renderAt('/food')
+  await screen.findByText('A to Z · 1 recipe')
+  expect(within(screen.getByRole('link', { name: /Chicken/ })).getByLabelText('Rated 3.5 out of 5')).toBeInTheDocument()
+})
+
+test('New recipe link goes to the editor', async () => {
+  stubFetch()
+  renderAt('/food')
+  await screen.findByText('A to Z · 4 recipes')
+  fireEvent.click(screen.getByRole('link', { name: 'New recipe' }))
+  expect(location()).toBe('/food/new')
+})
+
+test('the drinks page links to a new drink in the editor', async () => {
+  stubFetch([daiquiri])
+  renderAt('/drinks')
+  await screen.findByRole('link', { name: /Daiquiri/ })
+  expect(screen.getByRole('link', { name: 'New recipe' })).toHaveAttribute('href', '/drinks/new')
 })
 
 // ---- phone ----
@@ -421,6 +476,18 @@ test('the phone has no side panel, desktop search field or header toggle', async
   expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
   expect(screen.queryByRole('group', { name: 'View mode' })).not.toBeInTheDocument()
   expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+})
+
+test('the phone bar has a New recipe button that goes to the editor', async () => {
+  stubViewport(false)
+  stubFetch()
+  renderAt('/food')
+  await screen.findByText('A to Z · 4 recipes')
+  const add = screen.getByRole('link', { name: 'New recipe' })
+  expect(add).toHaveAttribute('href', '/food/new')
+  expect(add.textContent).toBe('')
+  fireEvent.click(add)
+  expect(location()).toBe('/food/new')
 })
 
 test('the phone filter sheet filters live, resets and closes with the count', async () => {

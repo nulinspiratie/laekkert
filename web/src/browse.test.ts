@@ -21,6 +21,8 @@ function recipe(over: Partial<RecipeSummary> & { slug: string }): RecipeSummary 
     tags: [],
     marks: [],
     image: null,
+    rating: null,
+    last_made: null,
     ...over,
   }
 }
@@ -92,7 +94,14 @@ suite('parseBrowse', () => {
 
   it('falls back to name for a missing or unknown sort', () => {
     expect(parse('food', '').sort).toBe('name')
-    expect(parse('food', 'sort=rating').sort).toBe('name')
+    expect(parse('food', 'sort=bogus').sort).toBe('name')
+  })
+
+  it('parse keeps sort=rating and sort=made', () => {
+    expect(parse('food', 'sort=rating').sort).toBe('rating')
+    expect(parse('drinks', 'sort=made').sort).toBe('made')
+    expect(browseQuery(state({ sort: 'rating' }))).toBe('sort=rating')
+    expect(browseQuery(state({ sort: 'made' }))).toBe('sort=made')
   })
 
   it('treats empty q, cat and tag values as absent', () => {
@@ -197,6 +206,40 @@ suite('applyBrowse', () => {
     ])
   })
 
+  it('rating sort puts unrated last', () => {
+    const list = [
+      recipe({ slug: 'u1', name: 'Unrated b' }),
+      recipe({ slug: 'r35', name: 'Three and a half', rating: 3.5 }),
+      recipe({ slug: 'r5b', name: 'Beta', rating: 5 }),
+      recipe({ slug: 'r5a', name: 'Alpha', rating: 5 }),
+      recipe({ slug: 'u0', name: 'Unrated a' }),
+    ]
+    expect(applyBrowse(list, state({ sort: 'rating' })).map((r) => r.slug)).toEqual([
+      'r5a',
+      'r5b',
+      'r35',
+      'u0',
+      'u1',
+    ])
+  })
+
+  it('made sort is newest first, never-made last', () => {
+    const list = [
+      recipe({ slug: 'never-b', name: 'Never b' }),
+      recipe({ slug: 'old', name: 'Old', last_made: '2026-01-02T10:00:00Z' }),
+      recipe({ slug: 'new-b', name: 'Beta', last_made: '2026-10-01T09:00:00Z' }),
+      recipe({ slug: 'new-a', name: 'Alpha', last_made: '2026-10-01T09:00:00Z' }),
+      recipe({ slug: 'never-a', name: 'Never a' }),
+    ]
+    expect(applyBrowse(list, state({ sort: 'made' })).map((r) => r.slug)).toEqual([
+      'new-a',
+      'new-b',
+      'old',
+      'never-a',
+      'never-b',
+    ])
+  })
+
   it('keeps the input order when q is set', () => {
     const out = applyBrowse(recipes, state({ q: 'x', sort: 'time' }))
     expect(out.map((r) => r.slug)).toEqual(['a', 'b', 'c', 'd'])
@@ -217,6 +260,11 @@ suite('describe', () => {
 
   it('says A to Z for the empty state', () => {
     expect(describe(state())).toBe('A to Z')
+  })
+
+  it('names the new sorts', () => {
+    expect(describe(state({ sort: 'rating' }))).toBe('highest rated first')
+    expect(describe(state({ sort: 'made' }))).toBe('recently made first')
   })
 
   it('replaces the sort with best match first when q is set', () => {
