@@ -2,8 +2,10 @@ import { afterEach, expect, test, vi } from 'vitest'
 import {
   ApiError,
   addEntry,
+  changeBar,
   createRecipe,
   deleteRecipe,
+  getBar,
   getTimeline,
   restoreVersion,
   setMarks,
@@ -136,4 +138,41 @@ test('setMarks and restoreVersion post their bodies', async () => {
   const [restoreUrl, restore] = fetch.mock.calls[1]
   expect(restoreUrl).toBe('/api/recipes/food/dal/restore')
   expect(JSON.parse(restore?.body as string)).toEqual({ version: 3 })
+})
+
+const bar = { items: [], set_up: false, counts: { can_make: 0, fresh_only: 0, missing: 0, unsorted: 0, total: 0 } }
+
+test('getBar gets the bar', async () => {
+  const fetch = stubFetch(() => json(bar))
+  expect(await getBar()).toEqual(bar)
+  const [url, init] = fetch.mock.calls[0]
+  expect(url).toBe('/api/bar')
+  expect(init?.method).toBe('GET')
+  expect(init?.body).toBeUndefined()
+})
+
+test('getBar throws the server sentence', async () => {
+  stubFetch(() => json({ error: 'The bar is unavailable.' }, 503))
+  await expect(getBar()).rejects.toMatchObject({ name: 'ApiError', message: 'The bar is unavailable.', status: 503 })
+})
+
+test('changeBar posts the changes and returns the bar', async () => {
+  const fetch = stubFetch(() => json({ ...bar, set_up: true }))
+  const result = await changeBar({ have: ['Gin'], fold: { 'London dry': 'Gin' } })
+  expect(result.set_up).toBe(true)
+  const [url, init] = fetch.mock.calls[0]
+  expect(url).toBe('/api/bar')
+  expect(init?.method).toBe('POST')
+  expect(new Headers(init?.headers).get('Content-Type')).toBe('application/json')
+  expect(JSON.parse(init?.body as string)).toEqual({ have: ['Gin'], fold: { 'London dry': 'Gin' } })
+})
+
+test('changeBar throws ApiError carrying the refusal sentence', async () => {
+  stubFetch(() => json({ error: 'Only items no drink uses can be deleted.' }, 400))
+  const failed = changeBar({ delete: ['Gin'] })
+  await expect(failed).rejects.toBeInstanceOf(ApiError)
+  await expect(failed).rejects.toMatchObject({
+    message: 'Only items no drink uses can be deleted.',
+    status: 400,
+  })
 })

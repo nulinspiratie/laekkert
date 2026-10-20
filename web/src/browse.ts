@@ -1,9 +1,11 @@
 // Browse state: what the recipe list shows, kept in the URL query string.
 
-import type { Mark, RecipeSummary, Side } from './types'
+import type { DrinkStatus, Mark, RecipeSummary, Side } from './types'
 
 export type FilterMark = Extract<Mark, 'favourite' | 'try_next'>
 export type SortKey = 'time' | 'rating' | 'made' | 'name'
+/** The "From your bar" filter: drinks you can make now, or that need only fresh items too. */
+export type BarFilter = 'can' | 'fresh'
 
 export interface BrowseState {
   q: string
@@ -11,6 +13,8 @@ export interface BrowseState {
   marks: FilterMark[]
   tags: string[]
   sort: SortKey
+  /** Drinks only; always null on food. */
+  bar: BarFilter | null
 }
 
 /** The sort choices the browse page offers, in display order. */
@@ -34,6 +38,10 @@ export const MARK_LABELS: Record<FilterMark, string> = {
   try_next: 'Try next',
 }
 
+const BAR_PARAMS: readonly BarFilter[] = ['can', 'fresh']
+
+const BAR_STATUS: Record<BarFilter, DrinkStatus> = { can: 'can_make', fresh: 'fresh_only' }
+
 export function parseBrowse(side: Side, params: URLSearchParams): BrowseState {
   const cat = params.get('cat')
   const picked = params.getAll('mark')
@@ -43,6 +51,7 @@ export function parseBrowse(side: Side, params: URLSearchParams): BrowseState {
     marks: FILTER_MARKS.filter((mark) => picked.includes(mark)),
     tags: [...new Set(params.getAll('tag').filter((tag) => tag !== ''))],
     sort: SORT_OPTIONS.find(({ key }) => key === params.get('sort'))?.key ?? 'name',
+    bar: side === 'drinks' ? BAR_PARAMS.find((value) => value === params.get('bar')) ?? null : null,
   }
 }
 
@@ -53,6 +62,7 @@ export function browseQuery(state: BrowseState): string {
   for (const mark of state.marks) params.append('mark', mark)
   for (const tag of state.tags) params.append('tag', tag)
   if (state.sort !== 'name') params.append('sort', state.sort)
+  if (state.bar) params.append('bar', state.bar)
   return params.toString()
 }
 
@@ -93,12 +103,19 @@ const SORTERS: Record<SortKey, (a: RecipeSummary, b: RecipeSummary) => number> =
   name: byName,
 }
 
+function matchesOtherFilters(recipe: RecipeSummary, state: BrowseState): boolean {
+  return (
+    (state.category === null || recipe.category === state.category) &&
+    state.marks.every((mark) => recipe.marks.includes(mark)) &&
+    state.tags.every((tag) => recipe.tags.includes(tag))
+  )
+}
+
 export function applyBrowse(recipes: RecipeSummary[], state: BrowseState): RecipeSummary[] {
   const kept = recipes.filter(
     (recipe) =>
-      (state.category === null || recipe.category === state.category) &&
-      state.marks.every((mark) => recipe.marks.includes(mark)) &&
-      state.tags.every((tag) => recipe.tags.includes(tag)),
+      matchesOtherFilters(recipe, state) &&
+      (state.bar === null || recipe.bar?.status === BAR_STATUS[state.bar]),
   )
   // A search keeps the API's relevance order.
   if (state.q) return kept
@@ -119,10 +136,19 @@ export function describe(state: BrowseState): string {
   return parts.join(', ')
 }
 
+/**
+ * The facets of a side's recipes. The bar counts follow the other filters in `state`
+ * (not the bar filter itself), so each choice shows what it would leave.
+ */
 export function facetCounts(
   side: Side,
   recipes: RecipeSummary[],
-): { categories: [string, number][]; tags: string[] } {
+  state?: BrowseState,
+): {
+  categories: [string, number][]
+  tags: string[]
+  bar: { all: number; can: number; fresh: number }
+} {
   const categories = CATEGORIES[side].map(
     (name): [string, number] => [name, recipes.filter((r) => r.category === name).length],
   )
@@ -133,5 +159,11 @@ export function facetCounts(
   const tags = [...tagCounts.keys()].sort(
     (a, b) => tagCounts.get(b)! - tagCounts.get(a)! || a.localeCompare(b),
   )
-  return { categories, tags }
+  const barCandidates = state ? recipes.filter((r) => matchesOtherFilters(r, state)) : recipes
+  const bar = {
+    all: barCandidates.length,
+    can: barCandidates.filter((r) => r.bar?.status === BAR_STATUS.can).length,
+    fresh: barCandidates.filter((r) => r.bar?.status === BAR_STATUS.fresh).length,
+  }
+  return { categories, tags, bar }
 }

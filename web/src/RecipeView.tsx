@@ -207,7 +207,7 @@ function Page({ recipe, onRecipe }: { recipe: Recipe; onRecipe: (recipe: Recipe)
             <ul className="recipe-tags" aria-label="Tags">
               {recipe.tags.map((tag) => (
                 <li key={tag}>
-                  <Link to={`/${side}?${browseQuery({ q: '', category: null, marks: [], tags: [tag], sort: 'name' })}`}>
+                  <Link to={`/${side}?${browseQuery({ q: '', category: null, marks: [], tags: [tag], sort: 'name', bar: null })}`}>
                     {tag}
                   </Link>
                 </li>

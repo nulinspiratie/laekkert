@@ -1,4 +1,4 @@
-import type { Mark, NewEntry, Recipe, RecipeDraft, RecipeSummary, Side, TimelineEntry } from './types'
+import type { Bar, BarChanges, Mark, NewEntry, Recipe, RecipeDraft, RecipeSummary, Side, TimelineEntry } from './types'
 
 /** All of a side's recipes, or only the matches for `q` (best match first). */
 export async function listRecipes(side: Side, q?: string): Promise<RecipeSummary[]> {
@@ -111,4 +111,13 @@ export async function setMarks(side: Side, slug: string, add: Mark[], remove: Ma
 
 export async function restoreVersion(side: Side, slug: string, version: number): Promise<Recipe> {
   return (await send(`${recipeUrl(side, slug)}/restore`, 'POST', { version })).json()
+}
+
+export async function getBar(): Promise<Bar> {
+  return (await send('/api/bar', 'GET')).json()
+}
+
+/** Every write returns the whole bar after the change. */
+export async function changeBar(changes: BarChanges): Promise<Bar> {
+  return (await send('/api/bar', 'POST', changes)).json()
 }

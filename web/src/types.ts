@@ -21,6 +21,8 @@ export interface Ingredient {
 
 export interface RecipeIngredient extends Ingredient {
   g_per_tsp: number | null
+  /** Drinks only: the bar item this ingredient is, or null when none matches. */
+  bar?: IngredientBar | null
 }
 
 export interface Source {
@@ -41,6 +43,8 @@ export interface RecipeSummary {
   rating: number | null
   /** UTC timestamp of the latest "made it" entry. */
   last_made: string | null
+  /** Drinks only: what the bar says about making this drink. */
+  bar?: DrinkBar
 }
 
 export interface Recipe extends RecipeSummary {
@@ -51,6 +55,67 @@ export interface Recipe extends RecipeSummary {
   source: Source | null
   /** Counts saved changes; 0 for a recipe that predates versions. Sent back with an edit. */
   version: number
+}
+
+export type Kind = 'spirits' | 'liqueurs' | 'aperitifs' | 'bitters' | 'syrups' | 'other'
+
+/** Whether the household has an item; an unsorted item has no state. */
+export type BarState = 'have' | 'dont'
+
+export type DrinkStatus = 'can_make' | 'fresh_only' | 'missing' | 'unsorted'
+
+/** A drink as a bar item links to it. */
+export interface DrinkLink {
+  slug: string
+  name: string
+}
+
+export interface BarItem {
+  name: string
+  aliases: string[]
+  kind: Kind
+  fresh: boolean
+  /** Null when unsorted, and always for a fresh item. */
+  state: BarState | null
+  used_in: DrinkLink[]
+  /** A syrup recipe that makes this item. */
+  recipe: DrinkLink | null
+}
+
+export interface Bar {
+  items: BarItem[]
+  set_up: boolean
+  counts: Record<DrinkStatus | 'total', number>
+}
+
+/** What the bar says about one drink. The lists hold item names. */
+export interface DrinkBar {
+  status: DrinkStatus
+  missing: string[]
+  unsorted: string[]
+  fresh: string[]
+}
+
+/** What the bar says about one ingredient of a drink. */
+export interface IngredientBar {
+  item: string
+  state: BarState | null
+  fresh: boolean
+  recipe: DrinkLink | null
+}
+
+/** One change to the bar, applied all or nothing by the server. */
+export interface BarChanges {
+  have?: string[]
+  dont_have?: string[]
+  unsorted?: string[]
+  fresh?: string[]
+  not_fresh?: string[]
+  kinds?: Record<string, Kind>
+  add_names?: Record<string, string[]>
+  remove_names?: Record<string, string[]>
+  fold?: Record<string, string>
+  delete?: string[]
 }
 
 export function isSide(value: string | undefined): value is Side {
