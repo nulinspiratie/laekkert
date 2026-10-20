@@ -158,13 +158,24 @@ function rowProblem(number: number, row: EditorRow): string | null {
   return null
 }
 
-/** The problems the form can see itself, in the server's words. Empty means good to save. */
-export function validate(state: EditorState): string[] {
+/** Number boxes whose text the browser could not read (`validity.badInput`); their value is ''. */
+export interface BadInput {
+  servings?: boolean
+  time?: boolean
+}
+
+/**
+ * The problems the form can see itself, in the server's words. Empty means good to save.
+ * `bad` marks number boxes holding unreadable text, so they are not mistaken for blank.
+ */
+export function validate(state: EditorState, bad: BadInput = {}): string[] {
   const problems: string[] = []
   if (!state.name.trim()) problems.push('Give the recipe a name')
 
   const servings = state.servings.trim()
-  if (!/^-?\d+$/.test(servings)) {
+  if (bad.servings) {
+    problems.push('Servings must be a whole number')
+  } else if (!/^-?\d+$/.test(servings)) {
     problems.push(/^-?\d*\.\d+$/.test(servings) ? 'Servings must be a whole number' : 'Servings must be at least 1')
   } else if (Number(servings) < 1) {
     problems.push('Servings must be at least 1')
@@ -173,7 +184,9 @@ export function validate(state: EditorState): string[] {
   }
 
   const time = state.time.trim()
-  if (time !== '') {
+  if (bad.time) {
+    problems.push('Cooking time must be a whole number of minutes')
+  } else if (time !== '') {
     if (!/^-?\d+$/.test(time)) problems.push('Cooking time must be a whole number of minutes')
     else if (Number(time) < 0) problems.push("Cooking time can't be negative")
     else if (Number(time) > MAX_MINUTES) problems.push('Cooking time can be at most a week')

@@ -2,8 +2,8 @@
 // phone is one column with Cancel and Save in a fixed bottom bar. The pure parts (state,
 // validation, the draft) are in editor.ts.
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { Link, useBlocker, useNavigate, useParams } from 'react-router'
 import { createRecipe, deleteRecipe, getRecipe, recipeImageUrl, updateRecipe, uploadImage } from './api'
 import { CATEGORIES } from './browse'
 import {
@@ -16,6 +16,7 @@ import {
   toDraft,
   UNITS,
   validate,
+  type BadInput,
   type EditorRow,
   type EditorState,
   type SourceMode,
@@ -155,10 +156,25 @@ function Form({ side, recipe }: { side: Side; recipe: Recipe | null }) {
     }
   }, [dirty])
 
+  // Set once the form is deliberately left (saved, deleted, or Cancel confirmed), so the
+  // blocker below does not ask a second time.
+  const leaving = useRef(false)
   const leave = (to: string, replace = false) => {
+    leaving.current = true
     guard.current?.()
     navigate(to, { replace })
   }
+
+  // Any other way out (the back gesture, the header links) asks first.
+  const blocker = useBlocker(() => dirty && !leaving.current)
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return
+    if (window.confirm('Discard your changes?')) blocker.proceed()
+    else blocker.reset()
+  }, [blocker])
+
+  const servingsBox = useRef<HTMLInputElement>(null)
+  const timeBox = useRef<HTMLInputElement>(null)
 
   const alertRef = useRef<HTMLUListElement>(null)
   useEffect(() => {
@@ -168,7 +184,11 @@ function Form({ side, recipe }: { side: Side; recipe: Recipe | null }) {
   const save = async () => {
     if (working.current || uploadRunning) return
     const next = withPendingTag(state)
-    const found = validate(next)
+    const bad: BadInput = {
+      servings: servingsBox.current?.validity.badInput,
+      time: timeBox.current?.validity.badInput,
+    }
+    const found = validate(next, bad)
     if (found.length > 0) {
       setProblems(found)
       return
@@ -201,7 +221,7 @@ function Form({ side, recipe }: { side: Side; recipe: Recipe | null }) {
     setProblems([])
     try {
       await deleteRecipe(side, slug)
-      leave(`/${side}`)
+      leave(`/${side}`, true)
     } catch (err) {
       setProblems([messageOf(err)])
       working.current = false
@@ -243,8 +263,8 @@ function Form({ side, recipe }: { side: Side; recipe: Recipe | null }) {
       onTags={(tags) => patch({ tags })}
     />
   )
-  const basics = <Basics side={side} state={state} onChange={patch} />
-  const ingredients = <Ingredients rows={state.rows} onRows={(rows) => patch({ rows })} />
+  const basics = <Basics side={side} state={state} onChange={patch} servingsBox={servingsBox} timeBox={timeBox} />
+  const ingredients = <Ingredients rows={state.rows} desktop={desktop} onRows={(rows) => patch({ rows })} />
   const steps = <Steps steps={state.steps} onSteps={(next) => patch({ steps: next })} />
   const deleteButton = recipe && (
     <button type="button" className="ed-delete" disabled={busy} onClick={() => void remove()}>
@@ -340,10 +360,14 @@ function Basics({
   side,
   state,
   onChange,
+  servingsBox,
+  timeBox,
 }: {
   side: Side
   state: EditorState
   onChange: (changes: Partial<EditorState>) => void
+  servingsBox: RefObject<HTMLInputElement | null>
+  timeBox: RefObject<HTMLInputElement | null>
 }) {
   return (
     <section className="ed-card" aria-label="Basics">
@@ -370,6 +394,7 @@ function Basics({
             <span className="ed-suffix">
               <input
                 id={id}
+                ref={timeBox}
                 type="number"
                 inputMode="numeric"
                 min={0}
@@ -384,6 +409,7 @@ function Basics({
           {(id) => (
             <input
               id={id}
+              ref={servingsBox}
               type="number"
               inputMode="numeric"
               min={1}
@@ -437,7 +463,15 @@ function MoveButtons({
   )
 }
 
-function Ingredients({ rows, onRows }: { rows: EditorRow[]; onRows: (rows: EditorRow[]) => void }) {
+function Ingredients({
+  rows,
+  desktop,
+  onRows,
+}: {
+  rows: EditorRow[]
+  desktop: boolean
+  onRows: (rows: EditorRow[]) => void
+}) {
   const change = (key: string, changes: Partial<EditorRow>) =>
     onRows(rows.map((row) => (row.key === key ? { ...row, ...changes } : row)))
   return (
@@ -455,82 +489,113 @@ function Ingredients({ rows, onRows }: { rows: EditorRow[]; onRows: (rows: Edito
         <ul className="ed-rows">
           {rows.map((row, index) => {
             const n = index + 1
+            const amount = (
+              <div className="ed-cell ed-cell--amount">
+                <span className="ed-cap" aria-hidden="true">
+                  Amount
+                </span>
+                <input
+                  type="text"
+                  aria-label={`Amount for ingredient ${n}`}
+                  value={row.amount}
+                  onChange={(e) => change(row.key, { amount: e.target.value })}
+                />
+                {row.original && row.amount.trim() === '' && (
+                  <span className="ed-original">As written: {row.original}</span>
+                )}
+              </div>
+            )
+            const unit = (
+              <div className="ed-cell ed-cell--unit">
+                <span className="ed-cap" aria-hidden="true">
+                  Unit
+                </span>
+                <select
+                  aria-label={`Unit for ingredient ${n}`}
+                  value={row.unit}
+                  onChange={(e) => change(row.key, { unit: e.target.value as EditorRow['unit'] })}
+                >
+                  {UNITS.map((unit) => (
+                    <option key={unit} value={unit}>
+                      {unit}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )
+            const item = (
+              <div className="ed-cell ed-cell--item">
+                <span className="ed-cap" aria-hidden="true">
+                  Ingredient
+                </span>
+                <input
+                  type="text"
+                  aria-label={`Ingredient ${n}`}
+                  value={row.item}
+                  onChange={(e) => change(row.key, { item: e.target.value })}
+                />
+              </div>
+            )
+            const note = (
+              <div className="ed-cell ed-cell--note">
+                <span className="ed-cap" aria-hidden="true">
+                  Note
+                </span>
+                <input
+                  type="text"
+                  aria-label={`Note for ingredient ${n}`}
+                  placeholder="Note"
+                  value={row.note}
+                  onChange={(e) => change(row.key, { note: e.target.value })}
+                />
+              </div>
+            )
+            const scale = (
+              <div className="ed-cell ed-cell--scale">
+                <button
+                  type="button"
+                  className="ed-toggle"
+                  aria-label={`Don't scale ingredient ${n}`}
+                  aria-pressed={row.no_scale}
+                  onClick={() => change(row.key, { no_scale: !row.no_scale })}
+                >
+                  <span className="ed-box">{row.no_scale && <Check strokeWidth={2.5} size={20} />}</span>
+                  <span className="ed-toggle-text">Don&apos;t scale</span>
+                </button>
+              </div>
+            )
+            const tools = (
+              <div className="ed-cell ed-cell--tools">
+                <MoveButtons
+                  what="ingredient"
+                  number={n}
+                  last={index === rows.length - 1}
+                  onMove={(delta) => onRows(move(rows, index, delta))}
+                  onRemove={() => onRows(rows.filter((r) => r.key !== row.key))}
+                />
+              </div>
+            )
+            // The name comes first on a phone, where the card stacks it on top; the table
+            // keeps the artboard's order. The DOM follows the visual order either way.
             return (
               <li key={row.key} className="ed-row">
-                <div className="ed-cell ed-cell--amount">
-                  <span className="ed-cap" aria-hidden="true">
-                    Amount
-                  </span>
-                  <input
-                    type="text"
-                    aria-label={`Amount for ingredient ${n}`}
-                    value={row.amount}
-                    onChange={(e) => change(row.key, { amount: e.target.value })}
-                  />
-                  {row.original && row.amount.trim() === '' && (
-                    <span className="ed-original">As written: {row.original}</span>
-                  )}
-                </div>
-                <div className="ed-cell ed-cell--unit">
-                  <span className="ed-cap" aria-hidden="true">
-                    Unit
-                  </span>
-                  <select
-                    aria-label={`Unit for ingredient ${n}`}
-                    value={row.unit}
-                    onChange={(e) => change(row.key, { unit: e.target.value as EditorRow['unit'] })}
-                  >
-                    {UNITS.map((unit) => (
-                      <option key={unit} value={unit}>
-                        {unit}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="ed-cell ed-cell--item">
-                  <span className="ed-cap" aria-hidden="true">
-                    Ingredient
-                  </span>
-                  <input
-                    type="text"
-                    aria-label={`Ingredient ${n}`}
-                    value={row.item}
-                    onChange={(e) => change(row.key, { item: e.target.value })}
-                  />
-                </div>
-                <div className="ed-cell ed-cell--note">
-                  <span className="ed-cap" aria-hidden="true">
-                    Note
-                  </span>
-                  <input
-                    type="text"
-                    aria-label={`Note for ingredient ${n}`}
-                    placeholder="Note"
-                    value={row.note}
-                    onChange={(e) => change(row.key, { note: e.target.value })}
-                  />
-                </div>
-                <div className="ed-cell ed-cell--scale">
-                  <button
-                    type="button"
-                    className="ed-toggle"
-                    aria-label={`Don't scale ingredient ${n}`}
-                    aria-pressed={row.no_scale}
-                    onClick={() => change(row.key, { no_scale: !row.no_scale })}
-                  >
-                    <span className="ed-box">{row.no_scale && <Check strokeWidth={2.5} size={20} />}</span>
-                    <span className="ed-toggle-text">Don&apos;t scale</span>
-                  </button>
-                </div>
-                <div className="ed-cell ed-cell--tools">
-                  <MoveButtons
-                    what="ingredient"
-                    number={n}
-                    last={index === rows.length - 1}
-                    onMove={(delta) => onRows(move(rows, index, delta))}
-                    onRemove={() => onRows(rows.filter((r) => r.key !== row.key))}
-                  />
-                </div>
+                {desktop ? (
+                  <>
+                    {amount}
+                    {unit}
+                    {item}
+                    {note}
+                  </>
+                ) : (
+                  <>
+                    {item}
+                    {amount}
+                    {unit}
+                    {note}
+                  </>
+                )}
+                {scale}
+                {tools}
               </li>
             )
           })}

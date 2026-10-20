@@ -302,31 +302,13 @@
 }
 
 .ed-cell--item,
-.ed-cell--note {
+.ed-cell--note,
+.ed-cell--scale,
+.ed-cell--tools {
   grid-column: 1 / -1;
-}
-
-.ed-cell--item {
-  grid-row: 1;
-}
-
-.ed-cell--amount,
-.ed-cell--unit {
-  grid-row: 2;
-}
-
-.ed-cell--note {
-  grid-row: 3;
-}
-
-.ed-cell--scale {
-  grid-column: 1 / -1;
-  grid-row: 4;
 }
 
 .ed-cell--tools {
-  grid-column: 1 / -1;
-  grid-row: 5;
   flex-direction: row;
   justify-content: flex-end;
   gap: 4px;
@@ -635,14 +617,11 @@
     background: transparent;
   }
 
-  .ed-cell--amount,
-  .ed-cell--unit,
   .ed-cell--item,
   .ed-cell--note,
   .ed-cell--scale,
   .ed-cell--tools {
     grid-column: auto;
-    grid-row: auto;
   }
 
   .ed-cap,

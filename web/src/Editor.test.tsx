@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { MemoryRouter, useLocation } from 'react-router'
+import { createMemoryRouter, RouterProvider, useLocation } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import App from './App'
 import type { Recipe } from './types'
@@ -96,13 +96,23 @@ function Location() {
   return <output aria-label="location">{pathname}</output>
 }
 
-function renderAt(path: string) {
-  return render(
-    <MemoryRouter initialEntries={[path]}>
-      <App />
-      <Location />
-    </MemoryRouter>,
+/** The app in a data router (the editor's blocker needs one); `history` is the entries before `path`. */
+function renderAt(path: string, history: string[] = []) {
+  const router = createMemoryRouter(
+    [
+      {
+        path: '*',
+        element: (
+          <>
+            <App />
+            <Location />
+          </>
+        ),
+      },
+    ],
+    { initialEntries: [...history, path], initialIndex: history.length },
   )
+  return { ...render(<RouterProvider router={router} />), router }
 }
 
 const location = () => screen.getByLabelText('location').textContent
@@ -228,6 +238,18 @@ test('tsp row is sent as tsp', async () => {
   expect(body.ingredients).toEqual([{ amount: 1.5, unit: 'tsp', item: 'salt', note: '', no_scale: false, original: '' }])
 })
 
+test('a number box with unreadable text is an error, not a blank', async () => {
+  const fetch = stubApi([])
+  renderAt('/food/new')
+  fillNew()
+  const time = screen.getByLabelText('Cooking time')
+  // jsdom does not model a number box holding text the browser cannot read.
+  Object.defineProperty(time, 'validity', { value: { badInput: true } })
+  fireEvent.click(save())
+  expect(await screen.findByRole('alert')).toHaveTextContent('Cooking time must be a whole number of minutes')
+  expect(writes(fetch, 'POST')).toEqual([])
+})
+
 test('the form catches problems before asking the server', async () => {
   const fetch = stubApi([])
   renderAt('/food/new')
@@ -253,6 +275,73 @@ test('cancel with changes asks first', async () => {
   confirm.mockReturnValue(true)
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
   await waitFor(() => expect(location()).toBe('/food'))
+})
+
+test('cancel asks once, not again when the editor is left', async () => {
+  stubApi([])
+  renderAt('/food/new')
+  type('Name', 'Soup')
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  await waitFor(() => expect(location()).toBe('/food'))
+  expect(confirm).toHaveBeenCalledTimes(1)
+})
+
+test('back with changes asks first', async () => {
+  stubApi([dal])
+  const { router } = renderAt('/food/dal/edit', ['/food/dal'])
+  await screen.findByLabelText('Name')
+  type('Name', 'Dal')
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+  await act(async () => {
+    await router.navigate(-1)
+  })
+  expect(confirm).toHaveBeenCalledWith('Discard your changes?')
+  expect(location()).toBe('/food/dal/edit')
+  expect(screen.getByLabelText('Name')).toHaveValue('Dal')
+
+  confirm.mockReturnValue(true)
+  await act(async () => {
+    await router.navigate(-1)
+  })
+  await waitFor(() => expect(location()).toBe('/food/dal'))
+})
+
+test('back on a clean form does not ask', async () => {
+  stubApi([dal])
+  const { router } = renderAt('/food/dal/edit', ['/food/dal'])
+  await screen.findByLabelText('Name')
+  const confirm = vi.spyOn(window, 'confirm')
+  await act(async () => {
+    await router.navigate(-1)
+  })
+  expect(confirm).not.toHaveBeenCalled()
+  expect(location()).toBe('/food/dal')
+})
+
+test('the header links ask first when there are changes', async () => {
+  stubApi([])
+  renderAt('/food/new')
+  type('Name', 'Soup')
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+  fireEvent.click(screen.getByRole('link', { name: 'Drinks' }))
+  await waitFor(() => expect(confirm).toHaveBeenCalledWith('Discard your changes?'))
+  expect(location()).toBe('/food/new')
+  expect(screen.getByLabelText('Name')).toHaveValue('Soup')
+
+  confirm.mockReturnValue(true)
+  fireEvent.click(screen.getByRole('link', { name: 'Drinks' }))
+  await waitFor(() => expect(location()).toBe('/drinks'))
+})
+
+test('save does not ask about discarding', async () => {
+  stubApi([], { create: () => json({ ...dal, slug: 'soup' }, 201) })
+  renderAt('/food/new')
+  fillNew()
+  const confirm = vi.spyOn(window, 'confirm')
+  fireEvent.click(save())
+  await waitFor(() => expect(location()).toBe('/food/soup'))
+  expect(confirm).not.toHaveBeenCalled()
 })
 
 test('cancel on a clean form does not ask', async () => {
@@ -508,6 +597,22 @@ test('delete asks then goes to the list', async () => {
   expect(fetch.mock.calls.find(([, init]) => init?.method === 'DELETE')![0]).toBe('/api/recipes/food/dal')
 })
 
+test('delete replaces the edit page in the history', async () => {
+  stubApi([dal], { remove: () => new Response(null, { status: 204 }) })
+  const { router } = renderAt('/food/dal/edit', ['/food/dal'])
+  await screen.findByLabelText('Name')
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+  fireEvent.click(screen.getByRole('button', { name: 'Delete recipe' }))
+  await waitFor(() => expect(location()).toBe('/food'))
+  // Only the delete confirm: leaving after it is clean. Back must not land on the deleted recipe.
+  expect(confirm).toHaveBeenCalledTimes(1)
+  expect(router.state.historyAction).toBe('REPLACE')
+  await act(async () => {
+    await router.navigate(-1)
+  })
+  expect(location()).toBe('/food/dal')
+})
+
 test('a failed delete stays on the form with the error', async () => {
   stubApi([dal], { remove: () => json({ error: 'could not save; nothing was changed' }, 503) })
   await editing()
@@ -539,6 +644,15 @@ test('phone layout has the bottom bar', async () => {
     'Source',
     'Tags',
   ])
+})
+
+test('on a phone each ingredient card starts with its name, then the amount', () => {
+  stubViewport(false)
+  stubApi([])
+  renderAt('/food/new')
+  const row = screen.getByLabelText('Ingredient 1').closest('li')!
+  const order = Array.from(row.querySelectorAll('input, select, button')).map((el) => el.getAttribute('aria-label'))
+  expect(order.slice(0, 4)).toEqual(['Ingredient 1', 'Amount for ingredient 1', 'Unit for ingredient 1', 'Note for ingredient 1'])
 })
 
 test('desktop layout has Cancel and Save in the header, and the aside beside the main column', () => {

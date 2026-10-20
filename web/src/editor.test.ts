@@ -171,6 +171,13 @@ describe('validate', () => {
     expect(validate({ ...valid(), time: '1.5' })).toEqual(['Cooking time must be a whole number of minutes'])
   })
 
+  test('a number box holding unreadable text is an error, not a blank', () => {
+    expect(validate(valid(), { servings: true })).toEqual(['Servings must be a whole number'])
+    expect(validate(valid(), { time: true })).toEqual(['Cooking time must be a whole number of minutes'])
+    expect(validate({ ...valid(), servings: '' }, { servings: true })).toEqual(['Servings must be a whole number'])
+    expect(validate(valid(), { servings: false, time: false })).toEqual([])
+  })
+
   test('a source link must start with http:// or https://', () => {
     const link = { ...valid(), sourceMode: 'link' as const }
     expect(validate({ ...link, sourceUrl: 'example.com' })).toEqual([

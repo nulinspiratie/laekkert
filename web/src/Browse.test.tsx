@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
-import { MemoryRouter, useLocation } from 'react-router'
+import { createMemoryRouter, RouterProvider, useLocation } from 'react-router'
 import { afterEach, expect, test, vi } from 'vitest'
 import App from './App'
 import type { RecipeSummary } from './types'
@@ -87,13 +87,23 @@ function Location() {
   return <output aria-label="location">{pathname + search}</output>
 }
 
+// A data router, because the editor (one test navigates to it) needs one.
 function renderAt(path: string) {
-  return render(
-    <MemoryRouter initialEntries={[path]}>
-      <App />
-      <Location />
-    </MemoryRouter>,
+  const router = createMemoryRouter(
+    [
+      {
+        path: '*',
+        element: (
+          <>
+            <App />
+            <Location />
+          </>
+        ),
+      },
+    ],
+    { initialEntries: [path] },
   )
+  return render(<RouterProvider router={router} />)
 }
 
 const location = () => screen.getByLabelText('location').textContent
