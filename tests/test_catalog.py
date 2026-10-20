@@ -3,7 +3,15 @@ import logging
 import os
 import shutil
 
-from app.recipes.catalog import SEED_CATALOG, Catalog
+import pytest
+
+from app.recipes.catalog import (
+    KINDS,
+    SEED_CATALOG,
+    Catalog,
+    CatalogUnavailable,
+    name_key,
+)
 
 
 def write_catalog(catalog, entries, **extra):
@@ -89,3 +97,122 @@ def test_seed_catalog_entries():
     assert by_name["honey"]["g_per_tsp"] == 7
     assert by_name["lime juice"]["fresh"] is True
     assert "g_per_tsp" not in by_name["mint"]
+    assert by_name["soda water"]["fresh"] is True
+    assert by_name["white rum"]["kind"] == "spirits"
+    assert by_name["simple syrup"]["kind"] == "syrups"
+
+
+def test_seed_catalog_names_are_unique():
+    entries = json.loads(SEED_CATALOG.read_text())["ingredients"]
+    keys = [name_key(n) for e in entries for n in (e["name"], *e.get("aliases", []))]
+    assert len(keys) == len(set(keys))
+
+
+def test_key_ignores_accents_case_and_spacing(tmp_path):
+    catalog = Catalog(tmp_path)
+    write_catalog(catalog, [{"name": "Crème de violette"}])
+    assert name_key("Crème de violette") == "creme de violette"
+    assert catalog.entry("creme  DE violette ").name == "Crème de violette"
+    assert catalog.entry("campari") is None
+
+
+def test_kinds_are_in_display_order():
+    assert KINDS == (
+        "spirits",
+        "liqueurs",
+        "aperitifs",
+        "bitters",
+        "syrups",
+        "other",
+    )
+
+
+def test_entry_kind_parses_and_rejects_unknown(tmp_path):
+    catalog = Catalog(tmp_path)
+    write_catalog(
+        catalog,
+        [
+            {"name": "gin", "kind": "spirits"},
+            {"name": "claret", "kind": "wine"},
+            {"name": "salt"},
+        ],
+    )
+    assert catalog.entry("gin").kind == "spirits"
+    assert catalog.entry("salt").kind is None
+    assert [e.name for e in catalog.entries()] == ["gin", "salt"]
+
+
+def test_entries_lists_each_entry_once_in_file_order(tmp_path):
+    catalog = Catalog(tmp_path)
+    write_catalog(
+        catalog,
+        [
+            {"name": "ground cumin", "aliases": ["cumin"]},
+            {"name": "aperol"},
+            {"name": "Cumin"},
+        ],
+    )
+    # An alias does not repeat its entry; a later entry with a taken name is
+    # still listed, but lookups find the first.
+    assert [e.name for e in catalog.entries()] == ["ground cumin", "aperol", "Cumin"]
+    assert catalog.entry("cumin").name == "ground cumin"
+
+
+def test_raw_missing_file_is_empty(tmp_path):
+    assert Catalog(tmp_path).raw() == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "{not json",
+        json.dumps({"format_version": 2, "ingredients": []}),
+        json.dumps({"format_version": 1, "ingredients": {}}),
+        json.dumps({"ingredients": []}),
+        json.dumps([]),
+    ],
+)
+def test_raw_unreadable_or_newer_raises(tmp_path, text):
+    catalog = Catalog(tmp_path)
+    catalog.path.parent.mkdir(parents=True)
+    catalog.path.write_text(text)
+    with pytest.raises(CatalogUnavailable, match="Fix catalog/ingredients.json"):
+        catalog.raw()
+    with pytest.raises(CatalogUnavailable):
+        catalog.save_raw([{"name": "gin"}])
+
+
+def test_save_keeps_untouched_entries_verbatim(tmp_path):
+    catalog = Catalog(tmp_path)
+    first = {"name": "salt", "g_per_tsp": 6.0, "note": "hand"}
+    write_catalog(catalog, [first, {"name": ""}])
+    assert catalog.entry("salt").g_per_tsp == 6.0
+    catalog.save_raw(catalog.raw() + [{"name": "gin", "kind": "spirits"}])
+    saved = json.loads(catalog.path.read_text(encoding="utf-8"))
+    assert saved["format_version"] == 1
+    assert saved["ingredients"] == [
+        first,
+        {"name": ""},
+        {"name": "gin", "kind": "spirits"},
+    ]
+    assert catalog.entry("gin").kind == "spirits"
+    assert catalog.path.read_text(encoding="utf-8").endswith("}\n")
+
+
+def test_save_keeps_other_top_level_keys(tmp_path):
+    catalog = Catalog(tmp_path)
+    write_catalog(catalog, [{"name": "salt"}], comment="edited by hand")
+    catalog.save_raw([{"name": "gin"}])
+    saved = json.loads(catalog.path.read_text(encoding="utf-8"))
+    assert saved["comment"] == "edited by hand"
+    assert saved["ingredients"] == [{"name": "gin"}]
+
+
+def test_save_into_missing_file_writes_it(tmp_path):
+    catalog = Catalog(tmp_path)
+    catalog.save_raw([{"name": "Crème de cassis"}])
+    assert json.loads(catalog.path.read_text(encoding="utf-8")) == {
+        "format_version": 1,
+        "ingredients": [{"name": "Crème de cassis"}],
+    }
+    assert "Crème" in catalog.path.read_text(encoding="utf-8")

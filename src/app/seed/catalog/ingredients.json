@@ -9,6 +9,9 @@
     {"name": "baking powder", "g_per_tsp": 4},
     {"name": "honey", "g_per_tsp": 7},
     {"name": "lime juice", "fresh": true},
-    {"name": "mint", "aliases": ["mint leaves"], "fresh": true}
+    {"name": "mint", "aliases": ["mint leaves"], "fresh": true},
+    {"name": "soda water", "fresh": true},
+    {"name": "white rum", "kind": "spirits"},
+    {"name": "simple syrup", "kind": "syrups"}
   ]
 }
