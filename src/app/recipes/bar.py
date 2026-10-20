@@ -274,13 +274,31 @@ class _Registry:
         return None if position is None else self.entries[position]
 
     def in_bar(self, item: str | None) -> bool:
-        """Shown on the bar: used by a cocktail or mocktail, or an entry with a kind."""
+        """Shown on the bar: used by a cocktail or mocktail, or an entry with a
+        kind, unless it is an M4 leftover (see `made_only_other`)."""
         if item is None:
             return False
         if item in self.bar_used:
             return True
         entry = self.entry(item)
-        return entry is not None and entry.kind is not None
+        return (
+            entry is not None
+            and entry.kind is not None
+            and not self.made_only_other(item)
+        )
+
+    def made_only_other(self, item: str) -> bool:
+        """Kind Other and used only by syrups and prep recipes: M4 sorted every
+        drink's ingredients, so it gave such items (sugar, water) kind Other and
+        a state. They are not on the bar, whatever state they kept. An Other
+        bottle no recipe uses stays."""
+        entry = self.entry(item)
+        return (
+            entry is not None
+            and entry.kind == "other"
+            and item in self.used_in
+            and item not in self.bar_used
+        )
 
     def name(self, item: str) -> str:
         entry = self.entry(item)
@@ -862,8 +880,14 @@ class Bar:
 
             def is_on_bar(name: str) -> bool:
                 item = registry.item_key(name)
-                return registry.in_bar(item) or (
-                    item is not None and registry.state(item, shelf) is not None
+                if item is None:
+                    return False
+                if registry.in_bar(item):
+                    return True
+                # An M4 leftover's stored state doesn't put it on the bar.
+                return (
+                    not registry.made_only_other(item)
+                    and registry.state(item, shelf) is not None
                 )
 
             def bar_kept(merged: list) -> None:

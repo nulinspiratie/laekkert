@@ -15,6 +15,7 @@ from app.recipes.bar import (
 )
 from app.recipes.catalog import Catalog, CatalogUnavailable
 from app.recipes.drafts import parse_draft
+from app.recipes.ingredients import IngredientError
 from app.recipes.store import RecipeStore
 from app.recipes.uploads import UploadStore
 
@@ -46,6 +47,29 @@ def drink(store, name, *items, category="cocktails"):
                 "time_minutes": None,
                 "ingredients": [
                     {"amount": 10, "unit": "ml", "item": item} for item in items
+                ],
+                "steps": [],
+                "source": None,
+                "tags": [],
+                "image": None,
+            }
+        ),
+        "app",
+    )
+
+
+def food(store, name, *items):
+    """A food recipe saved through the store, one ingredient per item."""
+    return store.create(
+        "food",
+        parse_draft(
+            {
+                "name": name,
+                "category": "mains",
+                "servings": 1,
+                "time_minutes": None,
+                "ingredients": [
+                    {"amount": 10, "unit": "g", "item": item} for item in items
                 ],
                 "steps": [],
                 "source": None,
@@ -427,6 +451,66 @@ def test_made_recipes_have_no_status_and_dont_fill_the_bar(bar, store):
         "unsorted": 0,
         "total": 0,
     }
+
+
+@pytest.fixture
+def m4_sorted(catalog, store, bar):
+    """Data as M4 left it: sorting the bar, syrup ingredients included, gave
+    each one a kind Other entry and a state."""
+    entries(
+        catalog,
+        {"name": "sugar", "kind": "other"},
+        {"name": "water", "kind": "other"},
+        {"name": "gin", "kind": "spirits"},
+    )
+    drink(store, "Simple syrup", "sugar", "water", category="syrups")
+    drink(store, "Gin shot", "gin")
+    food(store, "Cake", "caster sugar", "flour")
+    write_inventory(bar, {"sugar": "dont", "water": "have", "gin": "have"})
+
+
+def test_m4_other_entries_used_only_by_syrups_are_off_the_bar(m4_sorted, bar):
+    view = bar.view()
+    assert names(view) == ["gin"]
+    assert view.item_for("sugar") is None
+    assert view.ingredient("sugar") is None
+    assert view.json()["counts"] == {
+        "can_make": 1,
+        "missing": 0,
+        "unsorted": 0,
+        "total": 1,
+    }
+    refused(bar, "There is no ‘sugar’ in the bar.", unsorted=["sugar"])
+
+
+def test_other_entries_stay_on_the_bar_unless_only_syrups_use_them(catalog, store, bar):
+    entries(
+        catalog,
+        {"name": "prosecco", "kind": "other"},  # added by hand, no recipe uses it
+        {"name": "vodka", "kind": "spirits"},
+        {"name": "sugar", "kind": "other"},
+    )
+    drink(store, "Infused vodka", "vodka", category="prep")
+    drink(store, "Simple syrup", "sugar", category="syrups")
+    drink(store, "Old fashioned", "bourbon", "sugar")
+    assert names(bar.view()) == ["bourbon", "prosecco", "sugar", "vodka"]
+
+
+def test_food_merge_of_an_m4_leftover_is_not_on_the_bar(m4_sorted, catalog, bar):
+    inventory = bar.inventory_path.read_bytes()
+    before = bar.view().json()
+    [result] = bar.merge_ingredients({"sugar": "caster sugar"}, [])
+    assert result["other_names"] == ["sugar"]
+    assert bar.inventory_path.read_bytes() == inventory
+    assert bar.view().json() == before
+
+
+def test_merge_still_refuses_a_tracked_bar_item(m4_sorted, catalog, bar):
+    with pytest.raises(IngredientError) as exc:
+        bar.merge_ingredients({"gin": "caster sugar"}, [])
+    assert str(exc.value) == (
+        "‘gin’ is on the bar. Fold it there instead (manage_inventory)."
+    )
 
 
 def test_used_in_keeps_every_drink(bar, store, catalog):

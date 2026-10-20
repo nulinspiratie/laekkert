@@ -303,6 +303,14 @@ Rulings made on the way:
 - On phone, a not-sorted row's "Don't track" sits on a second line under Have and
   Don't have, so the item name keeps its width.
 - No dark screenshots: the app has one theme.
+- An item of kind Other that only syrups and prep recipes use (the sugar and water M4
+  sorted when its bar listed syrup ingredients) is not on the bar: not listed, not
+  counted, and not "on the bar" for a merge, whatever state it kept. An Other bottle
+  added by hand that no recipe uses stays, and so does an item of any other kind.
+- The set-up box on Can make says "so drinks that need bottles can't show here yet",
+  not "so nothing can show here", since drinks with no tracked bottle are listed under it.
+- An old `tag=mocktail` or `tag=mocktails` link (with no `show=`) opens the Mocktails
+  view, and the tag is dropped.
 
 ### After the PoC
 
