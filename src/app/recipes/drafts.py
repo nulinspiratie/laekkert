@@ -7,9 +7,10 @@ form can show as it is.
 
 import re
 import unicodedata
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from app.recipes.catalog import Catalog
 from app.recipes.model import (
@@ -31,11 +32,12 @@ class DraftIngredient(Ingredient):
     """
 
     unit: Unit | Literal["tsp", "tbsp"]  # type: ignore[assignment]
-    amount: float | None = None
+    amount: float | None = Field(default=None, allow_inf_nan=False)
     item: str = ""
 
     @model_validator(mode="after")
     def _measured_needs_amount(self) -> "DraftIngredient":
+        # Deliberately disables the parent check so to_recipe can number the error.
         return self
 
 
@@ -44,13 +46,47 @@ class RecipeDraft(BaseModel):
 
     name: str
     category: str
-    servings: int
-    time_minutes: int | None
+    servings: int = Field(ge=1)
+    time_minutes: int | None = Field(ge=0)
     ingredients: list[DraftIngredient]
     steps: list[str]
     source: Source | None
     tags: list[str]
     image: str | None
+
+
+def parse_draft(data: object) -> RecipeDraft:
+    """Validate a JSON-decoded request body; raises ValueError with one sentence."""
+    try:
+        return RecipeDraft.model_validate(data)
+    except ValidationError as err:
+        raise ValueError(_draft_sentence(err)) from None
+
+
+def _draft_sentence(err: ValidationError) -> str:
+    first = err.errors()[0]
+    loc, kind = first["loc"], first["type"]
+    unknown = f"has an unknown field: {loc[-1] if loc else ''}"
+    if len(loc) >= 2 and loc[0] == "ingredients" and isinstance(loc[1], int):
+        who = f"Ingredient {loc[1] + 1}"
+        if kind == "extra_forbidden":
+            return f"{who} {unknown}"
+        if len(loc) >= 3 and loc[2] == "unit":
+            return f"{who} has an unknown unit"
+        if len(loc) >= 3 and loc[2] == "amount":
+            return f"{who} needs a number for the amount"
+        return f"{who} isn't valid"
+    if kind == "extra_forbidden" and len(loc) == 1:
+        return f"The recipe {unknown}"
+    if loc == ("servings",):
+        return "Servings must be at least 1"
+    if loc == ("time_minutes",):
+        if kind == "greater_than_equal":
+            return "Cooking time can't be negative"
+        return "Cooking time must be a whole number of minutes"
+    if loc == ("name",):
+        return "Give the recipe a name"
+    return "The recipe isn't valid"
 
 
 def _blank(row: DraftIngredient) -> bool:
@@ -77,10 +113,15 @@ def _metric(row: DraftIngredient, catalog: Catalog) -> tuple[float, Unit]:
     tsp = row.amount * (3 if row.unit == "tbsp" else 1)
     density = catalog.g_per_tsp(row.item)
     if density is None:
-        return tsp * 5, "ml"
-    grams = tsp * density
-    grams = round(grams, 1) if grams < 10 else float(round(grams))
+        # 1 tsp is exactly 5 ml; round away float noise (0.1 tbsp is 1.5 ml).
+        return round(tsp * 5, 6), "ml"
+    grams = _half_up(tsp * density, 1 if tsp * density < 10 else 0)
     return max(grams, 0.1), "g"
+
+
+def _half_up(value: float, places: int) -> float:
+    exact = Decimal(str(round(value, 6)))
+    return float(exact.quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP))
 
 
 def _row(number: int, row: DraftIngredient, catalog: Catalog) -> Ingredient:

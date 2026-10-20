@@ -3,7 +3,7 @@ import json
 import pytest
 
 from app.recipes.catalog import Catalog
-from app.recipes.drafts import RecipeDraft, slugify, to_recipe
+from app.recipes.drafts import RecipeDraft, parse_draft, slugify, to_recipe
 from app.recipes.model import FORMAT_VERSION
 
 
@@ -23,6 +23,19 @@ def catalog(tmp_path):
         )
     )
     return catalog
+
+
+GOOD = {
+    "name": "Dal",
+    "category": "mains",
+    "servings": 4,
+    "time_minutes": None,
+    "ingredients": [{"amount": 200, "unit": "g", "item": "red lentils"}],
+    "steps": ["Simmer"],
+    "source": None,
+    "tags": [],
+    "image": None,
+}
 
 
 def draft(**overrides) -> RecipeDraft:
@@ -78,6 +91,30 @@ def test_tbsp_is_three_tsp(catalog):
 def test_converted_grams_round_to_whole_numbers_from_ten(catalog):
     recipe = convert(draft(ingredients=[row("honey", 2.5, "tsp")]), catalog)
     assert recipe.ingredients[0].amount == 18  # 17.5 g
+
+
+@pytest.mark.parametrize(
+    ("amount", "unit", "expected"),
+    [(0.1, "tbsp", 1.5), (0.7, "tbsp", 10.5), (0.3, "tsp", 1.5)],
+)
+def test_ml_conversion_is_exact(catalog, amount, unit, expected):
+    recipe = convert(draft(ingredients=[row("olive oil", amount, unit)]), catalog)
+    assert (recipe.ingredients[0].amount, recipe.ingredients[0].unit) == (
+        expected,
+        "ml",
+    )
+
+
+def test_whole_grams_round_half_up(tmp_path):
+    catalog = Catalog(tmp_path)
+    catalog.path.parent.mkdir(parents=True)
+    catalog.path.write_text(
+        json.dumps(
+            {"format_version": 1, "ingredients": [{"name": "flour", "g_per_tsp": 5}]}
+        )
+    )
+    recipe = convert(draft(ingredients=[row("flour", 2.5, "tsp")]), catalog)
+    assert recipe.ingredients[0].amount == 13  # 12.5 g, not banker's 12
 
 
 def test_blank_rows_and_steps_are_dropped(catalog):
@@ -153,8 +190,6 @@ def test_tags_are_normalised(catalog):
             "drinks",
             "Category for drinks must be one of cocktails, mocktails, syrups, prep",
         ),
-        ({"servings": 0}, "food", "Servings must be at least 1"),
-        ({"time_minutes": -5}, "food", "Cooking time can't be negative"),
     ],
 )
 def test_error_sentences(catalog, overrides, side, message):
@@ -195,3 +230,55 @@ def test_slugify():
     assert len(long) <= 60
     assert not long.endswith("-")
     assert slugify("a" * 100) == "a" * 60
+
+
+def test_parse_draft_accepts_a_good_body(catalog):
+    parsed = parse_draft(GOOD)
+    assert convert(parsed, catalog).name == "Dal"
+
+
+@pytest.mark.parametrize(
+    ("body", "message"),
+    [
+        ({**GOOD, "servings": None}, "Servings must be at least 1"),
+        ({**GOOD, "servings": 0}, "Servings must be at least 1"),
+        ({**GOOD, "servings": "lots"}, "Servings must be at least 1"),
+        (
+            {**GOOD, "time_minutes": "soon"},
+            "Cooking time must be a whole number of minutes",
+        ),
+        (
+            {**GOOD, "ingredients": [row("a", 1), row("b", 1, "cup")]},
+            "Ingredient 2 has an unknown unit",
+        ),
+        (
+            {**GOOD, "ingredients": [row("a", 1), row("b", "lots")]},
+            "Ingredient 2 needs a number for the amount",
+        ),
+        (
+            {**GOOD, "ingredients": [row("a", float("inf"))]},
+            "Ingredient 1 needs a number for the amount",
+        ),
+        (
+            {**GOOD, "ingredients": [row("a", float("nan"))]},
+            "Ingredient 1 needs a number for the amount",
+        ),
+        (
+            {**GOOD, "ingredients": [row("a", 1, colour="red")]},
+            "Ingredient 1 has an unknown field: colour",
+        ),
+        ({**GOOD, "colour": "red"}, "The recipe has an unknown field: colour"),
+        ({**GOOD, "name": None}, "Give the recipe a name"),
+        ({**GOOD, "ingredients": "salt"}, "The recipe isn't valid"),
+        ({**GOOD, "steps": [1, 2]}, "The recipe isn't valid"),
+        ({"name": "Dal"}, "The recipe isn't valid"),
+        (["not", "an", "object"], "The recipe isn't valid"),
+        (None, "The recipe isn't valid"),
+    ],
+)
+def test_parse_draft_error_sentences(body, message):
+    with pytest.raises(ValueError) as caught:
+        parse_draft(body)
+    assert type(caught.value) is ValueError
+    assert str(caught.value) == message
+    assert caught.value.__cause__ is None
