@@ -27,7 +27,8 @@ from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
 from app.recipes.catalog import Catalog, CatalogEntry, Kind, name_key
 from app.recipes.files import atomic_write
-from app.recipes.model import Recipe
+from app.recipes.ingredients import EMPTY_NAME, Identities, merge, touched_json
+from app.recipes.model import SIDES, Recipe
 from app.recipes.store import RecipeStore
 
 INVENTORY_FORMAT_VERSION = 1
@@ -42,7 +43,6 @@ UNAVAILABLE = (
     "Fix inventory.json on the NAS."
 )
 TOO_MANY = "That's too many changes at once."
-EMPTY_NAME = "A name can't be empty."
 FOLD_SELF = "An item can't be folded into itself."
 OWN_NAME = "An item's own name can't be removed."
 USED = "Only items no drink uses can be deleted."
@@ -715,6 +715,35 @@ class Bar:
             if draft.inventory != items:
                 self._write({**data, "items": draft.inventory})
             return self.view(drinks)
+
+    def ingredients(self, side: str | None) -> list[dict]:
+        """Every ingredient identity in use (see `Identities.all`)."""
+        recipes = {s: self._store.list(s) for s in SIDES}
+        return Identities(list(self._catalog.entries()), recipes).all(side)
+
+    def merge_ingredients(
+        self, merges: dict[str, str], separate: list[str]
+    ) -> list[dict]:
+        """Merge and separate names in the catalog, all or nothing; the touched
+        identities after it. The inventory is read, to refuse when it is bad and
+        to know what is on the bar, but never written."""
+        with self._lock:
+            raw = self._catalog.raw()
+            shelf = _Inventory(dict(self._read_strict().get("items", {})))
+            recipes = {s: self._store.list(s) for s in SIDES}
+            registry = _Registry([_parse(r) for r in raw], recipes["drinks"])
+
+            def on_bar(name: str) -> bool:
+                item = registry.item_key(name)
+                return registry.in_bar(item) or (
+                    item is not None and registry.state(item, shelf) is not None
+                )
+
+            new_raw, touched = merge(raw, recipes, on_bar, merges, separate)
+            if new_raw != raw:
+                self._catalog.save_raw(new_raw)
+            identities = Identities([_parse(r) for r in new_raw], recipes)
+            return touched_json(identities, touched, separate)
 
     def _read_strict(self) -> dict:
         """The inventory file as parsed; raises InventoryUnavailable if it is bad."""
