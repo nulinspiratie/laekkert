@@ -17,6 +17,7 @@ def describe_changes(old: Recipe, new: Recipe) -> list[Change]:
         *_details(old, new),
         *_ingredients(old, new),
         *_method(old, new),
+        *_notes(old, new),
         *_source(old, new),
         *_tags(old, new),
         *_photo(old, new),
@@ -110,12 +111,57 @@ def _row_changes(a: Ingredient, b: Ingredient) -> list[str]:
     return out
 
 
+def _renames(
+    moves: list[tuple[str, str]], old: set[str], new: set[str]
+) -> dict[str, str]:
+    """Groups that were renamed, as {old name: new name}.
+
+    A group that is gone is renamed when everything that was in it and survives
+    went to one group that did not exist before. Anything else is a set of moves.
+    """
+    renames: dict[str, str] = {}
+    for group in old - new - {""}:
+        went_to = {b for a, b in moves if a == group}
+        if len(went_to) == 1:
+            (target,) = went_to
+            if target and target not in old:
+                renames[group] = target
+    return renames
+
+
+def _rename_lines(renames: dict[str, str]) -> list[str]:
+    return [f"group “{a}” → “{b}”" for a, b in sorted(renames.items())]
+
+
+def _moved(what: str, a: str, b: str) -> str:
+    if not a:
+        return f"{what} moved to “{b}”"
+    if not b:
+        return f"{what} moved out of “{a}”"
+    return f"{what} moved from “{a}” to “{b}”"
+
+
+def _is_move(a: str, b: str, renames: dict[str, str]) -> bool:
+    """Whether a kept row went to another group for a reason other than a rename."""
+    return a != b and renames.get(a) != b
+
+
 def _ingredients(old: Recipe, new: Recipe) -> list[Change]:
     pairs, added, removed = _pair_rows(old.ingredients, new.ingredients)
-    changes: list[Change] = []
+    moves = [(old.ingredients[i].group, new.ingredients[j].group) for i, j in pairs]
+    renames = _renames(
+        moves,
+        {ingredient.group for ingredient in old.ingredients},
+        {ingredient.group for ingredient in new.ingredients},
+    )
+    changes = [_change("ingredients", "changed", t) for t in _rename_lines(renames)]
     for i, j in pairs:
-        for text in _row_changes(old.ingredients[i], new.ingredients[j]):
+        a, b = old.ingredients[i], new.ingredients[j]
+        for text in _row_changes(a, b):
             changes.append(_change("ingredients", "changed", text))
+        if _is_move(a.group, b.group, renames):
+            moved = _moved(b.item.strip(), a.group, b.group)
+            changes.append(_change("ingredients", "changed", moved))
     for j in added:
         changes.append(_change("ingredients", "added", _whole(new.ingredients[j])))
     for i in removed:
@@ -134,14 +180,32 @@ def _step(number: int, step: Step) -> str:
 
 
 def _method(old: Recipe, new: Recipe) -> list[Change]:
-    changes: list[Change] = []
     matcher = SequenceMatcher(
         None,
         [s.text for s in old.steps],
         [s.text for s in new.steps],
         autojunk=False,
     )
-    for op, i1, i2, j1, j2 in matcher.get_opcodes():
+    opcodes = matcher.get_opcodes()
+    # Steps whose text is unchanged are the same step, so a group change is a move.
+    kept = [
+        (i1 + k, j1 + k)
+        for op, i1, i2, j1, _ in opcodes
+        if op == "equal"
+        for k in range(i2 - i1)
+    ]
+    moves = [(old.steps[i].group, new.steps[j].group) for i, j in kept]
+    renames = _renames(
+        moves,
+        {step.group for step in old.steps},
+        {step.group for step in new.steps},
+    )
+    lines = _rename_lines(renames)
+    for (a, b), (_, j) in zip(moves, kept, strict=True):
+        if _is_move(a, b, renames):
+            lines.append(_moved(f"step {j + 1}", a, b))
+    changes = [_change("method", "changed", text) for text in lines]
+    for op, i1, i2, j1, j2 in opcodes:
         if op == "equal":
             continue
         shared = min(i2 - i1, j2 - j1) if op == "replace" else 0
@@ -165,6 +229,11 @@ def _swap(old: str | None, new: str | None, added: str, removed: str, changed: s
     if not new:
         return "removed", removed
     return "changed", changed
+
+
+def _notes(old: Recipe, new: Recipe) -> list[Change]:
+    hit = _swap(old.notes, new.notes, "notes added", "notes removed", "notes changed")
+    return [_change("notes", hit[0], hit[1])] if hit else []
 
 
 def _source(old: Recipe, new: Recipe) -> list[Change]:
