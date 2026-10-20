@@ -21,7 +21,7 @@ from app.recipes.catalog import Catalog
 from app.recipes.drafts import parse_draft
 from app.recipes.model import SIDES, Mark, Recipe
 from app.recipes.search import search
-from app.recipes.store import RecipeStore
+from app.recipes.store import RATING_RANGE, RecipeStore
 from app.recipes.timeline import current_rating, last_made
 from app.recipes.uploads import (
     IMAGE_TYPES,
@@ -34,10 +34,18 @@ from app.recipes.uploads import (
 ALL_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]
 MARKS: tuple[str, ...] = get_args(Mark)
 VIA = "app"
+MAX_JSON_BYTES = 1024 * 1024
 
 log = logging.getLogger("app.api")
 
 SAVE_FAILED = "could not save; nothing was changed"
+UNEXPECTED = "something went wrong; nothing was changed"
+JSON_TOO_BIG = "That's too much to save at once"
+PHOTO_TOO_BIG = "That photo is over 20 MB"
+
+
+class BodyTooLarge(Exception):
+    """A request body went over its cap; the message is the sentence to show."""
 
 
 def error(message: str, status: int) -> JSONResponse:
@@ -53,8 +61,18 @@ def media_type(request: Request) -> str:
     return request.headers.get("content-type", "").split(";")[0].strip().lower()
 
 
-def is_number(value: object) -> bool:
-    return isinstance(value, int | float) and not isinstance(value, bool)
+def stars(value: object) -> float:
+    """A rating from the body as a float; anything but 0.5 to 5 is refused.
+
+    The range test runs before float(), which fails on huge integers.
+    """
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int | float)
+        or not 0.5 <= value <= 5
+    ):
+        raise ValueError(RATING_RANGE)
+    return float(value)
 
 
 def write_route(
@@ -68,18 +86,40 @@ def write_route(
             return await handler(request)
         except ValueError as err:
             return error(str(err), 400)
+        except BodyTooLarge as err:
+            return error(str(err), 413)
         except OSError:
             log.exception("write failed: %s %s", request.method, request.url.path)
             return error(SAVE_FAILED, 503)
+        except Exception:
+            # A bug must still answer in JSON, as the editor expects.
+            log.exception("write crashed: %s %s", request.method, request.url.path)
+            return error(UNEXPECTED, 500)
 
     return wrapper
 
 
+async def read_body(request: Request, limit: int, message: str) -> bytes:
+    """The request body, read in chunks; raises BodyTooLarge past `limit` bytes."""
+    declared = request.headers.get("content-length", "")
+    if declared.isascii() and declared.isdigit() and int(declared) > limit:
+        raise BodyTooLarge(message)
+    chunks: list[bytes] = []
+    size = 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > limit:
+            raise BodyTooLarge(message)
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 async def json_body(request: Request) -> object:
     """The decoded JSON body. Raises ValueError (a sentence) if it isn't JSON."""
+    body = await read_body(request, MAX_JSON_BYTES, JSON_TOO_BIG)
     try:
-        return json.loads(await request.body())
-    except ValueError:  # includes bad UTF-8
+        return json.loads(body)
+    except (ValueError, RecursionError):  # ValueError includes bad UTF-8
         raise ValueError("That isn't valid JSON") from None
 
 
@@ -227,20 +267,14 @@ def api_routes(
                 raise ValueError("Write something in the note")
             entry = store.add_note(side, slug, text, VIA)
         elif kind == "rating":
-            rating = body.get("rating")
-            if not is_number(rating):
-                raise ValueError("Give a rating from 0.5 to 5")
-            entry = store.add_rating(side, slug, float(rating), VIA)
+            entry = store.add_rating(side, slug, stars(body.get("rating")), VIA)
         elif kind == "made":
             rating = body.get("rating")
-            if rating is not None and not is_number(rating):
-                raise ValueError("Give a rating from 0.5 to 5")
+            rating = None if rating is None else stars(rating)
             note = body.get("note", "")
             if not isinstance(note, str):
                 raise ValueError("The note must be text")
-            entry = store.add_made(
-                side, slug, None if rating is None else float(rating), note, VIA
-            )
+            entry = store.add_made(side, slug, rating, note, VIA)
         else:
             raise ValueError("kind must be note, rating or made")
         recipe = store.get(side, slug)
@@ -256,18 +290,9 @@ def api_routes(
         content_type = media_type(request)
         if content_type not in IMAGE_TYPES:
             return error("That file type isn't a supported photo", 415)
-        declared = request.headers.get("content-length", "")
-        if declared.isdigit() and int(declared) > MAX_UPLOAD_BYTES:
-            return error("That photo is over 20 MB", 413)
-        chunks: list[bytes] = []
-        size = 0
-        async for chunk in request.stream():
-            size += len(chunk)
-            if size > MAX_UPLOAD_BYTES:
-                return error("That photo is over 20 MB", 413)
-            chunks.append(chunk)
+        body = await read_body(request, MAX_UPLOAD_BYTES, PHOTO_TOO_BIG)
         try:
-            name = uploads.save(content_type, b"".join(chunks))
+            name = uploads.save(content_type, body)
         except UnsupportedImage as err:
             return error(str(err), 415)
         except ImageTooLarge as err:

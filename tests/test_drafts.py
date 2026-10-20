@@ -232,6 +232,18 @@ def test_slugify():
     assert slugify("a" * 100) == "a" * 60
 
 
+def test_parse_draft_accepts_the_largest_allowed_values():
+    parsed = parse_draft(
+        {
+            **GOOD,
+            "servings": 1000,
+            "time_minutes": 10080,
+            "ingredients": [row("a", 100000)],
+        }
+    )
+    assert parsed.servings == 1000 and parsed.time_minutes == 10080
+
+
 def test_parse_draft_accepts_a_good_body(catalog):
     parsed = parse_draft(GOOD)
     assert convert(parsed, catalog).name == "Dal"
@@ -246,6 +258,19 @@ def test_parse_draft_accepts_a_good_body(catalog):
         (
             {**GOOD, "time_minutes": "soon"},
             "Cooking time must be a whole number of minutes",
+        ),
+        ({**GOOD, "time_minutes": -1}, "Cooking time can't be negative"),
+        ({**GOOD, "time_minutes": 10081}, "Cooking time can be at most a week"),
+        ({**GOOD, "time_minutes": 10**400}, "Cooking time can be at most a week"),
+        ({**GOOD, "servings": 1001}, "Servings can be at most 1000"),
+        ({**GOOD, "servings": 10**400}, "Servings can be at most 1000"),
+        (
+            {**GOOD, "ingredients": [row("a", 1), row("b", 100000.5)]},
+            "Ingredient 2's amount is too large",
+        ),
+        (
+            {**GOOD, "ingredients": [row("a", 1e308, "tbsp")]},
+            "Ingredient 1's amount is too large",
         ),
         (
             {**GOOD, "ingredients": [row("a", 1), row("b", 1, "cup")]},

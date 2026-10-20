@@ -23,6 +23,11 @@ from app.recipes.model import (
     Unit,
 )
 
+# Far beyond any recipe, but small enough that no conversion can overflow.
+MAX_AMOUNT = 100_000
+MAX_SERVINGS = 1000
+MAX_MINUTES = 7 * 24 * 60  # a week
+
 
 class DraftIngredient(Ingredient):
     """An ingredient row as typed: tsp and tbsp allowed, and not yet checked.
@@ -32,7 +37,7 @@ class DraftIngredient(Ingredient):
     """
 
     unit: Unit | Literal["tsp", "tbsp"]  # type: ignore[assignment]
-    amount: float | None = Field(default=None, allow_inf_nan=False)
+    amount: float | None = Field(default=None, allow_inf_nan=False, le=MAX_AMOUNT)
     item: str = ""
 
     @model_validator(mode="after")
@@ -46,8 +51,8 @@ class RecipeDraft(BaseModel):
 
     name: str
     category: str
-    servings: int = Field(ge=1)
-    time_minutes: int | None = Field(ge=0)
+    servings: int = Field(ge=1, le=MAX_SERVINGS)
+    time_minutes: int | None = Field(ge=0, le=MAX_MINUTES)
     ingredients: list[DraftIngredient]
     steps: list[str]
     source: Source | None
@@ -74,15 +79,21 @@ def _draft_sentence(err: ValidationError) -> str:
         if len(loc) >= 3 and loc[2] == "unit":
             return f"{who} has an unknown unit"
         if len(loc) >= 3 and loc[2] == "amount":
+            if kind == "less_than_equal":
+                return f"{who}'s amount is too large"
             return f"{who} needs a number for the amount"
         return f"{who} isn't valid"
     if kind == "extra_forbidden" and len(loc) == 1:
         return f"The recipe {unknown}"
     if loc == ("servings",):
+        if kind == "less_than_equal":
+            return f"Servings can be at most {MAX_SERVINGS}"
         return "Servings must be at least 1"
     if loc == ("time_minutes",):
         if kind == "greater_than_equal":
             return "Cooking time can't be negative"
+        if kind == "less_than_equal":
+            return "Cooking time can be at most a week"
         return "Cooking time must be a whole number of minutes"
     if loc == ("name",):
         return "Give the recipe a name"

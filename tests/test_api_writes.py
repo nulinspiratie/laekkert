@@ -1,8 +1,10 @@
+import asyncio
 import json
 
 import pytest
 from starlette.testclient import TestClient
 
+from app.api import MAX_JSON_BYTES
 from app.config import Settings
 from app.main import create_app
 from app.recipes.uploads import MAX_UPLOAD_BYTES
@@ -415,3 +417,142 @@ def test_write_routes_send_no_cors_headers(client):
     assert not any(k.lower().startswith("access-control-") for k in response.headers)
     response = upload(client)
     assert not any(k.lower().startswith("access-control-") for k in response.headers)
+
+
+TOO_MUCH = {"error": "That's too much to save at once"}
+NOT_JSON = {"error": "That isn't valid JSON"}
+BAD_RATING = {"error": "Ratings go from 0.5 to 5 in half stars"}
+
+
+def raw_post(client, path, content, method="post"):
+    return getattr(client, method)(
+        path, content=content, headers={"Content-Type": "application/json"}
+    )
+
+
+@pytest.mark.parametrize("content", [b"[" * 200000, b'{"a":' * 200000])
+def test_deeply_nested_json_is_400(client, tmp_path, content):
+    before = snapshot(tmp_path)
+    for method, path in WRITES:
+        response = raw_post(client, path, content, method)
+        assert response.status_code == 400, (method, path)
+        assert response.json() == NOT_JSON
+    assert snapshot(tmp_path) == before
+
+
+@pytest.mark.parametrize("kind", ["rating", "made"])
+@pytest.mark.parametrize("value", ["1" + "0" * 400, "-1" + "0" * 400, "1e999", "0"])
+def test_absurd_ratings_are_400(client, tmp_path, kind, value):
+    create(client)
+    before = snapshot(tmp_path)
+    content = f'{{"kind": "{kind}", "rating": {value}}}'
+    response = raw_post(client, "/api/recipes/drinks/margarita/timeline", content)
+    assert response.status_code == 400
+    assert response.json() == BAD_RATING
+    assert snapshot(tmp_path) == before
+
+
+@pytest.mark.parametrize(
+    ("over", "message"),
+    [
+        ({"servings": 10**400}, "Servings can be at most 1000"),
+        ({"time_minutes": 10**400}, "Cooking time can be at most a week"),
+        (
+            {"ingredients": [{"amount": 1e308, "unit": "tbsp", "item": "salt"}]},
+            "Ingredient 1's amount is too large",
+        ),
+    ],
+)
+def test_absurd_draft_numbers_are_400(client, tmp_path, over, message):
+    before = snapshot(tmp_path)
+    response = post_json(client, "/api/recipes", {"side": "drinks", **DRAFT, **over})
+    assert response.status_code == 400
+    assert response.json() == {"error": message}
+    assert snapshot(tmp_path) == before
+
+
+def test_unexpected_error_is_json_500(client, monkeypatch):
+    create(client)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("bug")
+
+    monkeypatch.setattr("app.recipes.store.RecipeStore.set_marks", boom)
+    response = post_json(client, "/api/recipes/drinks/margarita/marks", {"add": []})
+    assert response.status_code == 500
+    assert response.headers["content-type"] == "application/json"
+    assert response.json() == {"error": "something went wrong; nothing was changed"}
+
+
+def test_odd_content_length_is_ignored(tmp_path):
+    # b"\xb2" decodes to a superscript two: str.isdigit() is true, int() fails.
+    app = create_app(Settings(), data_dir=tmp_path)
+    sent = []
+
+    async def call():
+        events = [{"type": "http.request", "body": PNG, "more_body": False}]
+
+        async def receive():
+            return events.pop(0)
+
+        async def send(message):
+            sent.append(message)
+
+        scope = {
+            "type": "http",
+            "asgi": {"version": "3.0"},
+            "http_version": "1.1",
+            "method": "POST",
+            "path": "/api/uploads",
+            "raw_path": b"/api/uploads",
+            "query_string": b"",
+            "root_path": "",
+            "scheme": "http",
+            "server": ("test", 80),
+            "headers": [
+                (b"content-type", b"image/png"),
+                (b"content-length", b"\xb2"),
+            ],
+        }
+        await app.router(scope, receive, send)
+
+    asyncio.run(call())
+    assert sent[0]["status"] == 201
+
+
+@pytest.mark.parametrize(("method", "path"), WRITES)
+def test_json_body_over_the_cap_is_413_by_declared_length(
+    client, tmp_path, method, path
+):
+    before = snapshot(tmp_path)
+    body = b'{"pad": "' + b"x" * MAX_JSON_BYTES + b'"}'
+    response = raw_post(client, path, body, method)
+    assert response.status_code == 413
+    assert response.json() == TOO_MUCH
+    assert snapshot(tmp_path) == before
+
+
+@pytest.mark.parametrize(("method", "path"), WRITES)
+def test_json_body_over_the_cap_is_413_when_chunked(client, tmp_path, method, path):
+    before = snapshot(tmp_path)
+    chunk = b"x" * 65536
+
+    def body():
+        yield b'{"pad": "'
+        for _ in range(MAX_JSON_BYTES // len(chunk) + 1):
+            yield chunk
+        yield b'"}'
+
+    # An iterator body is sent chunked, with no Content-Length header.
+    response = raw_post(client, path, body(), method)
+    assert response.status_code == 413
+    assert response.json() == TOO_MUCH
+    assert snapshot(tmp_path) == before
+
+
+def test_json_body_just_under_the_cap_is_still_read(client):
+    steps = ["x" * (MAX_JSON_BYTES - 2000)]
+    response = post_json(
+        client, "/api/recipes", {"side": "drinks", **DRAFT, "steps": steps}
+    )
+    assert response.status_code == 201
