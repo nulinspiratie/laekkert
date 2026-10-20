@@ -884,3 +884,259 @@ test('fresh only with nothing fresh but drinks to make says so', async () => {
   fireEvent.click(screen.getByRole('link', { name: 'Show all 2 drinks' }))
   expect(location()).toBe('/drinks')
 })
+
+// ---- cook with what you have ----
+
+const withHave = (base: RecipeSummary, matched: string[], missing: string[]): RecipeSummary => ({
+  ...base,
+  have: { matched, missing },
+})
+const haveTraybake = withHave(traybake, ['chicken thighs', 'leeks'], ['baby potatoes', 'olive oil', 'smoked paprika', 'lemon'])
+const haveDal = withHave(dal, ['red lentils'], ['onion'])
+const haveBrownies = withHave(brownies, ['eggs', 'butter'], [])
+// The API's order: fewest missing first.
+const haveRanked = [haveBrownies, haveDal, haveTraybake]
+
+/** Answers the list with `ranked` when the URL asks for `have` terms, and with all food otherwise. */
+function stubHaveFetch(ranked: RecipeSummary[] = haveRanked) {
+  const fetch = vi.fn(async (url: string) => listing(url.includes('have=') ? ranked : food))
+  vi.stubGlobal('fetch', fetch)
+  return fetch
+}
+
+const asideHave = () => within(screen.getByRole('complementary')).getByRole('region', { name: 'What you have' })
+
+test('the food filter aside has a What you have section between search and marks', async () => {
+  stubFetch()
+  renderAt(DEFAULT_FOOD)
+  await screen.findByText('quickest first · 4 recipes')
+  const aside = screen.getByRole('complementary')
+  const section = within(aside).getByRole('region', { name: 'What you have' })
+  expect(within(section).getByRole('heading', { name: 'What you have' })).toBeInTheDocument()
+  expect(within(section).getByPlaceholderText('Add an ingredient')).toBeInTheDocument()
+  const order = [...aside.querySelectorAll('input[type="search"], h2')].map((el) => el.textContent || 'search')
+  expect(order.slice(0, 3)).toEqual(['search', 'What you have', 'Marks'])
+})
+
+test('adding a term keeps the other params, refetches with have and ranks by fewest missing', async () => {
+  const fetch = stubHaveFetch()
+  renderAt(DEFAULT_FOOD)
+  await screen.findByText('quickest first · 4 recipes')
+  const input = within(asideHave()).getByPlaceholderText('Add an ingredient')
+  fireEvent.change(input, { target: { value: 'chicken' } })
+  fireEvent.keyDown(input, { key: 'Enter' })
+  expect(location()).toBe('/food?sort=time&have=chicken')
+  expect(await screen.findByText('fewest missing first · 3 recipes')).toBeInTheDocument()
+  expect(fetch).toHaveBeenCalledWith('/api/recipes?side=food&have=chicken')
+  // The API's order wins over the chosen sort.
+  expect(recipeNames()).toEqual(['/food/brownies', '/food/red-lentil-dal', '/food/chicken-leek-traybake'])
+  expect(within(asideHave()).getByRole('button', { name: 'Remove chicken' })).toBeInTheDocument()
+  // The sort control is left as it is.
+  expect(screen.getByRole('combobox', { name: 'Sort' })).toHaveValue('time')
+})
+
+test('terms in the URL are fetched on first load, and cards wear the badge', async () => {
+  const fetch = stubHaveFetch()
+  renderAt('/food?sort=time&have=chicken&have=leeks')
+  expect(await screen.findByText('fewest missing first · 3 recipes')).toBeInTheDocument()
+  expect(fetch).toHaveBeenCalledWith('/api/recipes?side=food&have=chicken&have=leeks')
+  const card = (name: RegExp) => screen.getByRole('link', { name })
+  expect(within(card(/Brownies/)).getByText('Have everything')).toBeInTheDocument()
+  expect(within(card(/Red lentil dal/)).getByText('Missing: onion')).toBeInTheDocument()
+  const long = within(card(/Chicken and leek traybake/)).getByRole('img', {
+    name: 'Missing: baby potatoes, olive oil, smoked paprika, lemon',
+  })
+  expect(long).toHaveAttribute('title', 'Missing: baby potatoes, olive oil, smoked paprika, lemon')
+  expect(within(long).getByText('Missing: baby potatoes, olive oil +2')).toBeInTheDocument()
+})
+
+test('the list views wear the badge too', async () => {
+  stubHaveFetch()
+  localStorage.setItem('laekkert.view', 'list')
+  renderAt('/food?have=chicken')
+  expect(await screen.findByText('Have everything')).toBeInTheDocument()
+  expect(screen.getByText('Missing: onion')).toBeInTheDocument()
+})
+
+test('a food list without terms has no badges', async () => {
+  stubHaveFetch()
+  renderAt(DEFAULT_FOOD)
+  await screen.findByText('quickest first · 4 recipes')
+  expect(screen.queryByText('Have everything')).not.toBeInTheDocument()
+  expect(screen.queryByText(/^Missing:/)).not.toBeInTheDocument()
+})
+
+test('the order and badges follow the data on screen while a new fetch is in flight', async () => {
+  let release: (response: Response) => void = () => {}
+  const fetch = vi.fn((url: string) => {
+    if (url.includes('have=chicken&have=leeks')) return new Promise<Response>((resolve) => (release = resolve))
+    return Promise.resolve(listing(url.includes('have=') ? haveRanked : food))
+  })
+  vi.stubGlobal('fetch', fetch)
+  renderAt('/food?have=chicken')
+  await screen.findByText('fewest missing first · 3 recipes')
+
+  const input = within(asideHave()).getByPlaceholderText('Add an ingredient')
+  fireEvent.change(input, { target: { value: 'leeks' } })
+  fireEvent.keyDown(input, { key: 'Enter' })
+  expect(location()).toBe('/food?have=chicken&have=leeks')
+  expect(fetch).toHaveBeenCalledWith('/api/recipes?side=food&have=chicken&have=leeks')
+  // Still the earlier answer: same order, same badges, same subtitle.
+  expect(recipeNames()[0]).toBe('/food/brownies')
+  expect(screen.getByText('Have everything')).toBeInTheDocument()
+  expect(screen.getByText('fewest missing first · 3 recipes')).toBeInTheDocument()
+
+  // The new answer replaces it once it arrives.
+  release(listing([haveTraybake]))
+  expect(await screen.findByText('fewest missing first · 1 recipe')).toBeInTheDocument()
+})
+
+test('removing the last term goes back to the chosen sort', async () => {
+  stubHaveFetch()
+  renderAt('/food?sort=time&have=chicken')
+  await screen.findByText('fewest missing first · 3 recipes')
+  fireEvent.click(within(asideHave()).getByRole('button', { name: 'Remove chicken' }))
+  expect(location()).toBe('/food?sort=time')
+  expect(await screen.findByText('quickest first · 4 recipes')).toBeInTheDocument()
+  expect(recipeNames()[0]).toBe('/food/veggie-quesadillas')
+})
+
+test('Clear in the section drops every have param and keeps the rest', async () => {
+  stubHaveFetch()
+  renderAt('/food?mark=favourite&sort=time&have=chicken&have=leeks')
+  await screen.findByText(/fewest missing first/)
+  fireEvent.click(within(asideHave()).getByRole('button', { name: 'Clear' }))
+  expect(location()).toBe('/food?mark=favourite&sort=time')
+})
+
+test('adding a term that is already there does nothing', async () => {
+  stubHaveFetch()
+  renderAt('/food?have=chicken')
+  await screen.findByText(/fewest missing first/)
+  const input = within(asideHave()).getByPlaceholderText('Add an ingredient')
+  fireEvent.change(input, { target: { value: ' Chicken ' } })
+  fireEvent.keyDown(input, { key: 'Enter' })
+  expect(location()).toBe('/food?have=chicken')
+})
+
+test('switching side drops the terms', async () => {
+  stubHaveFetch()
+  renderAt('/food?have=chicken')
+  await screen.findByText(/fewest missing first/)
+  expect(screen.getByRole('link', { name: 'Drinks' })).toHaveAttribute('href', '/drinks')
+  expect(screen.getByRole('link', { name: 'Food' })).toHaveAttribute('href', '/food?sort=time')
+})
+
+test('nothing uses the terms: the empty state names them and offers Clear', async () => {
+  stubFetch([])
+  renderAt('/food?sort=time&have=chicken&have=leeks')
+  expect(await screen.findByRole('heading', { name: 'Nothing uses chicken or leeks' })).toBeInTheDocument()
+  expect(screen.getByText('Try another ingredient, or clear the list.')).toBeInTheDocument()
+  expect(screen.queryByText('No recipes yet.')).not.toBeInTheDocument()
+  expect(screen.queryByText('Nothing matches these filters.')).not.toBeInTheDocument()
+  const main = screen.getByRole('main')
+  const empty = main.querySelector('.browse-empty') as HTMLElement
+  fireEvent.click(within(empty).getByRole('button', { name: 'Clear' }))
+  expect(location()).toBe('/food?sort=time')
+})
+
+test('the empty state joins one, two and three terms, and gives up at four', async () => {
+  stubFetch([])
+  const view = renderAt('/food?have=chicken')
+  expect(await screen.findByRole('heading', { name: 'Nothing uses chicken' })).toBeInTheDocument()
+  view.unmount()
+  const three = renderAt('/food?have=chicken&have=leeks&have=eggs')
+  expect(await screen.findByRole('heading', { name: 'Nothing uses chicken, leeks or eggs' })).toBeInTheDocument()
+  three.unmount()
+  renderAt('/food?have=chicken&have=leeks&have=eggs&have=milk')
+  expect(await screen.findByRole('heading', { name: 'Nothing uses those' })).toBeInTheDocument()
+})
+
+test('terms plus other filters that leave nothing keep the generic empty state', async () => {
+  stubHaveFetch()
+  renderAt('/food?tag=nope&have=chicken')
+  expect(await screen.findByText('Nothing matches these filters.')).toBeInTheDocument()
+  expect(screen.queryByText(/Nothing uses/)).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+  expect(location()).toBe('/food')
+})
+
+test('on a phone the What you have button opens a panel and shows pressed with terms', async () => {
+  stubViewport(false)
+  const setItem = vi.spyOn(Storage.prototype, 'setItem')
+  stubHaveFetch()
+  renderAt(DEFAULT_FOOD)
+  await screen.findByText('quickest first · 4 recipes')
+  const button = screen.getByRole('button', { name: 'What you have' })
+  expect(button).toHaveAttribute('aria-pressed', 'false')
+  expect(screen.queryByPlaceholderText('Add an ingredient')).not.toBeInTheDocument()
+
+  fireEvent.click(button)
+  const input = screen.getByPlaceholderText('Add an ingredient')
+  expect(input).toHaveFocus()
+  fireEvent.change(input, { target: { value: 'chicken' } })
+  fireEvent.keyDown(input, { key: 'Enter' })
+  expect(location()).toBe('/food?sort=time&have=chicken')
+  expect(await screen.findByText('fewest missing first · 3 recipes')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'What you have' })).toHaveAttribute('aria-pressed', 'true')
+  // The panel stays open after the re-render.
+  expect(screen.getByPlaceholderText('Add an ingredient')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Remove chicken' })).toBeInTheDocument()
+
+  // Closing it keeps the terms; the button still shows pressed.
+  fireEvent.click(screen.getByRole('button', { name: 'What you have' }))
+  expect(screen.queryByPlaceholderText('Add an ingredient')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'What you have' })).toHaveAttribute('aria-pressed', 'true')
+  expect(location()).toBe('/food?sort=time&have=chicken')
+
+  // Nothing about the terms is stored.
+  for (const [key, value] of setItem.mock.calls) {
+    expect(`${key} ${value}`).not.toMatch(/chicken/i)
+  }
+})
+
+test('on a phone the panel starts open when the URL has terms, and can sit beside search', async () => {
+  stubViewport(false)
+  stubHaveFetch()
+  renderAt('/food?q=leek&have=chicken')
+  await screen.findByText(/fewest missing first/)
+  expect(screen.getByPlaceholderText('Add an ingredient')).toBeInTheDocument()
+  expect(screen.getByRole('searchbox', { name: 'Search food' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Remove chicken' })).toBeInTheDocument()
+})
+
+test('phone chips and buttons are never nested', async () => {
+  stubViewport(false)
+  stubHaveFetch()
+  renderAt('/food?have=chicken&have=leeks')
+  await screen.findByText(/fewest missing first/)
+  for (const button of screen.getAllByRole('button')) expect(button.querySelector('button')).toBeNull()
+})
+
+test('drinks has no What you have button and ignores have= in the URL', async () => {
+  stubViewport(false)
+  const fetch = stubFetch(drinks)
+  renderAt('/drinks?have=chicken')
+  await screen.findByRole('link', { name: /Gimlet/ })
+  expect(screen.queryByRole('button', { name: 'What you have' })).not.toBeInTheDocument()
+  expect(fetch).toHaveBeenCalledWith('/api/recipes?side=drinks')
+  expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining('have='))
+  expect(screen.queryByText(/fewest missing first/)).not.toBeInTheDocument()
+})
+
+test('desktop drinks has no What you have section', async () => {
+  stubFetch(drinks)
+  renderAt('/drinks?have=chicken')
+  await screen.findByRole('link', { name: /Gimlet/ })
+  expect(screen.queryByRole('region', { name: 'What you have' })).not.toBeInTheDocument()
+  expect(screen.queryByPlaceholderText('Add an ingredient')).not.toBeInTheDocument()
+})
+
+test('the phone filter sheet Reset drops the terms too', async () => {
+  stubViewport(false)
+  stubHaveFetch()
+  renderAt('/food?mark=favourite&sort=time&have=chicken')
+  fireEvent.click(await screen.findByRole('button', { name: 'Filters, 1 active' }))
+  fireEvent.click(within(screen.getByRole('dialog', { name: 'Filters' })).getByRole('button', { name: 'Reset' }))
+  expect(location()).toBe(DEFAULT_FOOD)
+})

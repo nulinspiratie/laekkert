@@ -2,6 +2,7 @@
 // and sort. What is shown is derived from the URL's query string (see browse.ts);
 // only the list from the API, the bar, the search box text and the view are state.
 // On drinks the bar filters the list ("From your bar") and explains an empty one.
+// On food a "what you have" list (the `have` params) ranks it by fewest missing.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
@@ -10,19 +11,22 @@ import { topFresh, unsorted } from './bar'
 import {
   MARK_LABELS,
   SORT_OPTIONS,
+  addTerm,
   applyBrowse,
   browseQuery,
   defaultQuery,
   describe,
   facetCounts,
   parseBrowse,
+  removeTerm,
   type BarFilter,
   type BrowseState,
   type SortKey,
 } from './browse'
 import { FilterPanel, FilterSheet, SearchField, type BarSummary } from './FilterPanel'
 import { capitalise } from './format'
-import { Bottle, Close, CoupeBasket, Filters, Grid, List, Plus, Question, Search, Shelf } from './icons'
+import { HaveField } from './HaveField'
+import { Basket, Bottle, Close, CoupeBasket, Filters, Grid, List, Plus, Question, Search, Shelf } from './icons'
 import { getView, setLastSide, setView, type View } from './prefs'
 import { RecipeCard, RecipeRow, RecipeTableRow } from './RecipeCard'
 import { PageHeading, Shell } from './Shell'
@@ -37,6 +41,15 @@ const plural = (n: number) => `${n} ${n === 1 ? 'recipe' : 'recipes'}`
 const drinksCount = (n: number) => `${n} ${n === 1 ? 'drink' : 'drinks'}`
 
 const search = (query: string) => ({ search: query ? `?${query}` : '' })
+
+/** "chicken", "chicken or leeks", "chicken, leeks or eggs". */
+function joinOr(terms: string[]): string {
+  if (terms.length < 2) return terms.join('')
+  return `${terms.slice(0, -1).join(', ')} or ${terms[terms.length - 1]}`
+}
+
+/** More terms than this and the empty state says "those" instead of naming them. */
+const NAMED_TERMS = 3
 
 const BAR_LABELS: Record<BarFilter, string> = { can: 'Can make now', fresh: 'Only need fresh items' }
 
@@ -58,7 +71,10 @@ export default function Browse({ side }: { side: Side }) {
   const [text, setText] = useState(state.q)
   // The query the list on screen was fetched for; follows state.q after a pause.
   const [fetchQ, setFetchQ] = useState(state.q)
-  const [loaded, setLoaded] = useState<{ q: string; recipes: RecipeSummary[] } | null>(null)
+  // The same for the "what you have" terms (no pause: adding a chip is deliberate). The list
+  // on screen keeps its own order, subtitle and badges until the answer for the new terms is in.
+  const haveSignature = JSON.stringify(state.have)
+  const [loaded, setLoaded] = useState<{ q: string; have: string[]; recipes: RecipeSummary[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Drinks only: null while loading; 'failed' hides the bar's filter, banner and set-up state.
   const [bar, setBar] = useState<Bar | 'failed' | null>(null)
@@ -66,6 +82,15 @@ export default function Browse({ side }: { side: Side }) {
   const [searchOpen, setSearchOpen] = useState(state.q !== '')
   const searchInput = useRef<HTMLInputElement>(null)
   const focusSearch = useRef(false)
+  // Phone only: the "What you have" panel. Open from the start when the URL has terms.
+  const [haveOpen, setHaveOpen] = useState(state.have.length > 0)
+  const haveInput = useRef<HTMLInputElement>(null)
+  const focusHave = useRef(false)
+  // The state as of the latest add or remove, so a pasted list of terms adds every one.
+  const latest = useRef(state)
+  useEffect(() => {
+    latest.current = state
+  }, [state])
 
   useEffect(() => setLastSide(side), [side])
 
@@ -87,10 +112,11 @@ export default function Browse({ side }: { side: Side }) {
   useEffect(() => {
     // A response for an earlier query must not replace a newer one.
     let current = true
-    listRecipes(side, fetchQ || undefined).then(
+    const have: string[] = JSON.parse(haveSignature)
+    listRecipes(side, fetchQ || undefined, have).then(
       (recipes) => {
         if (!current) return
-        setLoaded({ q: fetchQ, recipes })
+        setLoaded({ q: fetchQ, have, recipes })
         setError(null)
       },
       (err: Error) => current && setError(err.message),
@@ -98,7 +124,7 @@ export default function Browse({ side }: { side: Side }) {
     return () => {
       current = false
     }
-  }, [side, fetchQ])
+  }, [side, fetchQ, haveSignature])
 
   useEffect(() => {
     if (side !== 'drinks') return
@@ -117,11 +143,16 @@ export default function Browse({ side }: { side: Side }) {
     focusSearch.current = false
   }, [searchOpen])
 
+  useEffect(() => {
+    if (haveOpen && focusHave.current) haveInput.current?.focus()
+    focusHave.current = false
+  }, [haveOpen])
+
   // A bar that failed to load cannot filter: its controls are hidden, so a bar=
   // left in the URL would shorten the list with no way to see or clear it.
   const shown = useMemo(() => (bar === 'failed' && state.bar ? { ...state, bar: null } : state), [bar, state])
   const recipes = useMemo(
-    () => (loaded ? applyBrowse(loaded.recipes, { ...shown, q: loaded.q }) : null),
+    () => (loaded ? applyBrowse(loaded.recipes, { ...shown, q: loaded.q, have: loaded.have }) : null),
     [loaded, shown],
   )
   const counts = useMemo(() => facetCounts(side, loaded?.recipes ?? [], shown), [side, loaded, shown])
@@ -129,7 +160,9 @@ export default function Browse({ side }: { side: Side }) {
     bar && bar !== 'failed' ? { setUp: bar.set_up, unsorted: unsorted(bar.items).length } : undefined
 
   const title = SIDE_LABELS[side]
-  let subtitle = recipes ? `${describe(state)} · ${plural(recipes.length)}` : describe(state)
+  // The order on screen is the loaded list's, so the subtitle names that order too.
+  const described = side === 'food' && loaded ? { ...state, have: loaded.have } : state
+  let subtitle = recipes ? `${describe(described)} · ${plural(recipes.length)}` : describe(described)
   if (desktop && barSummary && recipes) subtitle = barLine(state, recipes)
 
   // The bar filter left nothing, though the other filters leave some drinks.
@@ -163,6 +196,34 @@ export default function Browse({ side }: { side: Side }) {
   }
 
   const onChange = (patch: Partial<BrowseState>) => navigate(search(browseQuery({ ...state, ...patch })))
+  const onAddTerm = (text: string) => {
+    const next = addTerm(latest.current, text)
+    if (next === latest.current) return
+    latest.current = next
+    onChange({ have: next.have })
+  }
+  const onRemoveTerm = (term: string) => {
+    const next = removeTerm(latest.current, term)
+    if (next === latest.current) return
+    latest.current = next
+    onChange({ have: next.have })
+  }
+  const onClearTerms = () => onChange({ have: [] })
+  const haveField = { terms: state.have, onAdd: onAddTerm, onRemove: onRemoveTerm, onClear: onClearTerms }
+
+  // No recipe uses any of the terms, and no search narrows it: say so and offer to clear them.
+  if (empty === undefined && loaded && loaded.recipes.length === 0 && loaded.q === '' && loaded.have.length > 0) {
+    empty = (
+      <div className="browse-empty browse-empty--have">
+        <h2>{loaded.have.length > NAMED_TERMS ? 'Nothing uses those' : `Nothing uses ${joinOr(loaded.have)}`}</h2>
+        <p>Try another ingredient, or clear the list.</p>
+        <button type="button" onClick={onClearTerms}>
+          Clear
+        </button>
+      </div>
+    )
+  }
+
   const onSearch = (value: string) => {
     setText(value)
     navigate(search(browseQuery({ ...state, q: value.trim() })), { replace: true })
@@ -177,7 +238,7 @@ export default function Browse({ side }: { side: Side }) {
     <Results
       side={side}
       recipes={recipes}
-      unfilteredEmpty={loaded?.recipes.length === 0 && !state.q}
+      unfilteredEmpty={loaded?.recipes.length === 0 && !state.q && loaded.have.length === 0}
       view={view}
       desktop={desktop}
       error={error}
@@ -197,6 +258,7 @@ export default function Browse({ side }: { side: Side }) {
               counts={counts}
               onChange={onChange}
               search={{ value: text, onChange: onSearch }}
+              have={side === 'food' ? haveField : undefined}
               bar={barSummary}
             />
           </aside>
@@ -257,6 +319,10 @@ export default function Browse({ side }: { side: Side }) {
       </Link>
     </>
   )
+  const toggleHave = () => {
+    if (!haveOpen) focusHave.current = true
+    setHaveOpen(!haveOpen)
+  }
   const toggleSearch = () => {
     if (searchOpen) {
       onSearch('')
@@ -281,6 +347,18 @@ export default function Browse({ side }: { side: Side }) {
               <Bottle size={22} strokeWidth={1.6} />
             </Link>
           )}
+          {side === 'food' && (
+            <button
+              type="button"
+              className="browse-head-btn"
+              aria-label="What you have"
+              aria-pressed={state.have.length > 0}
+              aria-expanded={haveOpen}
+              onClick={toggleHave}
+            >
+              <Basket size={22} />
+            </button>
+          )}
           <button
             type="button"
             className="browse-head-btn"
@@ -292,6 +370,11 @@ export default function Browse({ side }: { side: Side }) {
           </button>
         </PageHeading>
         <div className="gutter browse-body">
+          {side === 'food' && haveOpen && (
+            <section className="have-panel" aria-label="What you have">
+              <HaveField {...haveField} inputRef={haveInput} />
+            </section>
+          )}
           {searchOpen && <SearchField side={side} value={text} onChange={onSearch} inputRef={searchInput} />}
           {results}
         </div>

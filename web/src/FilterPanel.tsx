@@ -1,7 +1,8 @@
-// The browse filters: search (desktop only), the bar (desktop drinks only), marks,
-// category and tags. `aside` is the desktop side panel; `sheet` is the same
-// controls bigger, inside the phone's filter sheet (FilterSheet below). On a
-// phone the bar filter is chips under the heading instead (BarChips in Browse).
+// The browse filters: search (desktop only), what you have (desktop food only), the bar
+// (desktop drinks only), marks, category and tags. `aside` is the desktop side panel;
+// `sheet` is the same controls bigger, inside the phone's filter sheet (FilterSheet
+// below). On a phone the bar filter is chips under the heading and what you have is a
+// header button with its own panel (BarChips and HavePanel in Browse).
 
 import { useEffect, useRef, type ReactNode, type Ref } from 'react'
 import { Link } from 'react-router'
@@ -15,6 +16,7 @@ import {
   type facetCounts,
 } from './browse'
 import { capitalise } from './format'
+import { HaveField, type HaveFieldProps } from './HaveField'
 import { Bookmark, Bottle, Check, Heart, Question, Search } from './icons'
 import { SIDE_LABELS, type Side } from './types'
 
@@ -34,6 +36,8 @@ export interface FilterPanelProps {
   search?: { value: string; onChange: (value: string) => void }
   /** The "From your bar" section, shown when given (drinks, once the bar has loaded). */
   bar?: BarSummary
+  /** The "What you have" section, shown when given (desktop food; the phone has a button and panel). */
+  have?: Omit<HaveFieldProps, 'inputRef'>
 }
 
 /** What the browse page knows about the bar. */
@@ -43,7 +47,7 @@ export interface BarSummary {
   unsorted: number
 }
 
-export function FilterPanel({ side, state, counts, onChange, variant = 'aside', search, bar }: FilterPanelProps) {
+export function FilterPanel({ side, state, counts, onChange, variant = 'aside', search, bar, have }: FilterPanelProps) {
   const sheet = variant === 'sheet'
   const Heading = sheet ? 'h3' : 'h2'
 
@@ -58,6 +62,13 @@ export function FilterPanel({ side, state, counts, onChange, variant = 'aside', 
   return (
     <div className={`filters filters--${variant}`}>
       {search && <SearchField side={side} value={search.value} onChange={search.onChange} />}
+
+      {have && (
+        <section className="filter-section" aria-label="What you have">
+          <Heading>What you have</Heading>
+          <HaveField {...have} />
+        </section>
+      )}
 
       {bar && <BarSection bar={bar} state={state} counts={counts} onChange={onChange} />}
 
@@ -242,7 +253,7 @@ function CategoryPill({ name, on, onPick }: { name: string; on: boolean; onPick:
   )
 }
 
-export interface FilterSheetProps extends Omit<FilterPanelProps, 'variant' | 'search' | 'bar'> {
+export interface FilterSheetProps extends Omit<FilterPanelProps, 'variant' | 'search' | 'bar' | 'have'> {
   open: boolean
   /** How many recipes the filters leave, for the "Show N recipes" button. */
   count: number
