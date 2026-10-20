@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider, useLocation } from 'react-router'
 import { afterEach, expect, test, vi } from 'vitest'
 import App from './App'
@@ -857,7 +857,30 @@ test('browsing works when the bar fails to load', async () => {
   stubViewport(false)
   stubFetch(unsortedDrinks, 'fail')
   renderAt('/drinks?bar=can')
-  expect(await screen.findByRole('heading', { name: 'Nothing to make yet' })).toBeInTheDocument()
+  await waitFor(() => expect(recipeNames()).toHaveLength(unsortedDrinks.length))
+  expect(screen.queryByRole('heading', { name: 'Nothing to make yet' })).not.toBeInTheDocument()
   expect(screen.queryByRole('heading', { name: 'Set up your bar first' })).not.toBeInTheDocument()
   expect(screen.queryByRole('radiogroup', { name: 'From your bar' })).not.toBeInTheDocument()
+})
+
+test('a bar filter in the URL is ignored when the bar fails to load', async () => {
+  stubFetch(drinks, 'fail')
+  renderAt('/drinks?bar=can')
+  await waitFor(() => expect(recipeNames()).toHaveLength(5))
+  expect(recipeNames()).toEqual(expect.arrayContaining(drinks.map((d) => `/drinks/${d.slug}`)))
+  expect(screen.getByText('A to Z · 5 recipes')).toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: 'Nothing to make yet' })).not.toBeInTheDocument()
+})
+
+test('fresh only with nothing fresh but drinks to make says so', async () => {
+  stubFetch([negroni, maiTai])
+  renderAt('/drinks?bar=fresh')
+  expect(await screen.findByRole('heading', { name: 'Nothing needs only fresh items' })).toBeInTheDocument()
+  expect(
+    screen.getByText("No drink needs only fresh items right now. You can make 1 drink with what's in the bar."),
+  ).toBeInTheDocument()
+  expect(screen.queryByText('Every drink is missing a bottle or uses one not sorted yet.')).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Open the bar' })).toHaveAttribute('href', '/bar')
+  fireEvent.click(screen.getByRole('link', { name: 'Show all 2 drinks' }))
+  expect(location()).toBe('/drinks')
 })

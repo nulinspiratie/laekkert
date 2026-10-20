@@ -164,7 +164,7 @@ function BarSection({
       <div role="radiogroup" aria-label="Inventory" className="filter-bar">
         {BAR_OPTIONS.map(({ value, label, count }) => (
           <button
-            key={label}
+            key={value ?? 'all'}
             type="button"
             role="radio"
             aria-checked={state.bar === value}

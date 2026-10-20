@@ -117,11 +117,14 @@ export default function Browse({ side }: { side: Side }) {
     focusSearch.current = false
   }, [searchOpen])
 
+  // A bar that failed to load cannot filter: its controls are hidden, so a bar=
+  // left in the URL would shorten the list with no way to see or clear it.
+  const shown = useMemo(() => (bar === 'failed' && state.bar ? { ...state, bar: null } : state), [bar, state])
   const recipes = useMemo(
-    () => (loaded ? applyBrowse(loaded.recipes, { ...state, q: loaded.q }) : null),
-    [loaded, state],
+    () => (loaded ? applyBrowse(loaded.recipes, { ...shown, q: loaded.q }) : null),
+    [loaded, shown],
   )
-  const counts = useMemo(() => facetCounts(side, loaded?.recipes ?? [], state), [side, loaded, state])
+  const counts = useMemo(() => facetCounts(side, loaded?.recipes ?? [], shown), [side, loaded, shown])
   const barSummary: BarSummary | undefined =
     bar && bar !== 'failed' ? { setUp: bar.set_up, unsorted: unsorted(bar.items).length } : undefined
 
@@ -131,7 +134,7 @@ export default function Browse({ side }: { side: Side }) {
 
   // The bar filter left nothing, though the other filters leave some drinks.
   let empty: ReactNode | undefined
-  if (loaded && recipes?.length === 0 && state.bar && counts.bar.all > 0) {
+  if (loaded && recipes?.length === 0 && shown.bar && counts.bar.all > 0) {
     const link = (patch: Partial<BrowseState>) => {
       const query = browseQuery({ ...state, ...patch })
       return `/${side}${query ? `?${query}` : ''}`
@@ -151,6 +154,7 @@ export default function Browse({ side }: { side: Side }) {
           desktop={desktop}
           all={counts.bar.all}
           fresh={counts.bar.fresh}
+          can={state.bar === 'fresh' ? counts.bar.can : 0}
           top={topFresh(others)}
           showAll={link({ bar: null })}
           showFresh={link({ bar: 'fresh' })}
@@ -328,7 +332,7 @@ function BarChips({
       <div role="radiogroup" aria-label="From your bar" className="browse-bar-chips">
         {chips.map(({ value, label }) => (
           <button
-            key={label}
+            key={value ?? 'all'}
             type="button"
             role="radio"
             aria-checked={state.bar === value}
@@ -341,7 +345,7 @@ function BarChips({
       {bar.setUp && bar.unsorted > 0 && (
         <Link to="/bar" className="browse-bar-banner">
           <Question size={18} />
-          <span className="filter-grow">
+          <span className="browse-bar-banner-text">
             {bar.unsorted} new {bar.unsorted === 1 ? 'bottle' : 'bottles'} not sorted yet
           </span>{' '}
           <span className="browse-bar-sort">Sort</span>
@@ -357,6 +361,8 @@ interface BarEmptyProps {
   /** Drinks the other filters leave, and of those, the ones that need only fresh items. */
   all: number
   fresh: number
+  /** With "Fresh only" on, the drinks that can be made now (they rule out "Nothing to make yet"). */
+  can: number
   /** The fresh item most of the fresh-only drinks need. */
   top: { item: string; count: number } | null
   showAll: string
@@ -364,7 +370,7 @@ interface BarEmptyProps {
 }
 
 /** Why the bar filter leaves nothing, and what to do about it. */
-function BarEmpty({ kind, desktop, all, fresh, top, showAll, showFresh }: BarEmptyProps) {
+function BarEmpty({ kind, desktop, all, fresh, can, top, showAll, showFresh }: BarEmptyProps) {
   const showAllLink = (
     <Link to={showAll} className="browse-bar-empty-alt">
       {all === 1 ? 'Show 1 drink' : `Show all ${all} drinks`}
@@ -407,6 +413,18 @@ function BarEmpty({ kind, desktop, all, fresh, top, showAll, showFresh }: BarEmp
             {fresh === 1 ? 'Show the drink that needs fresh items' : `Show the ${fresh} that need fresh items`}
           </Link>
           {openBar(false)}
+        </>
+      ),
+    }
+  } else if (can > 0) {
+    content = {
+      icon: <Shelf />,
+      title: 'Nothing needs only fresh items',
+      text: `No drink needs only fresh items right now. You can make ${drinksCount(can)} with what's in the bar.`,
+      actions: (
+        <>
+          {openBar(true)}
+          {showAllLink}
         </>
       ),
     }

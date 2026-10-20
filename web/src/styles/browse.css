@@ -910,20 +910,21 @@ a.browse-head-btn {
 .browse-bar-chips button {
   flex: none;
   min-height: 44px;
-  padding: 0 16px;
-  border: 1px solid var(--masthead-border, var(--border-strong));
+  padding: 0 14px;
+  border: 1px solid var(--masthead-border);
   border-radius: 999px;
-  background: var(--masthead-raised, var(--surface));
-  color: var(--masthead-ink, var(--text));
-  font-size: 15px;
+  background: transparent;
+  color: var(--masthead-ink);
+  font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
 }
 
+/* DrinksPhone: the selected chip is the drinks green. */
 .browse-bar-chips button[aria-checked='true'] {
-  border-color: var(--masthead-cta, var(--accent));
-  background: var(--masthead-cta, var(--accent));
-  color: var(--masthead, var(--on-accent));
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
 }
 
 .browse-bar-banner {
@@ -941,6 +942,10 @@ a.browse-head-btn {
 
 .browse-bar-banner svg {
   flex: none;
+}
+
+.browse-bar-banner-text {
+  flex: 1;
 }
 
 .browse-bar-sort {
