@@ -132,11 +132,12 @@ every control is at least 44 x 44 px.
 ## Screenshots
 
 `screenshots/m5/` holds "Cook with what you have":
-- `food-have-desktop-*` and `food-have-phone-*` (`?have=chicken&have=leeks`, light and dark,
-  with the phone panel open);
+- `food-have-desktop` and `food-have-phone` (`?have=chicken&have=leeks`, with the phone
+  panel open);
 - `food-have-empty-phone` (no recipe uses the terms).
 
-They were taken the same way as M4's.
+They were taken the same way as M4's, from a scratch data directory with five extra food
+recipes. The app has one theme, so there are no dark shots.
 
 `screenshots/m4/` holds the bar and the drinks inventory: `bar-phone`, `bar-desktop`,
 `bar-first-visit-*` (nothing sorted), `bar-search-empty-*`, `bar-item-sheet-*`,
