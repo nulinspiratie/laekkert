@@ -205,6 +205,7 @@
 }
 
 .bar-problem {
+  align-self: stretch;
   margin: 0;
   padding: 10px 14px;
   border-radius: 10px;
@@ -214,8 +215,10 @@
   overflow-wrap: anywhere;
 }
 
-.bar-page--phone .bar-problem {
-  margin: 16px 16px 0;
+/* A refusal sits in the row (or block) that was tapped, on a line of its own. */
+.bar-row .bar-problem {
+  flex: 1 0 100%;
+  margin: 0 0 6px;
 }
 
 /* ---- Phone body ---- */
@@ -244,6 +247,7 @@
 
 .bar-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   min-height: 64px;
@@ -255,7 +259,7 @@
 }
 
 .bar-row-name {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
   min-height: 56px;
   display: flex;

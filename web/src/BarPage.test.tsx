@@ -162,12 +162,51 @@ test('toggles an item in one tap', async () => {
   expect(screen.getByText('One bar for the household · 2 of 6 bottles in')).toBeInTheDocument()
 })
 
-test('rolls back a toggle the server refuses', async () => {
-  stubBar(everyday, () => json({ error: 'The bar file could not be read, so nothing was changed.' }, 503))
+const refusal = 'The bar file could not be read, so nothing was changed.'
+const refuse = () => json({ error: refusal }, 503)
+
+test('rolls back a toggle the server refuses, saying why in its row', async () => {
+  stubBar(everyday, refuse)
   await openBar()
   fireEvent.click(screen.getByRole('button', { name: "White rum: have. Tap if you've run out." }))
-  expect(await screen.findByRole('alert')).toHaveTextContent('The bar file could not be read, so nothing was changed.')
-  expect(screen.getByRole('button', { name: "White rum: have. Tap if you've run out." })).toBeInTheDocument()
+  // Next to the row that failed, so it shows wherever the page is scrolled.
+  const toggle = await screen.findByRole('button', { name: "White rum: have. Tap if you've run out." })
+  expect(await within(toggle.parentElement!).findByRole('alert')).toHaveTextContent(refusal)
+  expect(screen.getAllByRole('alert')).toHaveLength(1)
+
+  // The next write clears it.
+  fireEvent.click(screen.getByRole('button', { name: "Campari: have. Tap if you've run out." }))
+  await waitFor(() => expect(within(toggle.parentElement!).queryByRole('alert')).not.toBeInTheDocument())
+  const campari = await screen.findByRole('button', { name: "Campari: have. Tap if you've run out." })
+  expect(await within(campari.parentElement!).findByRole('alert')).toHaveTextContent(refusal)
+})
+
+test('says why an unsorted pick was refused in its row', async () => {
+  stubBar(everyday, refuse)
+  await openBar()
+  fireEvent.click(screen.getByRole('button', { name: 'Orgeat: have' }))
+  const pick = await screen.findByRole('button', { name: 'Orgeat: have' })
+  expect(await within(pick.parentElement!).findByRole('alert')).toHaveTextContent(refusal)
+})
+
+test('says why marking the rest was refused next to the button', async () => {
+  stubBar(everyday, refuse)
+  await openBar()
+  fireEvent.click(screen.getByRole('button', { name: 'Mark the other 2 as don’t have' }))
+  // The section empties at once and comes back with the rollback.
+  const unsorted = await screen.findByRole('region', { name: 'Not sorted yet' })
+  expect(await within(unsorted).findByRole('alert')).toHaveTextContent(refusal)
+  expect(within(unsorted).getByRole('button', { name: 'Orgeat: have' })).toBeInTheDocument()
+})
+
+test('says why an add was refused next to the add button', async () => {
+  stubBar(everyday, refuse)
+  await openBar()
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Find a bottle' }), { target: { value: 'Falernum' } })
+  const add = screen.getByRole('button', { name: 'Add ‘Falernum’ to the bar' })
+  fireEvent.click(add)
+  expect(await within(add.parentElement!).findByRole('alert')).toHaveTextContent(refusal)
+  expect(screen.getByRole('searchbox', { name: 'Find a bottle' })).toHaveValue('Falernum')
 })
 
 test('sorts an unsorted item', async () => {
@@ -256,6 +295,15 @@ test('a desktop says Click and has a More button', async () => {
   expect(screen.getByRole('dialog', { name: 'White rum' })).toBeInTheDocument()
 })
 
+test('the first-visit subtitle says Click on a desktop', async () => {
+  stubViewport(true)
+  stubBar(firstVisit)
+  await openBar()
+  expect(
+    screen.getByText('Lækkert found 6 bottles in your drinks. Click Have for each one in your cabinet.'),
+  ).toBeInTheDocument()
+})
+
 test('a desktop says every bottle is sorted when none is left', async () => {
   stubViewport(true)
   const sorted = withItem(withItem(everyday, 'orgeat', { state: 'dont' }), 'crème de violette', { state: 'dont' })
@@ -289,6 +337,18 @@ describe('the item sheet', () => {
     fireEvent.keyDown(dialog, { key: 'Escape' })
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(row('White rum')).toHaveFocus()
+  })
+
+  test('closes on a backdrop click, not on a click inside the sheet', async () => {
+    const { dialog } = await openSheet('White rum')
+    const box = { left: 0, top: 64, right: 400, bottom: 800, width: 400, height: 736, x: 0, y: 64 }
+    dialog.getBoundingClientRect = () => ({ ...box, toJSON: () => box }) as DOMRect
+    // The dialog's own padding or margins, inside its box.
+    fireEvent.click(dialog, { clientX: 200, clientY: 300 })
+    expect(screen.getByRole('dialog', { name: 'White rum' })).toBeInTheDocument()
+    // Above the sheet: the backdrop.
+    fireEvent.click(dialog, { clientX: 200, clientY: 20 })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   test('sets the state from the sheet', async () => {

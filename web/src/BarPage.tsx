@@ -5,15 +5,13 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { changeBar, getBar } from './api'
-import { fresh, groupByKind, KIND_LABELS, matchItem, shelf, usedText } from './bar'
+import { fresh, groupByKind, KIND_LABELS, matchItem, messageOf, shelf, usedText } from './bar'
 import { BarItemSheet } from './BarItemSheet'
 import { capitalise } from './format'
 import { Back, Basket, Bottle, Check, Chevron, DrinksTab, MinusCircle, More, Plus, Question, Search } from './icons'
 import { Shell } from './Shell'
 import type { Bar, BarChanges, BarItem, BarState } from './types'
 import { useIsDesktop } from './useIsDesktop'
-
-const messageOf = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong')
 
 /** The bar with some items' states replaced: writes in flight, or a rollback. */
 function withStates(bar: Bar, states: ReadonlyMap<string, BarState | null>): Bar {
@@ -27,13 +25,35 @@ function withStates(bar: Bar, states: ReadonlyMap<string, BarState | null>): Bar
 /** Opens the item sheet for `name`; `from` gets the focus back when it closes. */
 type OpenSheet = (name: string, from: HTMLElement) => void
 
+/**
+ * A write the server refused, and where to say so: next to what was tapped, so the
+ * sentence shows however far the page is scrolled. `at` is `item:<name>` for a row,
+ * `rest` for marking the rest, `add` for adding what the search found nothing for.
+ */
+interface Problem {
+  at: string
+  message: string
+}
+
+const atItem = (name: string) => `item:${name}`
+
+/** The refusal, if it belongs at `at`. */
+function ProblemNote({ problem, at }: { problem: Problem | null; at: string }) {
+  if (problem?.at !== at) return null
+  return (
+    <p role="alert" className="bar-problem">
+      {problem.message}
+    </p>
+  )
+}
+
 export function BarPage() {
   const desktop = useIsDesktop()
   // undefined while loading.
   const [bar, setBar] = useState<Bar | undefined>(undefined)
   const [loadError, setLoadError] = useState<string | null>(null)
-  // The sentence of the last write that failed.
-  const [problem, setProblem] = useState<string | null>(null)
+  // The last write that failed.
+  const [problem, setProblem] = useState<Problem | null>(null)
   const [query, setQuery] = useState('')
   // The name of the item in the sheet.
   const [open, setOpen] = useState<string | null>(null)
@@ -69,7 +89,7 @@ export function BarPage() {
   const take = (server: Bar) => setBar(withStates(server, new Map(pending.current)))
 
   /** Optimistic: the rows change at once and roll back if the server refuses. */
-  const setStates = (names: string[], state: BarState) => {
+  const setStates = (names: string[], state: BarState, at = atItem(names[0])) => {
     if (!bar) return
     const free = names.filter((name) => !pending.current.has(name))
     if (free.length === 0) return
@@ -86,7 +106,7 @@ export function BarPage() {
       (err: unknown) => {
         for (const name of free) pending.current.delete(name)
         setBar((current) => current && withStates(current, previous))
-        setProblem(messageOf(err))
+        setProblem({ at, message: messageOf(err) })
       },
     )
   }
@@ -100,7 +120,7 @@ export function BarPage() {
       take(await changeBar(changes))
       setQuery('')
     } catch (err) {
-      setProblem(messageOf(err))
+      setProblem({ at: 'add', message: messageOf(err) })
     } finally {
       adding.current = false
     }
@@ -145,7 +165,8 @@ export function BarPage() {
   const canMake = bar.counts.can_make === 1 ? '1 drink' : `${bar.counts.can_make} drinks`
   const sheetItem = open === null ? null : (bar.items.find((item) => item.name === open) ?? null)
 
-  const rowProps = { desktop, query: q, onToggle: setStates, onOpen: openSheet }
+  const verb = desktop ? 'Click' : 'Tap'
+  const rowProps = { desktop, query: q, problem, onToggle: setStates, onOpen: openSheet }
 
   const title = (
     <div className="bar-title">
@@ -153,7 +174,7 @@ export function BarPage() {
       <p>
         {bar.set_up
           ? `One bar for the household · ${have} of ${total} bottles in`
-          : `Lækkert found ${total} bottles in your drinks. Tap Have for each one in your cabinet.`}
+          : `Lækkert found ${total} bottles in your drinks. ${verb} Have for each one in your cabinet.`}
       </p>
       {!bar.set_up && <Progress sorted={total - allUnsorted.length} total={total} />}
     </div>
@@ -190,7 +211,7 @@ export function BarPage() {
       items={unsortedShown}
       count={allUnsorted.length}
       setUp={bar.set_up}
-      onRest={() => setStates(unsortedShown.map((item) => item.name), 'dont')}
+      onRest={() => setStates(unsortedShown.map((item) => item.name), 'dont', 'rest')}
       row={rowProps}
     />
   )
@@ -200,7 +221,13 @@ export function BarPage() {
   ))
 
   const noMatchSection = noMatch && (
-    <NoMatch query={q} desktop={desktop} onAdd={() => add({ have: [q] })} onFresh={() => add({ fresh: [q] })} />
+    <NoMatch
+      query={q}
+      desktop={desktop}
+      problem={problem}
+      onAdd={() => add({ have: [q] })}
+      onFresh={() => add({ fresh: [q] })}
+    />
   )
 
   const freshSection = freshShown.length > 0 && <FreshSection items={freshShown} onOpen={openSheet} />
@@ -231,12 +258,6 @@ export function BarPage() {
             </>
           )}
         </div>
-
-        {problem && (
-          <p role="alert" className="bar-problem">
-            {problem}
-          </p>
-        )}
 
         {desktop ? (
           <div className="bar-columns">
@@ -319,7 +340,9 @@ interface RowProps {
   desktop: boolean
   /** The search, to say which other name matched. */
   query: string
-  onToggle: (names: string[], state: BarState) => void
+  /** A refused write, shown in the row it belongs to. */
+  problem: Problem | null
+  onToggle: (names: string[], state: BarState, at?: string) => void
   onOpen: OpenSheet
 }
 
@@ -341,7 +364,7 @@ function NameButton({ item, query, onOpen }: { item: BarItem; query: string; onO
 }
 
 /** A sorted item: one tap flips have and don't have. */
-function ItemRow({ item, desktop, query, onToggle, onOpen }: RowProps & { item: BarItem }) {
+function ItemRow({ item, desktop, query, problem, onToggle, onOpen }: RowProps & { item: BarItem }) {
   const name = capitalise(item.name)
   const verb = desktop ? 'Click' : 'Tap'
   const isHave = item.state === 'have'
@@ -370,6 +393,7 @@ function ItemRow({ item, desktop, query, onToggle, onOpen }: RowProps & { item: 
           <More />
         </button>
       )}
+      <ProblemNote problem={problem} at={atItem(item.name)} />
     </div>
   )
 }
@@ -447,11 +471,13 @@ function UnsortedSection({
                   <MinusCircle />
                   Don't have
                 </button>
+                <ProblemNote problem={row.problem} at={atItem(item.name)} />
               </div>
             )
           })}
         </div>
       ))}
+      <ProblemNote problem={row.problem} at="rest" />
       <button type="button" className="bar-rest" onClick={onRest}>
         {items.length === 1 ? 'Mark it as don’t have' : `Mark the other ${items.length} as don’t have`}
       </button>
@@ -490,11 +516,13 @@ function FreshSection({ items, onOpen }: { items: BarItem[]; onOpen: OpenSheet }
 function NoMatch({
   query,
   desktop,
+  problem,
   onAdd,
   onFresh,
 }: {
   query: string
   desktop: boolean
+  problem: Problem | null
   onAdd: () => void
   onFresh: () => void
 }) {
@@ -507,6 +535,7 @@ function NoMatch({
           ? 'Check the spelling, or add it as a bottle you have.'
           : 'Check the spelling, or add it. It goes in as a bottle you have, and you can change that after.'}
       </p>
+      <ProblemNote problem={problem} at="add" />
       <button type="button" className="bar-nomatch-add" onClick={onAdd}>
         <Plus size={20} />
         Add ‘{query}’ to the bar

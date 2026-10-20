@@ -4,7 +4,7 @@
 
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
-import { KIND_LABELS, KINDS, usedText } from './bar'
+import { KIND_LABELS, KINDS, messageOf, usedText } from './bar'
 import { capitalise } from './format'
 import { Check, Chevron, Close, Fold, MinusCircle } from './icons'
 import type { Bar, BarChanges, BarItem, Kind } from './types'
@@ -47,8 +47,13 @@ export function BarItemSheet({ item, bar, open, onClose, onChange }: BarItemShee
         event.preventDefault()
         onClose()
       }}
-      // A click on the dialog itself, not its content, is a click on the backdrop.
-      onClick={(event) => event.target === event.currentTarget && onClose()}
+      // Only a click outside the sheet's box is on the backdrop; its own padding is not.
+      onClick={(event) => {
+        const box = event.currentTarget.getBoundingClientRect()
+        const { clientX: x, clientY: y } = event
+        if (event.target === event.currentTarget && (x < box.left || x > box.right || y < box.top || y > box.bottom))
+          onClose()
+      }}
     >
       {shown && (
         <SheetBody key={item.name} item={item} bar={bar} titleId={titleId} onClose={onClose} onChange={onChange} />
@@ -56,8 +61,6 @@ export function BarItemSheet({ item, bar, open, onClose, onChange }: BarItemShee
     </dialog>
   )
 }
-
-const messageOf = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong')
 
 const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1)
 

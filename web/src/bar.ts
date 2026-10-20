@@ -88,3 +88,6 @@ export function topFresh(recipes: RecipeSummary[]): { item: string; count: numbe
   }
   return top
 }
+
+/** The sentence to show for a failed request: the server's own, when it gave one. */
+export const messageOf = (err: unknown): string => (err instanceof Error ? err.message : 'Something went wrong.')
