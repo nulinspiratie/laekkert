@@ -1,0 +1,282 @@
+import httpx2
+import pytest
+from conftest import call, rpc
+
+from app.api import SAVE_FAILED, SAVE_INCOMPLETE
+from app.recipes.store import RecipeStore, SaveIncomplete
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
+PAGE = "https://example.com/dal"
+PHOTO = "https://example.com/dal.jpg"
+OTHER_PHOTO = "https://example.com/other.png"
+NO_PHOTO_PAGE = "https://example.com/plain"
+
+RECIPE = {
+    "name": "Quick dal",
+    "category": "mains",
+    "servings": 2,
+    "ingredients": [{"amount": 200, "unit": "g", "item": "red lentils"}],
+    "steps": ["Simmer."],
+}
+
+
+def html(head):
+    return httpx2.Response(
+        200,
+        headers={"content-type": "text/html; charset=utf-8"},
+        text=f"<html><head>{head}</head><body></body></html>",
+    )
+
+
+def image(body=PNG, content_type="image/png"):
+    return httpx2.Response(200, headers={"content-type": content_type}, content=body)
+
+
+@pytest.fixture(autouse=True)
+def network(routes):
+    routes[PAGE] = html('<meta property="og:image" content="/dal.jpg">')
+    routes[PHOTO] = image()
+    routes[OTHER_PHOTO] = image()
+    routes[NO_PHOTO_PAGE] = html("<title>Plain</title>")
+
+
+def add(client, side="food", **arguments):
+    return call(client, "add_recipe", {"side": side, "recipe": RECIPE, **arguments})
+
+
+def saved(res):
+    assert res["isError"] is False, res
+    return res["structuredContent"]
+
+
+def text(res):
+    """The sentence of a tool error; the SDK puts its own prefix before it."""
+    assert res["isError"] is True
+    prefix = "Error executing tool add_recipe: "
+    message = res["content"][0]["text"]
+    return message.removeprefix(prefix)
+
+
+def read(client, side, slug):
+    return call(client, "read_recipe", {"side": side, "slug": slug})[
+        "structuredContent"
+    ]
+
+
+def test_add_recipe_minimal(client, store):
+    result = saved(add(client))
+    assert result["side"] == "food"
+    assert result["slug"] == "quick-dal"
+    assert result["version"] == 1
+    assert result["path"] == "/food/quick-dal"
+    assert result["link"] == "https://laekkert.serwan.me/food/quick-dal"
+    assert result["photo"] is False
+    assert result["warnings"] == []
+    shown = read(client, "food", "quick-dal")
+    assert shown["name"] == "Quick dal"
+    assert shown["ingredients"][0]["item"] == "red lentils"
+    assert shown["source"] is None
+    assert store.timeline("food", "quick-dal")[0].via == "claude"
+
+
+def test_add_recipe_on_drinks(client):
+    recipe = {**RECIPE, "name": "Lime fizz", "category": "mocktails"}
+    res = call(client, "add_recipe", {"side": "drinks", "recipe": recipe})
+    assert saved(res)["path"] == "/drinks/lime-fizz"
+
+
+def test_add_recipe_without_host_header_has_no_link(client):
+    # The result's link comes from the Host header; without one there is none.
+    res = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "add_recipe",
+                "arguments": {"side": "food", "recipe": RECIPE},
+            },
+        },
+        headers={
+            "Accept": "application/json, text/event-stream",
+            "MCP-Protocol-Version": "2025-06-18",
+            "Host": "",
+        },
+    ).json()["result"]
+    assert "link" not in saved(res)
+
+
+def test_add_recipe_from_url_grabs_og_image(client):
+    result = saved(add(client, source_url=PAGE))
+    assert result["photo"] is True
+    assert result["warnings"] == []
+    shown = read(client, "food", result["slug"])
+    assert shown["source"]["url"] == PAGE
+    assert shown["image"].startswith("img-")
+
+
+def test_add_recipe_image_url_wins(client, routes):
+    asked = []
+    routes[PAGE] = lambda request: asked.append(request) or html("")
+    result = saved(add(client, source_url=PAGE, image_url=OTHER_PHOTO))
+    assert result["photo"] is True
+    assert result["warnings"] == []
+    # The page was never asked for its own photo.
+    assert asked == []
+    assert read(client, "food", result["slug"])["source"]["url"] == PAGE
+
+
+def test_add_recipe_page_without_photo_warns(client):
+    result = saved(add(client, source_url=NO_PHOTO_PAGE))
+    assert result["photo"] is False
+    assert result["warnings"] == ["Saved without a photo: the page has no main photo"]
+    assert read(client, "food", result["slug"])["source"]["url"] == NO_PHOTO_PAGE
+
+
+def test_add_recipe_page_that_fails_warns(client):
+    result = saved(add(client, source_url="https://example.com/gone"))
+    assert result["warnings"] == ["Saved without a photo: the site answered 404"]
+
+
+def test_add_recipe_no_source_no_photo_attempt(client, routes):
+    seen = []
+    routes[PHOTO] = lambda request: seen.append(request) or image()
+    result = saved(add(client))
+    assert result["warnings"] == []
+    assert seen == []
+
+
+@pytest.mark.parametrize(
+    "url, response, sentence",
+    [
+        (
+            "https://example.com/page.html",
+            httpx2.Response(
+                200, headers={"content-type": "image/jpeg"}, content=b"<html>hi</html>"
+            ),
+            "that link isn't a supported photo",
+        ),
+        (
+            "https://example.com/pic.svg",
+            httpx2.Response(
+                200,
+                headers={"content-type": "image/svg+xml"},
+                content=b"<svg xmlns='http://www.w3.org/2000/svg'/>",
+            ),
+            "that link isn't a supported photo",
+        ),
+        ("https://evil.test/pic.jpg", image(), "that link points to a private address"),
+        ("https://example.com/missing.jpg", None, "the site answered 404"),
+    ],
+    ids=["html", "svg", "private-host", "not-found"],
+)
+def test_add_recipe_bad_image_still_saves(client, routes, url, response, sentence):
+    if response is not None:
+        routes[url] = response
+    result = saved(add(client, image_url=url))
+    assert result["photo"] is False
+    assert result["warnings"] == [f"Saved without a photo: {sentence}"]
+    assert read(client, "food", result["slug"])["image"] is None
+
+
+def test_add_recipe_refuses_cups(client, store):
+    recipe = {
+        **RECIPE,
+        "ingredients": [{"amount": 1, "unit": "cup", "item": "flour"}],
+    }
+    res = call(client, "add_recipe", {"side": "food", "recipe": recipe})
+    assert "unit" in text(res)
+    assert [r.slug for r in store.list("food")] == [
+        "chicken-leek-traybake",
+        "red-lentil-dal",
+    ]
+
+
+def test_unit_description_points_to_the_style_guide(client):
+    tools = rpc(client, 2, "tools/list").json()["result"]["tools"]
+    schema = next(t for t in tools if t["name"] == "add_recipe")["inputSchema"]
+    unit = schema["$defs"]["DraftIngredient"]["properties"]["unit"]
+    assert unit["description"] == (
+        "Metric only: g, ml, piece, dash, pinch, to taste; tsp/tbsp are converted. "
+        "Convert cups and ounces first (see the style guide)."
+    )
+
+
+def test_add_recipe_wrong_category_sentence(client, routes):
+    seen = []
+    routes[PHOTO] = lambda request: seen.append(request) or image()
+    recipe = {**RECIPE, "category": "cocktails"}
+    res = call(
+        client,
+        "add_recipe",
+        {"side": "food", "recipe": recipe, "image_url": PHOTO},
+    )
+    assert text(res) == (
+        "Category for food must be one of mains, sides, desserts, sauces, prep"
+    )
+    assert seen == []
+
+
+def test_add_recipe_tsp_converted(client):
+    recipe = {
+        **RECIPE,
+        "ingredients": [{"amount": 1, "unit": "tsp", "item": "salt"}],
+    }
+    res = call(client, "add_recipe", {"side": "food", "recipe": recipe})
+    shown = read(client, "food", saved(res)["slug"])
+    assert shown["ingredients"][0]["amount"] == 6
+    assert shown["ingredients"][0]["unit"] == "g"
+
+
+def test_add_recipe_duplicate_source_refused(client, routes, store):
+    saved(add(client, source_url=PAGE))
+    seen = []
+    routes[PHOTO] = lambda request: seen.append(request) or image()
+    res = add(client, source_url=PAGE)
+    assert text(res) == "Already in Lækkert as quick-dal; use edit_recipe to change it"
+    assert seen == []
+    assert len(store.list("food")) == 3
+
+
+def test_add_recipe_same_source_on_other_side_is_fine(client):
+    saved(add(client, source_url=PAGE))
+    recipe = {**RECIPE, "category": "mocktails"}
+    res = call(
+        client,
+        "add_recipe",
+        {"side": "drinks", "recipe": recipe, "source_url": PAGE},
+    )
+    assert saved(res)["side"] == "drinks"
+
+
+def test_add_recipe_javascript_source_refused(client, routes):
+    seen = []
+    routes["javascript:alert(1)"] = lambda request: seen.append(request) or image()
+    res = add(client, source_url="javascript:alert(1)")
+    assert text(res) == "The source link must start with http:// or https://"
+    assert seen == []
+
+
+def test_add_recipe_rejects_unknown_field(client):
+    recipe = {**RECIPE, "colour": "red"}
+    res = call(client, "add_recipe", {"side": "food", "recipe": recipe})
+    assert "colour" in text(res)
+
+
+def test_add_recipe_blank_name_sentence(client):
+    res = add(client, recipe={**RECIPE, "name": "  "})
+    assert text(res) == "Give the recipe a name"
+
+
+def test_add_recipe_save_failures(client, monkeypatch):
+    def broken(self, *args):
+        raise OSError("disk full")
+
+    def half(self, *args):
+        raise SaveIncomplete("rollback failed")
+
+    monkeypatch.setattr(RecipeStore, "create", broken)
+    assert text(add(client)) == SAVE_FAILED
+    monkeypatch.setattr(RecipeStore, "create", half)
+    assert text(add(client)) == SAVE_INCOMPLETE

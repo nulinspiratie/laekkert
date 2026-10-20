@@ -1,60 +1,13 @@
 import importlib.resources
-import socket
 
-import httpx2
 import pytest
+from conftest import HEADERS, call, rpc
 from starlette.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
 from app.mcp_server import STYLE_GUIDE
-from app.recipes.catalog import Catalog
 from app.recipes.drafts import RecipeDraft
-from app.recipes.fetch import Fetcher
-from app.recipes.store import RecipeStore
-from app.recipes.uploads import UploadStore
-
-HEADERS = {
-    "Accept": "application/json, text/event-stream",
-    "MCP-Protocol-Version": "2025-06-18",
-}
-
-
-def fake_fetcher():
-    """A Fetcher that never touches the network; later tasks add routes."""
-
-    def handler(request):
-        return httpx2.Response(404)
-
-    async def resolve(host, port):
-        raise socket.gaierror(socket.EAI_NONAME, "not known")
-
-    return Fetcher(transport=httpx2.MockTransport(handler), resolve=resolve)
-
-
-@pytest.fixture
-def client(tmp_path):
-    app = create_app(Settings(), data_dir=tmp_path, fetcher=fake_fetcher())
-    with TestClient(app, base_url="https://laekkert.serwan.me") as c:
-        yield c
-
-
-@pytest.fixture
-def store(client, tmp_path):
-    """A second store on the app's data folder, to set up state the tools read."""
-    return RecipeStore(tmp_path, Catalog(tmp_path), UploadStore(tmp_path))
-
-
-def rpc(client, id, method, params=None):
-    body = {"jsonrpc": "2.0", "id": id, "method": method}
-    if params is not None:
-        body["params"] = params
-    return client.post("/mcp", json=body, headers=HEADERS)
-
-
-def call(client, name, arguments):
-    params = {"name": name, "arguments": arguments}
-    return rpc(client, 3, "tools/call", params).json()["result"]
 
 
 def test_initialize_through_public_hostname(client):
@@ -76,7 +29,13 @@ def test_initialize_through_public_hostname(client):
 
 def test_tools_listed(client):
     names = {t["name"] for t in rpc(client, 2, "tools/list").json()["result"]["tools"]}
-    assert names == {"list_recipes", "read_recipe", "search_recipes", "get_style_guide"}
+    assert names == {
+        "list_recipes",
+        "read_recipe",
+        "search_recipes",
+        "add_recipe",
+        "get_style_guide",
+    }
 
 
 def test_list_recipes_tool(client):

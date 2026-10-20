@@ -36,7 +36,12 @@ class DraftIngredient(Ingredient):
     so their messages can name the row.
     """
 
-    unit: Unit | Literal["tsp", "tbsp"]  # type: ignore[assignment]
+    unit: Unit | Literal["tsp", "tbsp"] = Field(  # type: ignore[assignment]
+        description=(
+            "Metric only: g, ml, piece, dash, pinch, to taste; tsp/tbsp are "
+            "converted. Convert cups and ounces first (see the style guide)."
+        )
+    )
     amount: float | None = Field(default=None, allow_inf_nan=False, le=MAX_AMOUNT)
     item: str = ""
 

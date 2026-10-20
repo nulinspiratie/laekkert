@@ -306,6 +306,13 @@ class RecipeStore:
             "version": self.current_version(side, slug) or 0,
         }
 
+    def check(self, side: Side, draft: RecipeDraft) -> None:
+        """Raise the ValueError `create` would raise for this draft, saving nothing."""
+        if side not in SIDES:
+            raise ValueError("Pick food or drinks")
+        slug = self._free_slug(side, draft.name)
+        to_recipe(draft, side=side, slug=slug, marks=[], catalog=self._catalog)
+
     @_locked
     def create(self, side: Side, draft: RecipeDraft, via: Via) -> Recipe:
         if side not in SIDES:

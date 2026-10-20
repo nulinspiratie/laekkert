@@ -1,17 +1,20 @@
 """MCP server, so Claude (claude.ai on the phone included) can read recipes."""
 
+import re
 from importlib import resources
 from typing import Any, Literal
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
-from pydantic import Field
+from pydantic import BaseModel, ConfigDict, Field
 
-from app.recipes.fetch import Fetcher
+from app.api import SAVE_FAILED, SAVE_INCOMPLETE
+from app.recipes.drafts import DraftIngredient, parse_draft
+from app.recipes.fetch import Fetcher, FetchError
 from app.recipes.model import Mark, Recipe
 from app.recipes.search import search
-from app.recipes.store import RecipeStore
-from app.recipes.uploads import UploadStore
+from app.recipes.store import RecipeStore, SaveIncomplete
+from app.recipes.uploads import ImageTooLarge, UnsupportedImage, UploadStore
 
 INSTRUCTIONS = (
     "Lækkert is Serwan's recipe app. Food and drinks are separate sides and are "
@@ -24,6 +27,45 @@ INSTRUCTIONS = (
 STYLE_GUIDE = (resources.files("app") / "style_guide.md").read_text(encoding="utf-8")
 
 Sort = Literal["relevance", "name", "time", "rating", "recently_made"]
+
+NO_PHOTO = "the page has no main photo"
+# A host name or address with an optional port; anything else is not echoed back.
+HOST = re.compile(r"[A-Za-z0-9.-]+(:[0-9]{1,5})?")
+
+
+class NewRecipe(BaseModel):
+    """A recipe to add. Follow the style guide (get_style_guide)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(
+        description="The recipe's name, in sentence case (see the style guide)"
+    )
+    category: str = Field(
+        description=(
+            "Food: mains, sides, desserts, sauces or prep. "
+            "Drinks: cocktails, mocktails, syrups or prep."
+        )
+    )
+    servings: int = Field(description="How many it serves; amounts are for this many")
+    time_minutes: int | None = Field(
+        default=None, description="Total time in minutes, or leave out if unknown"
+    )
+    ingredients: list[DraftIngredient] = Field(
+        description="Ingredients in metric units only (see the style guide for units)"
+    )
+    steps: list[str] = Field(
+        default_factory=list,
+        description="The method, one short step each (see the style guide)",
+    )
+    tags: list[str] = Field(
+        default_factory=list,
+        description="Tags, reusing the ones already in use (see the style guide)",
+    )
+
+
+def lower_first(sentence: str) -> str:
+    return sentence[:1].lower() + sentence[1:]
 
 
 def order(entries: list[dict], sort: Sort) -> list[dict]:
@@ -113,6 +155,84 @@ def build_mcp(store: RecipeStore, uploads: UploadStore, fetcher: Fetcher) -> MCP
             **recipe.model_dump(mode="json"),
             **store.derived(recipe.side, recipe.slug),
         }
+
+    def saved(recipe: Recipe, ctx: Context, warnings: list[str]) -> dict[str, Any]:
+        """The result of a write: where the recipe is, and anything left undone."""
+        path = f"/{recipe.side}/{recipe.slug}"
+        result: dict[str, Any] = {
+            "side": recipe.side,
+            "slug": recipe.slug,
+            "version": store.derived(recipe.side, recipe.slug)["version"],
+            "path": path,
+        }
+        host = (ctx.headers or {}).get("host", "")
+        if HOST.fullmatch(host):
+            result["link"] = f"https://{host}{path}"
+        return {**result, "photo": recipe.image is not None, "warnings": warnings}
+
+    async def fetch_photo(
+        source_url: str | None, image_url: str | None
+    ) -> tuple[str | None, list[str]]:
+        """Fetch and park a photo; the name, and a warning if there is none."""
+        if not (image_url or source_url):
+            return None, []
+        try:
+            url = image_url
+            if url is None:
+                assert source_url is not None
+                url = await fetcher.page_image_url(source_url)
+            if url is None:
+                return None, [f"Saved without a photo: {NO_PHOTO}"]
+            return uploads.save_detected(await fetcher.image(url)), []
+        except (FetchError, UnsupportedImage, ImageTooLarge) as err:
+            return None, [f"Saved without a photo: {lower_first(str(err))}"]
+
+    @server.tool()
+    async def add_recipe(
+        side: Literal["food", "drinks"],
+        recipe: NewRecipe,
+        ctx: Context,
+        source_url: str | None = None,
+        image_url: str | None = None,
+    ) -> dict[str, Any]:
+        """Add a recipe. Read the style guide first and follow it.
+
+        Give source_url when the recipe comes from a web page: it is kept as the
+        recipe's source and the page's main photo is fetched and attached.
+        image_url attaches a photo from that link instead. If no photo can be
+        fetched the recipe is still saved, with a warning. A recipe already
+        saved with the same source_url on that side is refused.
+        """
+        source_url = (source_url or "").strip() or None
+        image_url = (image_url or "").strip() or None
+        try:
+            draft = parse_draft(
+                {
+                    **recipe.model_dump(),
+                    "source": {"url": source_url} if source_url else None,
+                    "image": None,
+                }
+            )
+            # Everything the store would refuse is refused before any fetch.
+            store.check(side, draft)
+            if source_url:
+                for other in store.list(side):
+                    if other.source and other.source.url == source_url:
+                        raise ToolError(
+                            f"Already in Lækkert as {other.slug}; "
+                            "use edit_recipe to change it"
+                        )
+            name, warnings = await fetch_photo(source_url, image_url)
+            created = store.create(
+                side, draft.model_copy(update={"image": name}), "claude"
+            )
+        except ValueError as err:
+            raise ToolError(str(err)) from None
+        except SaveIncomplete:
+            raise ToolError(SAVE_INCOMPLETE) from None
+        except OSError:
+            raise ToolError(SAVE_FAILED) from None
+        return saved(created, ctx, warnings)
 
     @server.tool()
     def get_style_guide() -> str:
