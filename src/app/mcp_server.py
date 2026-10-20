@@ -1,7 +1,9 @@
 """MCP server, so Claude (on the phone too) can read, add and edit recipes."""
 
+import contextlib
 import logging
 import re
+from collections.abc import Iterator
 from importlib import resources
 from typing import Any, Literal
 
@@ -9,7 +11,9 @@ from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.api import SAVE_FAILED, SAVE_INCOMPLETE
+from app.api import SAVE_FAILED, SAVE_INCOMPLETE, bar_changes, with_bar
+from app.recipes.bar import Bar, BarView, InventoryUnavailable
+from app.recipes.catalog import KINDS, CatalogUnavailable
 from app.recipes.drafts import DraftIngredient, RecipeDraft, parse_draft
 from app.recipes.fetch import Fetcher, FetchError
 from app.recipes.model import Mark, Recipe
@@ -27,12 +31,15 @@ INSTRUCTIONS = (
     "never mixed. You can list, search, read, add and edit recipes. Before adding "
     "or editing, read the style guide (get_style_guide or the laekkert://style-guide "
     "resource) and follow it. Amounts are metric (g, ml)."
+    " Drinks have a bar of bottles the household has or doesn't have (read_bar, "
+    "manage_inventory); fresh items such as limes are never tracked."
 )
 
 # Package data, so it is in the wheel and the image (the Dockerfile copies no docs/).
 STYLE_GUIDE = (resources.files("app") / "style_guide.md").read_text(encoding="utf-8")
 
 Sort = Literal["relevance", "name", "time", "rating", "recently_made"]
+BarStatus = Literal["can_make", "fresh_only"]
 
 NO_PHOTO = "the page has no main photo"
 PHOTO_FAILED = "the photo could not be fetched"
@@ -143,11 +150,32 @@ def order(entries: list[dict], sort: Sort) -> list[dict]:
     return known + unknown
 
 
-def build_mcp(store: RecipeStore, uploads: UploadStore, fetcher: Fetcher) -> MCPServer:
+@contextlib.contextmanager
+def bar_refusals() -> Iterator[None]:
+    """Turn what the bar refuses, or cannot read, into a ToolError with its sentence."""
+    try:
+        yield
+    except (CatalogUnavailable, InventoryUnavailable) as err:
+        raise ToolError(str(err)) from None
+    except ValueError as err:  # BarError, and the sentence of an invalid change
+        raise ToolError(str(err)) from None
+    except OSError:
+        raise ToolError(SAVE_FAILED) from None
+
+
+def build_mcp(
+    store: RecipeStore, uploads: UploadStore, fetcher: Fetcher, bar: Bar
+) -> MCPServer:
     server = MCPServer("laekkert", instructions=INSTRUCTIONS)
 
-    def entry(recipe: Recipe) -> dict:
-        return {**recipe.summary(), **store.derived(recipe.side, recipe.slug)}
+    def entry(recipe: Recipe, view: BarView | None = None) -> dict:
+        """A summary; a drink's has its bar status when there is a view."""
+        summary = {**recipe.summary(), **store.derived(recipe.side, recipe.slug)}
+        return summary if view is None else with_bar(summary, recipe, view)
+
+    def view_for(side: str) -> BarView | None:
+        """The bar, read once per call; only drinks have one."""
+        return bar.view() if side == "drinks" else None
 
     @server.tool()
     def list_recipes(side: Literal["food", "drinks"]) -> list[dict]:
@@ -155,10 +183,13 @@ def build_mcp(store: RecipeStore, uploads: UploadStore, fetcher: Fetcher) -> MCP
 
         Each entry has slug, name, side, category, time_minutes, tags, marks,
         image, rating (stars, or null if unrated), last_made (when it was last
-        made, or null) and version. Use read_recipe with the slug for
-        ingredients and steps.
+        made, or null) and version. Drinks also have bar: whether the bar can
+        make them (status can_make, fresh_only, missing or unsorted) and which
+        bottles are missing, unsorted or fresh. Use read_recipe with the slug
+        for ingredients and steps.
         """
-        return [entry(r) for r in store.list(side)]
+        view = view_for(side)
+        return [entry(r, view) for r in store.list(side)]
 
     @server.tool()
     def search_recipes(
@@ -169,6 +200,7 @@ def build_mcp(store: RecipeStore, uploads: UploadStore, fetcher: Fetcher) -> MCP
         category: str | None = None,
         sort: Sort = "relevance",
         limit: int = Field(20, ge=1, le=50),
+        bar: BarStatus | None = None,
     ) -> list[dict]:
         """Search the recipes on one side, with the same entries as list_recipes.
 
@@ -178,7 +210,12 @@ def build_mcp(store: RecipeStore, uploads: UploadStore, fetcher: Fetcher) -> MCP
         relevance (best match first), name, time (shortest first), rating
         (highest first) or recently_made (latest first); recipes without a
         time, rating or made date come last. At most limit entries come back.
+        bar (drinks only) keeps the drinks the bar can make now (can_make) or
+        can make once fresh items such as limes are at hand (fresh_only).
         """
+        if bar is not None and side != "drinks":
+            raise ToolError("The bar filter is for drinks only.")
+        view = view_for(side)
         wanted = {t.casefold() for t in tags}
         found = []
         for recipe in search(store.list(side), query):
@@ -191,7 +228,9 @@ def build_mcp(store: RecipeStore, uploads: UploadStore, fetcher: Fetcher) -> MCP
                 and recipe.category.casefold() != category.casefold()
             ):
                 continue
-            found.append(entry(recipe))
+            if bar is not None and view.status(recipe)["status"] != bar:
+                continue
+            found.append(entry(recipe, view))
         return order(found, sort)[:limit]
 
     @server.tool()
@@ -209,6 +248,67 @@ def build_mcp(store: RecipeStore, uploads: UploadStore, fetcher: Fetcher) -> MCP
             **recipe.model_dump(mode="json"),
             **store.derived(recipe.side, recipe.slug),
         }
+
+    @server.tool()
+    def read_bar() -> dict[str, Any]:
+        """Read the bar: the drink ingredients the household has or doesn't have.
+
+        items lists every bottle with name, aliases (other names that mean it),
+        kind, fresh, state (have, dont or null when not sorted yet), used_in
+        (the drinks that use it) and recipe (the syrup recipe that makes it, or
+        null). set_up is false until something has been sorted. counts says how
+        many drinks can be made, can be made with fresh items, are missing a
+        bottle or have an unsorted one. Use manage_inventory to change it.
+        """
+        return bar.view().json()
+
+    @server.tool()
+    def manage_inventory(
+        have: list[str] = Field(default_factory=list),  # noqa: B008
+        dont_have: list[str] = Field(default_factory=list),  # noqa: B008
+        fresh: list[str] = Field(default_factory=list),  # noqa: B008
+        not_fresh: list[str] = Field(default_factory=list),  # noqa: B008
+        kinds: dict[str, str] = Field(default_factory=dict),  # noqa: B008
+        add_names: dict[str, list[str]] = Field(default_factory=dict),  # noqa: B008
+        remove_names: dict[str, list[str]] = Field(default_factory=dict),  # noqa: B008
+        fold: dict[str, str] = Field(default_factory=dict),  # noqa: B008
+    ) -> dict[str, Any]:
+        """Change the bar, all or nothing, and return it as read_bar does.
+
+        Every argument is optional. have and dont_have mark bottles the household
+        has or doesn't have. fresh marks items such as limes and mint as fresh,
+        and not_fresh undoes that; fresh items are never tracked, so they are
+        neither had nor not had. Names in have, dont_have and fresh that the bar
+        doesn't know yet are added. kinds sets an item's kind (spirits,
+        liqueurs, aperitifs, bitters, syrups or other), keyed by item name.
+        add_names and remove_names give an item other names, keyed by item name.
+        fold maps an item to the item it is a duplicate of: the first is merged
+        into the second and its name becomes another name for it. Names are
+        matched ignoring case and accents. If any part of the change is refused
+        nothing is changed.
+        """
+        with bar_refusals():
+            # Checked here, not in the schema, so the refusal is a sentence.
+            for kind in kinds.values():
+                if kind not in KINDS:
+                    raise ToolError(
+                        f"‘{kind}’ isn't a kind. Use {', '.join(KINDS[:-1])} or "
+                        f"{KINDS[-1]}."
+                    )
+            changes = bar_changes(
+                {
+                    "have": have,
+                    "dont_have": dont_have,
+                    "fresh": fresh,
+                    "not_fresh": not_fresh,
+                    "kinds": kinds,
+                    "add_names": add_names,
+                    "remove_names": remove_names,
+                    "fold": fold,
+                }
+            )
+            # Claude cannot delete: the tool has no delete, and the bar refuses too.
+            return bar.apply(changes, allow_delete=False).json()
 
     def saved(recipe: Recipe, ctx: Context, warnings: list[str]) -> dict[str, Any]:
         """The result of a write: where the recipe is, and anything left undone."""

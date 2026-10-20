@@ -42,7 +42,7 @@ def create_app(
     uploads = UploadStore(data_dir)
     store = RecipeStore(data_dir, catalog, uploads)
     bar = Bar(data_dir, catalog, store)
-    server = build_mcp(store, uploads, fetcher or Fetcher())
+    server = build_mcp(store, uploads, fetcher or Fetcher(), bar)
     mcp_app = server.streamable_http_app(
         streamable_http_path="/mcp",
         stateless_http=True,
