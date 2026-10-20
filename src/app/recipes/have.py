@@ -20,6 +20,7 @@ MAX_TERMS = 20
 MAX_TERM_LENGTH = 60
 MIN_FUZZY_LENGTH = 5
 MIN_RATIO = 80
+HAVE_FOOD_ONLY = '"What you have" is for food only.'
 
 
 def clean_terms(raw: list[str]) -> list[str]:
@@ -80,9 +81,23 @@ def _is_assumed(row: Ingredient, entry: CatalogEntry | None) -> bool:
     )
 
 
+def _prepare(
+    terms: list[str], catalog: Catalog
+) -> list[tuple[list[str], CatalogEntry | None]]:
+    """Each term's words and catalog entry, looked up once for many recipes."""
+    return [(words(term), catalog.entry(term)) for term in terms]
+
+
 def match(recipe: Recipe, terms: list[str], catalog: Catalog) -> HaveMatch:
     """Which rows the terms cover and which are missing; terms are cleaned."""
-    term_entries = [(words(term), catalog.entry(term)) for term in terms]
+    return _match(recipe, _prepare(terms, catalog), catalog)
+
+
+def _match(
+    recipe: Recipe,
+    term_entries: list[tuple[list[str], CatalogEntry | None]],
+    catalog: Catalog,
+) -> HaveMatch:
     # One group per distinct ingredient, in recipe order, named by its first row.
     groups: dict[str, dict] = {}
     covered_terms: set[int] = set()
@@ -113,9 +128,10 @@ def rank(
     recipes: list[Recipe], terms: list[str], catalog: Catalog
 ) -> list[tuple[Recipe, HaveMatch]]:
     """Recipes that use at least one term: fewest missing, most terms, then name."""
+    prepared = _prepare(terms, catalog)
     kept = []
     for recipe in recipes:
-        result = match(recipe, terms, catalog)
+        result = _match(recipe, prepared, catalog)
         if result.matched:
             kept.append((recipe, result))
     kept.sort(

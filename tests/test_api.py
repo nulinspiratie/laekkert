@@ -180,3 +180,53 @@ def test_image_route_404s_for_unknown_recipe(client, tmp_path, path):
     response = client.get(path)
     assert response.status_code == 404
     assert response.json() == {"error": "not found"}
+
+
+FOOD_ONLY = '"What you have" is for food only.'
+
+
+def have_list(client, *params):
+    return client.get("/api/recipes", params=[("side", "food"), *params])
+
+
+def test_list_have_ranks_and_annotates(client):
+    response = have_list(client, ("have", "chicken"), ("have", "leeks"))
+    recipes = response.json()["recipes"]
+    assert [r["slug"] for r in recipes] == ["chicken-leek-traybake"]
+    assert recipes[0]["have"] == {
+        "matched": ["chicken thighs", "leeks"],
+        "missing": ["baby potatoes", "olive oil", "smoked paprika", "lemon"],
+    }
+
+
+def test_list_have_with_q(client):
+    both = have_list(client, ("q", "dal"), ("have", "onion")).json()["recipes"]
+    assert [r["slug"] for r in both] == ["red-lentil-dal"]
+    response = have_list(client, ("q", "traybake"), ("have", "onion"))
+    assert response.status_code == 200
+    assert response.json() == {"recipes": []}
+
+
+def test_list_have_nothing_matches(client):
+    response = have_list(client, ("have", "zzzz"))
+    assert response.status_code == 200
+    assert response.json() == {"recipes": []}
+
+
+@pytest.mark.parametrize("blank", ["", " "])
+def test_list_blank_have_is_ignored(client, blank):
+    plain = have_list(client).json()
+    blanked = have_list(client, ("have", blank))
+    assert blanked.status_code == 200
+    assert blanked.json() == plain
+    assert all("have" not in r for r in blanked.json()["recipes"])
+
+
+def test_list_have_on_drinks_is_refused(client):
+    response = client.get("/api/recipes?side=drinks&have=lime")
+    assert response.status_code == 400
+    assert response.json() == {"error": FOOD_ONLY}
+
+
+def test_list_blank_have_on_drinks_is_fine(client):
+    assert client.get("/api/recipes?side=drinks&have=%20").status_code == 200

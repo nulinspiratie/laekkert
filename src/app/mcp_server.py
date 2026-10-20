@@ -13,9 +13,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.api import SAVE_FAILED, SAVE_INCOMPLETE, bar_changes, with_bar
 from app.recipes.bar import Bar, BarView, InventoryUnavailable
-from app.recipes.catalog import KINDS, CatalogUnavailable
+from app.recipes.catalog import KINDS, Catalog, CatalogUnavailable
 from app.recipes.drafts import DraftIngredient, RecipeDraft, parse_draft
 from app.recipes.fetch import Fetcher, FetchError
+from app.recipes.have import HAVE_FOOD_ONLY, clean_terms, rank
 from app.recipes.model import Mark, Recipe
 from app.recipes.search import search
 from app.recipes.store import (
@@ -164,7 +165,11 @@ def bar_refusals() -> Iterator[None]:
 
 
 def build_mcp(
-    store: RecipeStore, uploads: UploadStore, fetcher: Fetcher, bar: Bar
+    store: RecipeStore,
+    catalog: Catalog,
+    uploads: UploadStore,
+    fetcher: Fetcher,
+    bar: Bar,
 ) -> MCPServer:
     server = MCPServer("laekkert", instructions=INSTRUCTIONS)
 
@@ -201,6 +206,7 @@ def build_mcp(
         sort: Sort = "relevance",
         limit: int = Field(20, ge=1, le=50),
         bar: BarStatus | None = None,
+        have: list[str] = Field(default_factory=list),  # noqa: B008
     ) -> list[dict]:
         """Search the recipes on one side, with the same entries as list_recipes.
 
@@ -212,9 +218,16 @@ def build_mcp(
         time, rating or made date come last. At most limit entries come back.
         bar (drinks only) keeps the drinks the bar can make now (can_make) or
         can make once fresh items such as limes are at hand (fresh_only).
+        have (food only) lists ingredients on hand, like ["chicken", "leeks"]:
+        it keeps recipes that use at least one, fewest missing first, instead of
+        sort. Each entry then has have: matched and missing ingredients (salt to
+        taste and water are assumed, never missing).
         """
         if bar is not None and side != "drinks":
             raise ToolError("The bar filter is for drinks only.")
+        terms = clean_terms(have)
+        if terms and side != "food":
+            raise ToolError(HAVE_FOOD_ONLY)
         view = view_for(side)
         wanted = {t.casefold() for t in tags}
         found = []
@@ -230,8 +243,13 @@ def build_mcp(
                 continue
             if bar is not None and view.status(recipe)["status"] != bar:
                 continue
-            found.append(entry(recipe, view))
-        return order(found, sort)[:limit]
+            found.append(recipe)
+        if terms:
+            return [
+                {**entry(recipe, view), "have": result.json()}
+                for recipe, result in rank(found, terms, catalog)[:limit]
+            ]
+        return order([entry(r, view) for r in found], sort)[:limit]
 
     @server.tool()
     def read_recipe(side: Literal["food", "drinks"], slug: str) -> dict[str, Any]:
