@@ -1,5 +1,5 @@
 // One bar item's sheet (BarItemSheetPhone): its state, drinks, other names, kind,
-// fresh or not, fold and delete. A bottom sheet on a phone, a centred dialog on
+// tracked or not, fold and delete. A bottom sheet on a phone, a centred dialog on
 // desktop (styles/bar.css). Each action is one change; a refusal shows inside.
 
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
@@ -78,10 +78,18 @@ function SheetBody({ item, bar, titleId, onClose, onChange }: SheetBodyProps) {
   const [foldInto, setFoldInto] = useState('')
   const [deleting, setDeleting] = useState(false)
   const busy = useRef(false)
-  const freshId = useId()
+  const trackId = useId()
+  const trackWhyId = useId()
   const whyId = useId()
 
   const name = capitalise(item.name)
+  // Why the Track it switch cannot be turned on; null when it can.
+  const neverTracked =
+    item.untracked_because === 'syrups'
+      ? 'Syrups are never tracked.'
+      : item.untracked_because === 'recipe'
+        ? "Lækkert has a recipe for it, so it's never tracked."
+        : null
   const used = item.used_in.length
   const others = bar.items.filter((other) => other.name !== item.name)
 
@@ -139,7 +147,7 @@ function SheetBody({ item, bar, titleId, onClose, onChange }: SheetBodyProps) {
       )}
 
       <div className="bar-sheet-body">
-        {!item.fresh && (
+        {item.tracked && (
           <div role="radiogroup" aria-label="In the bar" className="bar-sheet-state">
             <button
               type="button"
@@ -224,20 +232,25 @@ function SheetBody({ item, bar, titleId, onClose, onChange }: SheetBodyProps) {
           </select>
         </label>
 
-        <div className="bar-sheet-fresh">
-          <span className="bar-sheet-fresh-text">
-            <span id={freshId} className="bar-sheet-fresh-label">
-              Fresh item
+        <div className="bar-sheet-track">
+          <span className="bar-sheet-track-text">
+            <span id={trackId} className="bar-sheet-track-label">
+              Track it
             </span>
-            <span>Never tracked. Drinks that use it say ‘Buy fresh’.</span>
+            <span id={trackWhyId}>
+              {neverTracked ??
+                'Tracked items are bottles: a drink needs them before it shows under Can make. Turn it off for fresh things, syrups and mixers.'}
+            </span>
           </span>
           <button
             type="button"
             role="switch"
-            aria-checked={item.fresh}
-            aria-labelledby={freshId}
+            aria-checked={item.tracked}
+            aria-labelledby={trackId}
+            aria-describedby={trackWhyId}
+            disabled={neverTracked !== null}
             className="bar-switch"
-            onClick={() => void run(item.fresh ? { not_fresh: [item.name] } : { fresh: [item.name] })}
+            onClick={() => void run(item.tracked ? { untrack: [item.name] } : { track: [item.name] })}
           >
             <span className="bar-switch-track" aria-hidden="true">
               <span className="bar-switch-knob" />

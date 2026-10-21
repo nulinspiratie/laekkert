@@ -522,7 +522,6 @@
   --state-have: var(--accent-soft-ink);
   --state-on-have: #f2f5ee;
   --state-raised: #fbf8f0;
-  --state-fresh: #6a460c;
   --state-unsorted: #6c7368;
   padding-bottom: 8px;
   --stack-gap: 12px;
@@ -559,8 +558,8 @@
   color: var(--state-have);
 }
 
-.ingredients-bar-fresh {
-  color: var(--state-fresh);
+.ingredients-bar-also {
+  color: var(--accent-soft-ink);
 }
 
 /* A column: the line, then a refusal or the undo bar. */
@@ -625,8 +624,7 @@
   border-style: dotted;
 }
 
-.ingredient-state svg,
-.ingredient-fresh svg {
+.ingredient-state svg {
   flex: none;
 }
 
@@ -646,17 +644,6 @@
   border: 1.5px dashed var(--state-unsorted);
   background: var(--state-raised);
   color: var(--label);
-}
-
-.ingredient-fresh {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0 6px;
-  color: var(--state-fresh);
-  font-size: 14px;
-  font-weight: 600;
-  white-space: nowrap;
 }
 
 .ingredient-problem {
@@ -986,8 +973,7 @@
     gap: 14px;
   }
 
-  /* DrinkRecipeDesktop: 400 px wide, so a fresh row's label leaves the item
-     room to wrap by word. */
+  /* DrinkRecipeDesktop: 400 px wide. */
   .ingredients--drinks {
     flex-basis: 400px;
     max-width: 520px;
@@ -1010,11 +996,6 @@
   .ingredient-state {
     gap: 6px;
     padding: 0 12px;
-  }
-
-  .ingredient-fresh {
-    gap: 6px;
-    padding: 0 8px;
   }
 
   /* Too narrow for ingredients beside the method: the method wraps below, so

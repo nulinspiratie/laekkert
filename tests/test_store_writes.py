@@ -829,3 +829,21 @@ def test_failed_write_without_hard_links_changes_nothing(store, tmp_path, monkey
     assert raw(store, "drinks", "daiquiri") == old
     assert not list(tmp_path.rglob(".tmp-*"))
     assert snapshot(tmp_path) == before
+
+
+def test_category_tag_is_not_stored_and_re_adding_it_is_no_change(store):
+    created = store.create(
+        "drinks",
+        draft(name="Elderflower fizz", category="mocktails", tags=["mocktail"]),
+        "app",
+    )
+    assert created.tags == []
+    assert json.loads(raw(store, "drinks", "elderflower-fizz"))["tags"] == []
+    again = store.update(
+        "drinks",
+        "elderflower-fizz",
+        draft_of(created, tags=["mocktail"]),
+        "app",
+    )
+    assert again == created
+    assert versions(store, "drinks", "elderflower-fizz") == ["0001.json"]

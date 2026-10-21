@@ -58,6 +58,12 @@ def test_style_guide_has_groups_and_notes(client):
     assert "\n## Notes\n" in text
 
 
+def test_style_guide_asks_for_a_photo_by_default():
+    assert "Every new recipe gets a photo" in STYLE_GUIDE
+    assert "search the web" in STYLE_GUIDE
+    assert "No photo is fine too" not in STYLE_GUIDE
+
+
 def test_list_recipes_tool(client):
     res = call(client, "list_recipes", {"side": "drinks"})
     assert [r["slug"] for r in res["structuredContent"]["result"]] == [
@@ -339,6 +345,7 @@ def test_instructions_mention_style_guide(client):
     instructions = r.json()["result"]["instructions"]
     assert "get_style_guide" in instructions
     assert "laekkert://style-guide" in instructions
+    assert "photo" in instructions
 
 
 def test_plain_text_post_refused(client, tmp_path):
