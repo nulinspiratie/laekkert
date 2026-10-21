@@ -203,6 +203,7 @@ describe('withBar', () => {
     note: '',
     no_scale: false,
     original: item,
+    group: '',
     g_per_tsp: null,
     bar,
   })
@@ -221,6 +222,7 @@ describe('withBar', () => {
     servings: 1,
     ingredients,
     steps: [],
+    notes: '',
     source: null,
     version: 1,
     bar: null,
