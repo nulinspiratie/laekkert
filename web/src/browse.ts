@@ -1,6 +1,7 @@
 // Browse state: what the recipe list shows, kept in the URL query string.
 
 import { normalise } from './bar'
+import { capitalise } from './format'
 import type { Mark, RecipeSummary, Side } from './types'
 
 export type FilterMark = Extract<Mark, 'favourite' | 'try_next'>
@@ -293,4 +294,106 @@ export function hiddenMatches(
   if (inAll > 0) return { view: 'all', count: inAll }
   const inSyrups = hidden.filter((recipe) => inView(recipe, 'syrups')).length
   return inSyrups > 0 ? { view: 'syrups', count: inSyrups } : null
+}
+
+/** The Food quick tags when the settings can't be read; the server's default too. */
+export const DEFAULT_QUICK_TAGS: readonly string[] = ['breakfast', 'dinner', 'kid approved', 'quick', 'vegetarian']
+
+/** A Food category tab; `category` null is All. */
+export interface QuickTab {
+  category: string | null
+  label: string
+  /** The recipes it would show with everything else that is on. */
+  count: number
+  on: boolean
+  /** It would leave nothing, so a tap does nothing. Never true for one that is on, or for All. */
+  disabled: boolean
+}
+
+/** A Food tag chip: a quick tag, or another tag that is on (`quick` false). */
+export interface QuickChip {
+  /** The spelling the recipes use, which is what the filter compares. */
+  tag: string
+  label: string
+  /** Off: the recipes there would be with it on too. On: the recipes there are now. */
+  count: number
+  on: boolean
+  /** Off and would leave nothing, so a tap does nothing. */
+  disabled: boolean
+  quick: boolean
+}
+
+/**
+ * The recipes' spelling of each quick tag, in the configured order. A setting entry matches a
+ * recipe tag by name key; the most common spelling wins (ties: A to Z). An entry no recipe uses
+ * is left out, unless a tag that is on matches it (then that tag, so it can be undone).
+ */
+export function quickTagSpellings(
+  recipes: RecipeSummary[],
+  onTags: string[],
+  quickTags: readonly string[],
+): string[] {
+  const used = new Map<string, Map<string, number>>()
+  for (const recipe of recipes) {
+    for (const tag of new Set(recipe.tags)) {
+      const spellings = used.get(normalise(tag)) ?? new Map<string, number>()
+      spellings.set(tag, (spellings.get(tag) ?? 0) + 1)
+      used.set(normalise(tag), spellings)
+    }
+  }
+  const seen = new Set<string>()
+  const kept: string[] = []
+  for (const entry of quickTags) {
+    const key = normalise(entry)
+    if (key === '' || seen.has(key)) continue
+    seen.add(key)
+    const spellings = used.get(key)
+    const spelling = spellings
+      ? [...spellings].sort(([a, n], [b, m]) => m - n || a.localeCompare(b))[0][0]
+      : onTags.find((tag) => normalise(tag) === key)
+    if (spelling !== undefined) kept.push(spelling)
+  }
+  return kept
+}
+
+/**
+ * The Food page's category tabs and tag chips, from the recipes it loaded (already cut down by
+ * the search and What you have). Tabs: All, then each category with a recipe or picked. Chips:
+ * the quick tags in use, then any other tag that is on. `quick` holds the quick tags' spellings.
+ */
+export function quickFilters(
+  recipes: RecipeSummary[],
+  state: BrowseState,
+  quickTags: readonly string[],
+): { tabs: QuickTab[]; chips: QuickChip[]; quick: string[]; active: boolean } {
+  const count = (patch: Partial<BrowseState>) =>
+    recipes.filter((recipe) => matchesOtherFilters(recipe, { ...state, ...patch })).length
+  const categories = CATEGORIES.food.filter(
+    (name) => name === state.category || recipes.some((recipe) => recipe.category === name),
+  )
+  const tabs = [null, ...categories].map((category): QuickTab => {
+    const on = state.category === category
+    const n = count({ category })
+    return {
+      category,
+      label: category === null ? 'All' : capitalise(category),
+      count: n,
+      on,
+      // All is how a picked tab is undone, so it is never dimmed.
+      disabled: !on && category !== null && n === 0,
+    }
+  })
+  const quick = quickTagSpellings(recipes, state.tags, quickTags)
+  const others = state.tags.filter((tag) => !quick.includes(tag))
+  const chips = [...quick, ...others].map((tag): QuickChip => {
+    const on = state.tags.includes(tag)
+    const n = on ? count({}) : count({ tags: [...state.tags, tag] })
+    return { tag, label: capitalise(tag), count: n, on, disabled: !on && n === 0, quick: quick.includes(tag) }
+  })
+  return { tabs, chips, quick, active: state.category !== null || state.tags.length > 0 }
+}
+
+/** Food's More tags: every tag (most used first) and any other that is on, without the quick tags. */
+export function moreTags(tags: string[], onTags: string[], quick: string[]): string[] {
+  return [...tags, ...onTags.filter((tag) => !tags.includes(tag))].filter((tag) => !quick.includes(tag))
 }

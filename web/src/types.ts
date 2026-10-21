@@ -142,6 +142,12 @@ export interface BarChanges {
   delete?: string[]
 }
 
+/** The app settings the web page reads (`GET /api/settings`). */
+export interface Settings {
+  /** Tags shown as one-tap filters at the top of the Food page, in this order. */
+  food_quick_tags: string[]
+}
+
 export function isSide(value: string | undefined): value is Side {
   return SIDES.includes(value as Side)
 }

@@ -1,8 +1,9 @@
 // The browse filters: search (desktop only), what you have (desktop food only), the Drinks
-// views (desktop drinks only), marks, category (food only) and tags. `aside` is the desktop
-// side panel; `sheet` is the same controls bigger, inside the phone's filter sheet
-// (FilterSheet below). On a phone the views are chips under the heading and what you have is
-// a header button with its own panel (ViewChips and the have panel in Browse).
+// views (desktop drinks only), marks and tags. `aside` is the desktop side panel; `sheet` is
+// the same controls bigger, inside the phone's filter sheet (FilterSheet below). On a phone
+// the views are chips under the heading and what you have is a header button with its own
+// panel (ViewChips and the have panel in Browse). Food picks its category and quick tags in
+// the rows at the top of the page (QuickFilters), so here it has only More tags.
 
 import { useEffect, useRef, type ReactNode, type Ref } from 'react'
 import { Link } from 'react-router'
@@ -16,7 +17,6 @@ import {
   type FilterMark,
   type facetCounts,
 } from './browse'
-import { capitalise } from './format'
 import { HaveField, type HaveFieldProps } from './HaveField'
 import { Bookmark, Bottle, Check, Heart, Question, Search } from './icons'
 import { SIDE_LABELS, type Side } from './types'
@@ -29,7 +29,7 @@ const MARK_ICONS: Record<FilterMark, () => ReactNode> = {
 export interface FilterPanelProps {
   side: Side
   state: BrowseState
-  /** Counts for the recipes on the page, before the marks, category and tags are applied. */
+  /** Counts for the recipes on the page, before the marks and tags are applied. */
   counts: ReturnType<typeof facetCounts>
   onChange: (patch: Partial<BrowseState>) => void
   variant?: 'aside' | 'sheet'
@@ -39,6 +39,8 @@ export interface FilterPanelProps {
   views?: ViewsProps
   /** The "What you have" section, shown when given (desktop food; the phone has a button and panel). */
   have?: Omit<HaveFieldProps, 'inputRef'>
+  /** Food: the tags the quick row doesn't show, listed as More tags (`moreTags` in browse.ts). */
+  more?: string[]
 }
 
 /** What the browse page knows about the bar. */
@@ -56,17 +58,24 @@ export interface ViewsProps {
   bar: BarSummary | null
 }
 
-export function FilterPanel({ side, state, counts, onChange, variant = 'aside', search, views, have }: FilterPanelProps) {
+export function FilterPanel({
+  side,
+  state,
+  counts,
+  onChange,
+  variant = 'aside',
+  search,
+  views,
+  have,
+  more,
+}: FilterPanelProps) {
   const sheet = variant === 'sheet'
   const Heading = sheet ? 'h3' : 'h2'
 
   const toggle = <T,>(list: T[], item: T) =>
     list.includes(item) ? list.filter((x) => x !== item) : [...list, item]
 
-  // Hide categories nothing is in, unless one is picked (so it can be unpicked).
-  const categories = counts.categories.filter(([name, n]) => n > 0 || name === state.category)
-  const total = counts.categories.reduce((sum, [, n]) => sum + n, 0)
-  const tags = [...counts.tags, ...state.tags.filter((tag) => !counts.tags.includes(tag))]
+  const tags = more ?? [...counts.tags, ...state.tags.filter((tag) => !counts.tags.includes(tag))]
 
   return (
     <div className={`filters filters--${variant}`}>
@@ -107,42 +116,12 @@ export function FilterPanel({ side, state, counts, onChange, variant = 'aside', 
         })}
       </section>
 
-      {/* Drinks pick a view instead (ViewSection). */}
-      {side === 'food' && (
-        <section className="filter-section">
-          <Heading>Category</Heading>
-          {sheet ? (
-            <div role="radiogroup" aria-label="Category" className="filter-pills">
-              <CategoryPill name="All" on={state.category === null} onPick={() => onChange({ category: null })} />
-              {categories.map(([name]) => (
-                <CategoryPill
-                  key={name}
-                  name={capitalise(name)}
-                  on={state.category === name}
-                  onPick={() => onChange({ category: name })}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="filter-categories">
-              <CategoryRow name="All" n={total} on={state.category === null} onPick={() => onChange({ category: null })} />
-              {categories.map(([name, n]) => (
-                <CategoryRow
-                  key={name}
-                  name={capitalise(name)}
-                  n={n}
-                  on={state.category === name}
-                  onPick={() => onChange({ category: name })}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
       {tags.length > 0 && (
         <section className="filter-section">
-          <Heading>Tags</Heading>
+          {/* The desktop quick row's More moves focus here. */}
+          <Heading id={more && !sheet ? 'more-tags' : undefined} tabIndex={more && !sheet ? -1 : undefined}>
+            {more ? 'More tags' : 'Tags'}
+          </Heading>
           <div className="filter-pills">
             {tags.map((tag) => (
               <button
@@ -241,23 +220,6 @@ export function SearchField({
         onChange={(event) => onChange(event.target.value)}
       />
     </label>
-  )
-}
-
-function CategoryRow({ name, n, on, onPick }: { name: string; n: number; on: boolean; onPick: () => void }) {
-  return (
-    <button type="button" className="filter-category" aria-pressed={on} onClick={onPick}>
-      <span>{name}</span>{' '}
-      <span className="filter-count">{n}</span>
-    </button>
-  )
-}
-
-function CategoryPill({ name, on, onPick }: { name: string; on: boolean; onPick: () => void }) {
-  return (
-    <button type="button" role="radio" aria-checked={on} className="filter-pill" onClick={onPick}>
-      {name}
-    </button>
   )
 }
 

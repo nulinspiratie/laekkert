@@ -4,6 +4,7 @@ import {
   applyBrowse,
   browseQuery,
   CATEGORIES,
+  DEFAULT_QUICK_TAGS,
   defaultQuery,
   describe,
   DRINKS_VIEWS,
@@ -11,7 +12,10 @@ import {
   haveKey,
   hiddenMatches,
   MARK_LABELS,
+  moreTags,
   parseBrowse,
+  quickFilters,
+  quickTagSpellings,
   removeTerm,
   VIEW_CHIP_LABELS,
   VIEW_LABELS,
@@ -549,5 +553,148 @@ suite('what you have', () => {
     const base = state({ have: ['chicken', 'Leeks'] })
     expect(removeTerm(base, 'leeks').have).toEqual(['chicken'])
     expect(removeTerm(base, 'bogus')).toBe(base)
+  })
+})
+
+suite('food quick filters', () => {
+  // The eleven food recipes the spec's mockup uses.
+  const meals = [
+    recipe({ slug: 'apple-porridge', tags: ['breakfast', 'vegetarian'], marks: ['favourite'] }),
+    recipe({ slug: 'pancakes', tags: ['breakfast'], marks: ['favourite'] }),
+    recipe({ slug: 'carrot-buns', category: 'sides', tags: ['vegetarian', 'breakfast'] }),
+    recipe({ slug: 'jambalaya', tags: ['dinner'] }),
+    recipe({ slug: 'chutney-chicken', tags: ['dinner'] }),
+    recipe({ slug: 'lemon-orzo', tags: ['dinner', 'kid approved', 'quick'] }),
+    recipe({ slug: 'miso-mushrooms', category: 'sides', tags: ['breakfast', 'vegetarian'] }),
+    recipe({ slug: 'overnight-oats', tags: ['breakfast', 'vegetarian'] }),
+    recipe({ slug: 'pad-thai', tags: ['dinner'] }),
+    recipe({ slug: 'chickpea-curry', tags: ['dinner', 'vegetarian', 'quick'] }),
+    recipe({ slug: 'sesame-buns', category: 'sides', tags: ['vegetarian', 'breakfast'] }),
+  ]
+  const tabs = (s: BrowseState) =>
+    quickFilters(meals, s, DEFAULT_QUICK_TAGS).tabs.map(({ label, count, on, disabled }) => [label, count, on, disabled])
+  const chips = (s: BrowseState, recipes = meals, quick = DEFAULT_QUICK_TAGS) =>
+    quickFilters(recipes, s, quick).chips.map(({ tag, count, on, disabled }) => [tag, count, on, disabled])
+
+  it('counts with nothing on, leaving out empty categories', () => {
+    expect(tabs(state())).toEqual([
+      ['All', 11, true, false],
+      ['Mains', 8, false, false],
+      ['Sides', 3, false, false],
+    ])
+    expect(chips(state())).toEqual([
+      ['breakfast', 6, false, false],
+      ['dinner', 5, false, false],
+      ['kid approved', 1, false, false],
+      ['quick', 2, false, false],
+      ['vegetarian', 6, false, false],
+    ])
+    expect(quickFilters(meals, state(), DEFAULT_QUICK_TAGS).active).toBe(false)
+  })
+
+  it('counts with a category on', () => {
+    const mains = state({ category: 'mains' })
+    expect(tabs(mains)).toEqual([
+      ['All', 11, false, false],
+      ['Mains', 8, true, false],
+      ['Sides', 3, false, false],
+    ])
+    expect(chips(mains).map(([tag, n]) => [tag, n])).toEqual([
+      ['breakfast', 3],
+      ['dinner', 5],
+      ['kid approved', 1],
+      ['quick', 2],
+      ['vegetarian', 3],
+    ])
+    expect(quickFilters(meals, mains, DEFAULT_QUICK_TAGS).active).toBe(true)
+  })
+
+  it('counts with two tags on, and the tabs follow the tags and marks', () => {
+    const both = state({ tags: ['dinner', 'quick'] })
+    expect(tabs(both)).toEqual([
+      ['All', 2, true, false],
+      ['Mains', 2, false, false],
+      ['Sides', 0, false, true],
+    ])
+    expect(chips(both)).toEqual([
+      ['breakfast', 0, false, true],
+      ['dinner', 2, true, false],
+      ['kid approved', 1, false, false],
+      ['quick', 2, true, false],
+      ['vegetarian', 1, false, false],
+    ])
+    expect(tabs(state({ marks: ['favourite'] }))[0]).toEqual(['All', 2, true, false])
+  })
+
+  it('dims an off chip that would leave nothing, never one that is on', () => {
+    const breakfast = chips(state({ tags: ['breakfast'] }))
+    expect(breakfast).toContainEqual(['kid approved', 0, false, true])
+    expect(breakfast).toContainEqual(['breakfast', 6, true, false])
+    // On and leaving nothing (a link can do that): still not dimmed.
+    expect(chips(state({ tags: ['breakfast', 'kid approved'] }))).toContainEqual(['kid approved', 0, true, false])
+  })
+
+  it('never dims a picked tab or All', () => {
+    const picked = tabs(state({ category: 'sides', tags: ['dinner'] }))
+    expect(picked).toEqual([
+      ['All', 5, false, false],
+      ['Mains', 5, false, false],
+      ['Sides', 0, true, false],
+    ])
+    expect(tabs(state({ category: 'desserts', tags: ['quick', 'breakfast'] }))).toEqual([
+      ['All', 0, false, false],
+      ['Mains', 0, false, true],
+      ['Sides', 0, false, true],
+      ['Desserts', 0, true, false],
+    ])
+  })
+
+  it('keeps the configured order, leaves out unused quick tags and appends other tags that are on', () => {
+    const quick = ['vegetarian', 'gluten free', 'breakfast']
+    expect(chips(state({ tags: ['weeknight', 'breakfast'] }), meals, quick).map(([tag]) => tag)).toEqual([
+      'vegetarian',
+      'breakfast',
+      'weeknight',
+    ])
+    const filters = quickFilters(meals, state({ tags: ['weeknight'] }), quick)
+    expect(filters.chips.map(({ quick: q }) => q)).toEqual([true, true, false])
+    expect(filters.quick).toEqual(['vegetarian', 'breakfast'])
+    expect(filters.chips[2]).toMatchObject({ tag: 'weeknight', label: 'Weeknight', on: true, count: 0 })
+  })
+
+  it('shows no chips for an empty list', () => {
+    expect(chips(state(), meals, [])).toEqual([])
+  })
+
+  it('matches setting entries to recipe tags by name key, using the most common spelling', () => {
+    const recipes = [
+      recipe({ slug: 'a', tags: ['Kid approved'] }),
+      recipe({ slug: 'b', tags: ['kid  approved'] }),
+      recipe({ slug: 'c', tags: ['Kid approved'] }),
+      recipe({ slug: 'd', tags: ['Quick'] }),
+      recipe({ slug: 'e', tags: ['quick'] }),
+    ]
+    expect(quickTagSpellings(recipes, [], ['KID APPROVED', 'quick', 'Kid Approved'])).toEqual(['Kid approved', 'quick'])
+    const filters = quickFilters(recipes, state(), ['kid approved'])
+    expect(filters.chips).toEqual([
+      { tag: 'Kid approved', label: 'Kid approved', count: 2, on: false, disabled: false, quick: true },
+    ])
+  })
+
+  it('keeps a quick tag that is on even when no recipe in the list has it', () => {
+    expect(quickTagSpellings([], ['Breakfast'], DEFAULT_QUICK_TAGS)).toEqual(['Breakfast'])
+    expect(quickTagSpellings([], [], DEFAULT_QUICK_TAGS)).toEqual([])
+  })
+
+  it('labels capitalise the first letter only', () => {
+    const [chip] = quickFilters(meals, state(), ['kid approved']).chips
+    expect(chip.label).toBe('Kid approved')
+  })
+
+  it('More tags leaves out the quick tags and keeps other tags that are on', () => {
+    const { tags } = facetCounts('food', meals)
+    const { quick } = quickFilters(meals, state(), DEFAULT_QUICK_TAGS)
+    expect(moreTags([...tags, 'batch cook'], ['date night', 'breakfast'], quick)).toEqual(['batch cook', 'date night'])
+    expect(moreTags(tags, [], quick)).toEqual([])
   })
 })

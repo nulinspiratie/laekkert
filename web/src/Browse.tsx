@@ -3,13 +3,15 @@
 // only the list from the API, the bar, the search box text and the view are state.
 // On drinks the four views (Can make, All drinks, Mocktails, Syrups & prep) filter the list;
 // Can make leans on the bar and explains an empty list.
-// On food a "what you have" list (the `have` params) ranks it by fewest missing.
+// On food a "what you have" list (the `have` params) ranks it by fewest missing, and the
+// category tabs and quick tag chips (QuickFilters) sit at the top of the page.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { getBar, listRecipes } from './api'
+import { getBar, getSettings, listRecipes } from './api'
 import { unsorted } from './bar'
 import {
+  DEFAULT_QUICK_TAGS,
   MARK_LABELS,
   SORT_OPTIONS,
   VIEW_CHIP_LABELS,
@@ -22,20 +24,22 @@ import {
   describe,
   facetCounts,
   hiddenMatches,
+  moreTags,
   parseBrowse,
+  quickFilters,
   removeTerm,
   type BrowseState,
   type DrinksView,
   type SortKey,
 } from './browse'
 import { FilterPanel, FilterSheet, SearchField, type BarSummary, type ViewsProps } from './FilterPanel'
-import { capitalise } from './format'
 import { HaveField } from './HaveField'
 import { Basket, Bottle, Check, Close, Filters, Grid, List, Plus, Question, Search, Shelf } from './icons'
 import { getView, setLastSide, setView, type View } from './prefs'
 import { RecipeCard, RecipeRow, RecipeTableRow } from './RecipeCard'
+import { QuickFilters } from './QuickFilters'
 import { PageHeading, Shell } from './Shell'
-import { SIDE_LABELS, type Bar, type RecipeSummary, type Side } from './types'
+import { SIDE_LABELS, type Bar, type RecipeSummary, type Settings, type Side } from './types'
 import { useIsDesktop } from './useIsDesktop'
 
 /** How long typing must pause before the search goes to the API. */
@@ -89,6 +93,8 @@ export default function Browse({ side }: { side: Side }) {
   const [error, setError] = useState<string | null>(null)
   // Drinks only: null while loading; 'failed' hides Can make, the banner and the set-up state.
   const [bar, setBar] = useState<Bar | 'failed' | null>(null)
+  // Food only: null while loading. A failed request means the default quick tags.
+  const [settings, setSettings] = useState<Settings | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(state.q !== '')
   const searchInput = useRef<HTMLInputElement>(null)
@@ -150,6 +156,18 @@ export default function Browse({ side }: { side: Side }) {
   }, [side])
 
   useEffect(() => {
+    if (side !== 'food') return
+    let current = true
+    getSettings().then(
+      (loadedSettings) => current && setSettings(loadedSettings),
+      () => current && setSettings({ food_quick_tags: [...DEFAULT_QUICK_TAGS] }),
+    )
+    return () => {
+      current = false
+    }
+  }, [side])
+
+  useEffect(() => {
     if (searchOpen && focusSearch.current) searchInput.current?.focus()
     focusSearch.current = false
   }, [searchOpen])
@@ -170,6 +188,15 @@ export default function Browse({ side }: { side: Side }) {
     [loaded, shown],
   )
   const counts = useMemo(() => facetCounts(side, loaded?.recipes ?? [], shown), [side, loaded, shown])
+  // Food's tabs and chips. Until the settings arrive the badge and More tags go by the default list.
+  const quick = useMemo(
+    () =>
+      side === 'food'
+        ? quickFilters(loaded?.recipes ?? [], shown, settings?.food_quick_tags ?? DEFAULT_QUICK_TAGS)
+        : null,
+    [side, loaded, shown, settings],
+  )
+  const more = quick ? moreTags(counts.tags, state.tags, quick.quick) : undefined
   const barSummary: BarSummary | null =
     bar && bar !== 'failed' ? { setUp: bar.set_up, unsorted: unsorted(bar.items).length } : null
   const views: ViewsProps | undefined = side === 'drinks' ? { canMake: bar !== 'failed', bar: barSummary } : undefined
@@ -243,6 +270,21 @@ export default function Browse({ side }: { side: Side }) {
     setViewState(next)
   }
 
+  // The desktop More moves focus to the sidebar's More tags; there is no More without any.
+  const focusMoreTags = () => document.getElementById('more-tags')?.focus()
+  const quickRows =
+    quick && loaded ? (
+      <QuickFilters
+        tabs={quick.tabs}
+        chips={settings ? quick.chips : null}
+        active={quick.active}
+        state={state}
+        onChange={onChange}
+        onMore={desktop ? (more && more.length > 0 ? focusMoreTags : undefined) : () => setSheetOpen(true)}
+        desktop={desktop}
+      />
+    ) : null
+
   const list = (
     <Results
       side={side}
@@ -282,6 +324,7 @@ export default function Browse({ side }: { side: Side }) {
               search={{ value: text, onChange: onSearch }}
               have={side === 'food' ? haveField : undefined}
               views={views}
+              more={more}
             />
           </aside>
           <div className="browse-main">
@@ -303,7 +346,8 @@ export default function Browse({ side }: { side: Side }) {
                 </Link>
               </div>
             </PageHeading>
-            <Chips state={state} onChange={onChange} />
+            {quickRows}
+            <Chips state={state} marksOnly={side === 'food'} onChange={onChange} />
             {results}
           </div>
         </div>
@@ -311,7 +355,9 @@ export default function Browse({ side }: { side: Side }) {
     )
   }
 
-  const active = state.marks.length + state.tags.length + (state.category ? 1 : 0)
+  // What the filter sheet holds that the rows at the top don't show: marks, and tags that are
+  // not quick tags. (Drinks have no quick tags, so all their tags count.)
+  const active = state.marks.length + state.tags.filter((tag) => !quick?.quick.includes(tag)).length
   const phoneActions = (
     <>
       <button
@@ -391,6 +437,8 @@ export default function Browse({ side }: { side: Side }) {
             <Search />
           </button>
         </PageHeading>
+        {/* Not in PageHeading's `below`: a sticky element only sticks inside its parent. */}
+        {quickRows}
         <div className="gutter browse-body">
           {side === 'food' && haveOpen && (
             <section className="have-panel" aria-label="What you have">
@@ -405,6 +453,7 @@ export default function Browse({ side }: { side: Side }) {
           state={state}
           counts={counts}
           onChange={onChange}
+          more={more}
           open={sheetOpen}
           count={recipes?.length ?? 0}
           onClose={() => setSheetOpen(false)}
@@ -516,18 +565,23 @@ function BarEmpty({ kind, desktop, all, showAll }: BarEmptyProps) {
   )
 }
 
-/** Removable chips for the marks, category and tags that are on. */
-function Chips({ state, onChange }: { state: BrowseState; onChange: (patch: Partial<BrowseState>) => void }) {
+/** Removable chips for the marks and tags that are on; only the marks on food, whose rows show the tags. */
+function Chips({
+  state,
+  marksOnly,
+  onChange,
+}: {
+  state: BrowseState
+  marksOnly: boolean
+  onChange: (patch: Partial<BrowseState>) => void
+}) {
   const chips = [
     ...state.marks.map((mark) => ({
       key: `mark:${mark}`,
       label: MARK_LABELS[mark],
       remove: () => onChange({ marks: state.marks.filter((m) => m !== mark) }),
     })),
-    ...(state.category
-      ? [{ key: 'cat', label: capitalise(state.category), remove: () => onChange({ category: null }) }]
-      : []),
-    ...state.tags.map((tag) => ({
+    ...(marksOnly ? [] : state.tags).map((tag) => ({
       key: `tag:${tag}`,
       label: tag,
       remove: () => onChange({ tags: state.tags.filter((t) => t !== tag) }),

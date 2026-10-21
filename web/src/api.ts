@@ -1,4 +1,16 @@
-import type { Bar, BarChanges, Mark, NewEntry, Recipe, RecipeDraft, RecipeSummary, Side, TimelineEntry } from './types'
+import { DEFAULT_QUICK_TAGS } from './browse'
+import type {
+  Bar,
+  BarChanges,
+  Mark,
+  NewEntry,
+  Recipe,
+  RecipeDraft,
+  RecipeSummary,
+  Settings,
+  Side,
+  TimelineEntry,
+} from './types'
 
 /**
  * All of a side's recipes, or only the matches for `q` (best match first). With `have` terms
@@ -124,4 +136,12 @@ export async function getBar(): Promise<Bar> {
 /** Every write returns the whole bar after the change. */
 export async function changeBar(changes: BarChanges): Promise<Bar> {
   return (await send('/api/bar', 'POST', changes)).json()
+}
+
+/** The app settings. A body without a list of strings (an older server, say) means the defaults. */
+export async function getSettings(): Promise<Settings> {
+  const body: unknown = await (await send('/api/settings', 'GET')).json()
+  const tags = (body as { food_quick_tags?: unknown } | null)?.food_quick_tags
+  const valid = Array.isArray(tags) && tags.every((tag) => typeof tag === 'string')
+  return { food_quick_tags: valid ? tags : [...DEFAULT_QUICK_TAGS] }
 }

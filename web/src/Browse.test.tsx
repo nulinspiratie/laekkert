@@ -106,9 +106,22 @@ function listing(recipes: RecipeSummary[]) {
   return new Response(JSON.stringify({ recipes }), { status: 200 })
 }
 
-/** The list for any recipes URL; `barBody` for /api/bar ('fail' answers 503). */
-function stubFetch(recipes: RecipeSummary[] = food, barBody: Bar | 'fail' = SORTED_BAR) {
+const DEFAULT_QUICK_TAGS = ['breakfast', 'dinner', 'kid approved', 'quick', 'vegetarian']
+
+/**
+ * The list for any recipes URL; `barBody` for /api/bar ('fail' answers 503); `quickTags` for
+ * /api/settings ('fail' answers 500).
+ */
+function stubFetch(
+  recipes: RecipeSummary[] = food,
+  barBody: Bar | 'fail' = SORTED_BAR,
+  quickTags: string[] | 'fail' = DEFAULT_QUICK_TAGS,
+) {
   const fetch = vi.fn(async (url: string) => {
+    if (url === '/api/settings') {
+      if (quickTags === 'fail') return new Response(JSON.stringify({ error: 'no' }), { status: 500 })
+      return new Response(JSON.stringify({ food_quick_tags: quickTags }), { status: 200 })
+    }
     if (url !== '/api/bar') return listing(recipes)
     if (barBody === 'fail') return new Response(JSON.stringify({ error: 'The bar could not be read.' }), { status: 503 })
     return new Response(JSON.stringify(barBody), { status: 200 })
@@ -160,6 +173,17 @@ const recipeNames = () =>
     .map((link) => link.getAttribute('href') ?? '')
     .filter((href) => /^\/(food|drinks)\/(?!new$)[^?]+$/.test(href))
 
+/** The recipe list requests made, leaving out settings and the bar. */
+const recipeFetches = (fetch: ReturnType<typeof stubFetch>) =>
+  fetch.mock.calls.map(([url]) => url).filter((url) => url.startsWith('/api/recipes'))
+
+const tabs = () => within(screen.getByRole('radiogroup', { name: 'Category' }))
+const quickChips = () => within(screen.getByRole('group', { name: 'Quick tags' }))
+const chipNames = () =>
+  quickChips()
+    .getAllByRole('button')
+    .map((button) => button.getAttribute('aria-label') ?? button.textContent)
+
 afterEach(() => {
   vi.useRealTimers()
 })
@@ -202,40 +226,162 @@ test('bare /food means no filters and A to Z', async () => {
   expect(recipeNames()[0]).toBe('/food/brownies')
 })
 
-test('clicking a tag filters and updates the URL', async () => {
+test('clicking a More tag in the side panel filters, and the tag shows in the chip row', async () => {
   stubFetch()
   renderAt('/food')
   await screen.findByText('A to Z · 4 recipes')
-  const tag = screen.getByRole('button', { name: 'vegetarian' })
+  const aside = within(screen.getByRole('complementary'))
+  expect(aside.getByRole('heading', { name: 'More tags' })).toBeInTheDocument()
+  const tag = aside.getByRole('button', { name: 'weeknight' })
   expect(tag).toHaveAttribute('aria-pressed', 'false')
   fireEvent.click(tag)
   expect(await screen.findByText('A to Z · 2 recipes')).toBeInTheDocument()
-  expect(location()).toBe('/food?tag=vegetarian')
-  expect(screen.getByRole('button', { name: 'vegetarian' })).toHaveAttribute('aria-pressed', 'true')
-  expect(screen.getByRole('button', { name: 'Remove vegetarian filter' })).toBeInTheDocument()
-  expect(recipeNames()).toEqual(['/food/red-lentil-dal', '/food/veggie-quesadillas'])
+  expect(location()).toBe('/food?tag=weeknight')
+  expect(aside.getByRole('button', { name: 'weeknight' })).toHaveAttribute('aria-pressed', 'true')
+  // The row shows it (soft, removable), so the removable chips under the heading don't.
+  const chip = quickChips().getByRole('button', { name: 'Weeknight' })
+  expect(chip).toHaveAttribute('aria-pressed', 'true')
+  expect(chip).toHaveClass('quick-chip--other')
+  expect(screen.queryByRole('button', { name: 'Remove weeknight filter' })).not.toBeInTheDocument()
+  expect(recipeNames()).toEqual(['/food/chicken-leek-traybake', '/food/veggie-quesadillas'])
 })
 
-test('marks and categories filter through the side panel', async () => {
+test('marks filter through the side panel, categories through the tabs', async () => {
   stubFetch()
   renderAt('/food')
   await screen.findByText('A to Z · 4 recipes')
   fireEvent.click(screen.getByRole('button', { name: 'Favourite' }))
   expect(location()).toBe('/food?mark=favourite')
-  fireEvent.click(screen.getByRole('button', { name: 'Mains 3' }))
+  fireEvent.click(tabs().getByRole('radio', { name: 'Mains 2' }))
   expect(location()).toBe('/food?cat=mains&mark=favourite')
   expect(await screen.findByText('Favourite, A to Z · 2 recipes')).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Remove Mains filter' })).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'All 4' }))
+  expect(tabs().getByRole('radio', { name: 'Mains 2' })).toBeChecked()
+  expect(screen.getByRole('button', { name: 'Remove Favourite filter' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Remove Mains filter' })).not.toBeInTheDocument()
+  fireEvent.click(tabs().getByRole('radio', { name: 'All 2' }))
   expect(location()).toBe('/food?mark=favourite')
 })
 
-test('categories without recipes are left out of the panel', async () => {
+test('the tabs leave out categories without recipes', async () => {
   stubFetch()
   renderAt('/food')
   await screen.findByText('A to Z · 4 recipes')
-  expect(screen.getByRole('button', { name: 'Desserts 1' })).toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: /^Sauces/ })).not.toBeInTheDocument()
+  expect(tabs().getAllByRole('radio').map((tab) => tab.textContent)).toEqual(['All 4', 'Mains 3', 'Desserts 1'])
+  expect(screen.getByRole('radio', { name: 'All 4' })).toBeChecked()
+})
+
+test('the chips are the quick tags in use with counts, then More', async () => {
+  stubFetch()
+  renderAt('/food')
+  await screen.findByText('A to Z · 4 recipes')
+  expect(chipNames()).toEqual(['Kid approved, 2 recipes', 'Vegetarian, 2 recipes', 'More'])
+  expect(quickChips().queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument()
+})
+
+test('the quick tags come from the settings, matched by name key, in that order', async () => {
+  stubFetch(food, SORTED_BAR, ['Weeknight', 'vegetarian', 'gluten free'])
+  renderAt('/food')
+  await screen.findByText('A to Z · 4 recipes')
+  expect(await screen.findByRole('button', { name: 'Weeknight, 2 recipes' })).toBeInTheDocument()
+  expect(chipNames()).toEqual(['Weeknight, 2 recipes', 'Vegetarian, 2 recipes', 'More'])
+  fireEvent.click(quickChips().getByRole('button', { name: 'Weeknight, 2 recipes' }))
+  // The filter uses the recipes' spelling.
+  expect(location()).toBe('/food?tag=weeknight')
+  const aside = within(screen.getByRole('complementary'))
+  expect(aside.getByRole('button', { name: 'kid approved' })).toBeInTheDocument()
+  expect(aside.queryByRole('button', { name: 'weeknight' })).not.toBeInTheDocument()
+})
+
+test('settings that fail to load mean the default quick tags', async () => {
+  stubFetch(food, SORTED_BAR, 'fail')
+  renderAt('/food')
+  await screen.findByText('A to Z · 4 recipes')
+  expect(await screen.findByRole('group', { name: 'Quick tags' })).toBeInTheDocument()
+  expect(chipNames()).toEqual(['Kid approved, 2 recipes', 'Vegetarian, 2 recipes', 'More'])
+})
+
+test('no quick tags means no chip row', async () => {
+  const fetch = stubFetch(food, SORTED_BAR, [])
+  renderAt('/food')
+  await screen.findByText('A to Z · 4 recipes')
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/settings', expect.anything()))
+  expect(screen.getByRole('radiogroup', { name: 'Category' })).toBeInTheDocument()
+  expect(screen.queryByRole('group', { name: 'Quick tags' })).not.toBeInTheDocument()
+})
+
+test('a tap on a chip adds the tag, a second tap removes it', async () => {
+  stubViewport(false)
+  stubFetch()
+  renderAt(DEFAULT_FOOD)
+  await screen.findByText('quickest first · 4 recipes')
+  fireEvent.click(await screen.findByRole('button', { name: 'Vegetarian, 2 recipes' }))
+  expect(location()).toBe('/food?tag=vegetarian&sort=time')
+  expect(await screen.findByText('quickest first · 2 recipes')).toBeInTheDocument()
+  const on = quickChips().getByRole('button', { name: 'Vegetarian' })
+  expect(on).toHaveAttribute('aria-pressed', 'true')
+  expect(on.querySelector('svg')).not.toBeNull()
+  // Kid approved now counts what Vegetarian leaves.
+  expect(quickChips().getByRole('button', { name: 'Kid approved, 1 recipe' })).toBeInTheDocument()
+  fireEvent.click(on)
+  expect(location()).toBe(DEFAULT_FOOD)
+})
+
+test('a tap on a tab sets cat=, and All removes it', async () => {
+  stubViewport(false)
+  stubFetch()
+  renderAt(DEFAULT_FOOD)
+  await screen.findByText('quickest first · 4 recipes')
+  fireEvent.click(tabs().getByRole('radio', { name: 'Desserts 1' }))
+  expect(location()).toBe('/food?cat=desserts&sort=time')
+  expect(await screen.findByText('quickest first · 1 recipe')).toBeInTheDocument()
+  fireEvent.click(tabs().getByRole('radio', { name: 'All 4' }))
+  expect(location()).toBe(DEFAULT_FOOD)
+})
+
+test('a tab or chip that would leave nothing is dimmed and does nothing', async () => {
+  stubViewport(false)
+  stubFetch()
+  renderAt('/food?cat=desserts&sort=time')
+  await screen.findByText('quickest first · 1 recipe')
+  const chip = await screen.findByRole('button', { name: 'Vegetarian, 0 recipes' })
+  expect(chip).toHaveAttribute('aria-disabled', 'true')
+  expect(chip).toBeEnabled()
+  fireEvent.click(chip)
+  expect(location()).toBe('/food?cat=desserts&sort=time')
+  // The picked tab is never dimmed.
+  expect(tabs().getByRole('radio', { name: 'Desserts 1' })).not.toHaveAttribute('aria-disabled')
+
+  fireEvent.click(tabs().getByRole('radio', { name: 'All 4' }))
+  fireEvent.click(quickChips().getByRole('button', { name: 'Kid approved, 2 recipes' }))
+  expect(location()).toBe('/food?tag=kid+approved&sort=time')
+  const desserts = tabs().getByRole('radio', { name: 'Desserts 0' })
+  expect(desserts).toHaveAttribute('aria-disabled', 'true')
+  fireEvent.click(desserts)
+  expect(location()).toBe('/food?tag=kid+approved&sort=time')
+})
+
+test('Clear drops the category and tags and keeps the search, marks, sort and what you have', async () => {
+  stubFetch()
+  renderAt('/food?q=a&cat=mains&mark=favourite&tag=vegetarian&tag=weeknight&sort=time&have=chicken')
+  await screen.findByRole('group', { name: 'Quick tags' })
+  fireEvent.click(quickChips().getByRole('button', { name: 'Clear' }))
+  expect(location()).toBe('/food?q=a&mark=favourite&sort=time&have=chicken')
+  expect(quickChips().queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument()
+})
+
+test('desktop More moves focus to More tags', async () => {
+  stubFetch()
+  renderAt('/food')
+  fireEvent.click(await screen.findByRole('button', { name: 'More' }))
+  expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'More tags' }))
+})
+
+test('desktop has no More when every tag is a quick tag', async () => {
+  stubFetch([dal, brownies])
+  renderAt('/food')
+  await screen.findByRole('button', { name: 'Vegetarian, 1 recipe' })
+  expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: 'More tags' })).not.toBeInTheDocument()
 })
 
 test('the sort select changes the sort in the URL', async () => {
@@ -288,8 +434,7 @@ test('a search in the URL is fetched on first load and keeps the API order', asy
   const fetch = stubFetch([dal, brownies, quesadillas])
   renderAt('/food?q=lentil')
   expect(await screen.findByText('best match first · 3 recipes')).toBeInTheDocument()
-  expect(fetch).toHaveBeenCalledTimes(1)
-  expect(fetch).toHaveBeenCalledWith('/api/recipes?side=food&q=lentil')
+  expect(recipeFetches(fetch)).toEqual(['/api/recipes?side=food&q=lentil'])
   expect(screen.getByRole('searchbox', { name: 'Search food' })).toHaveValue('lentil')
   expect(recipeNames()).toEqual(['/food/red-lentil-dal', '/food/brownies', '/food/veggie-quesadillas'])
 })
@@ -519,11 +664,24 @@ test('on a phone the filter button says how many filters are active', async () =
   expect(await screen.findByRole('button', { name: 'Filters' })).toBeInTheDocument()
 })
 
-test('phone filter count adds marks, tags and category; not sort or search', async () => {
+test('phone filter count adds marks and other tags; not category, quick tags, sort or search', async () => {
   stubViewport(false)
   stubFetch()
-  renderAt('/food?cat=mains&mark=favourite&mark=try_next&tag=weeknight&sort=time&q=x')
-  expect(await screen.findByRole('button', { name: 'Filters, 4 active' })).toBeInTheDocument()
+  const view = renderAt('/food?cat=mains&mark=favourite&mark=try_next&tag=weeknight&tag=vegetarian&sort=time&q=x')
+  expect(await screen.findByRole('button', { name: 'Filters, 3 active' })).toBeInTheDocument()
+  view.unmount()
+
+  renderAt('/food?cat=mains&tag=vegetarian&tag=kid+approved&sort=time')
+  expect(await screen.findByRole('button', { name: 'Filters' })).toBeInTheDocument()
+})
+
+test('More on a phone opens the filter sheet', async () => {
+  stubViewport(false)
+  stubFetch()
+  renderAt(DEFAULT_FOOD)
+  await screen.findByRole('group', { name: 'Quick tags' })
+  fireEvent.click(quickChips().getByRole('button', { name: 'More' }))
+  expect(screen.getByRole('dialog', { name: 'Filters' })).toBeInTheDocument()
 })
 
 test('the phone has no side panel, desktop search field or header toggle', async () => {
@@ -558,16 +716,19 @@ test('the phone filter sheet filters live, resets and closes with the count', as
   const sheet = screen.getByRole('dialog', { name: 'Filters' })
   expect(within(sheet).getByRole('heading', { name: 'Filters' })).toBeInTheDocument()
   expect(within(sheet).getByRole('button', { name: 'Favourite' })).toHaveAttribute('aria-pressed', 'true')
-  fireEvent.click(within(sheet).getByRole('button', { name: 'vegetarian' }))
-  expect(location()).toBe('/food?mark=favourite&tag=vegetarian&sort=time')
+  // Food: no Category (the tabs do it); More tags without the quick tags.
+  expect(within(sheet).queryByRole('heading', { name: 'Category' })).not.toBeInTheDocument()
+  expect(within(sheet).queryByRole('radiogroup', { name: 'Category' })).not.toBeInTheDocument()
+  expect(within(sheet).getByRole('heading', { name: 'More tags' })).toBeInTheDocument()
+  expect(within(sheet).queryByRole('button', { name: 'vegetarian' })).not.toBeInTheDocument()
+  fireEvent.click(within(sheet).getByRole('button', { name: 'weeknight' }))
+  expect(location()).toBe('/food?mark=favourite&tag=weeknight&sort=time')
   expect(within(sheet).getByRole('button', { name: 'Show 1 recipe' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Filters, 2 active' })).toBeInTheDocument()
 
   fireEvent.click(within(sheet).getByRole('radio', { name: 'A–Z' }))
-  expect(location()).toBe('/food?mark=favourite&tag=vegetarian')
+  expect(location()).toBe('/food?mark=favourite&tag=weeknight')
   expect(within(sheet).getByRole('radio', { name: 'A–Z' })).toBeChecked()
-
-  fireEvent.click(within(sheet).getByRole('radio', { name: 'Mains' }))
-  expect(location()).toBe('/food?cat=mains&mark=favourite&tag=vegetarian')
 
   fireEvent.click(within(sheet).getByRole('button', { name: 'Reset' }))
   expect(location()).toBe(DEFAULT_FOOD)
@@ -639,16 +800,37 @@ test('the desktop Show radiogroup has the four views with counts, and no Style',
   expect(screen.queryByRole('button', { name: /^(Cocktails|Mocktails|Syrups|Prep)\b/ })).not.toBeInTheDocument()
 })
 
-test('food still has Category and no Show views', async () => {
+test('food has category tabs and no Show views', async () => {
   const fetch = stubFetch()
   renderAt('/food?bar=can&show=all')
   expect(await screen.findByText('A to Z · 4 recipes')).toBeInTheDocument()
-  expect(screen.getByRole('heading', { level: 2, name: 'Category' })).toBeInTheDocument()
+  expect(screen.getByRole('radiogroup', { name: 'Category' })).toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: 'Category' })).not.toBeInTheDocument()
   expect(screen.queryByRole('radiogroup', { name: 'Show' })).not.toBeInTheDocument()
   expect(screen.queryByRole('link', { name: 'Edit the bar' })).not.toBeInTheDocument()
   expect(screen.queryByRole('link', { name: 'The bar' })).not.toBeInTheDocument()
   expect(fetch).not.toHaveBeenCalledWith('/api/bar', expect.anything())
-  expect(fetch).toHaveBeenCalledTimes(1)
+  expect(fetch).toHaveBeenCalledWith('/api/settings', expect.anything())
+  expect(fetch).toHaveBeenCalledTimes(2)
+})
+
+test('drinks has no quick rows and reads no settings, on desktop or a phone', async () => {
+  const fetch = stubFetch(drinks)
+  const view = renderAt('/drinks?show=all&tag=sour')
+  await screen.findByRole('heading', { level: 1, name: 'Drinks' })
+  expect(screen.queryByRole('radiogroup', { name: 'Category' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('group', { name: 'Quick tags' })).not.toBeInTheDocument()
+  // Drinks keep the removable tag chips and the Tags heading.
+  expect(screen.getByRole('button', { name: 'Remove sour filter' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Tags' })).toBeInTheDocument()
+  view.unmount()
+
+  stubViewport(false)
+  renderAt('/drinks?show=all&tag=sour')
+  expect(await screen.findByRole('button', { name: 'Filters, 1 active' })).toBeInTheDocument()
+  expect(screen.queryByRole('radiogroup', { name: 'Category' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('group', { name: 'Quick tags' })).not.toBeInTheDocument()
+  expect(fetch).not.toHaveBeenCalledWith('/api/settings', expect.anything())
 })
 
 test('the desktop views change the URL, the list and the result line', async () => {
