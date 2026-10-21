@@ -61,8 +61,8 @@ The sandbox route needs two settings outside the app, both Serwan's (see "Setup"
 ## The flow
 
 1. Serwan shares a cookbook page in the chat: "add this".
-2. Claude reads it, writes the recipe and calls
-   `add_recipe(side, recipe, upload_photos=["source"])`.
+2. Claude reads it, writes the recipe, finds a dish photo on the web (every new recipe
+   gets one) and calls `add_recipe(side, recipe, image_url=…, upload_photos=["source"])`.
 3. The result has the recipe as today plus an `uploads` entry with a one-time URL and a
    `curl` command.
 4. In its sandbox Claude runs the command on `/mnt/user-data/uploads/<file>`. The
@@ -184,7 +184,9 @@ Until both are done, uploads fail and Claude falls back as described. Image link
 ## Style guide
 
 `src/app/style_guide.md`, "Sources and photos" is replaced by this. It ships with the code,
-not before: the current guide must not describe arguments the app doesn't have yet.
+not before: the current guide must not describe arguments the app doesn't have yet. It
+keeps the rules already there (every new recipe gets a dish photo, how to pick one, retries)
+and adds the source photo and chat uploads.
 
 ```markdown
 ## Sources and photos
@@ -194,28 +196,38 @@ the **source photo** (what the recipe was written from: a cookbook page, a card,
 screenshot). Attach a source photo whenever one is available; Serwan wants to see the
 original next to the recipe.
 
+- **Every new recipe gets a photo.** The app is private (just Serwan and his partner,
+  behind a login), so any photo from the web is fine. Pick one that shows this dish
+  finished and served, close to what the recipe makes: a daiquiri in a coupe, not a row
+  of cocktails; a dal in a bowl, not raw lentils. No collages, text overlays or logos. A
+  source photo is never the dish photo: a recipe from a cookbook page still gets one.
 - **From a web page:** fetch the page yourself, write the recipe from it in this style,
-  and pass the page's address as `source_url`. The app saves the link and takes the page's
-  main photo as the recipe's photo by itself.
+  and pass the page's address as `source_url`. The app saves the link and takes the
+  page's main photo by itself. If `add_recipe` comes back with `"photo": false`, search
+  the web for a photo of the dish and attach it with `edit_recipe` and `image_url`.
 - **From an image online** (a scan of a cookbook page, a photo of a card, a screenshot):
-  pass the image's direct address as `source_url`. The app saves it as the source photo.
+  pass the image's direct address as `source_url`; the app saves it as the source photo.
+  Search the web for a dish photo and pass it as `image_url`.
+- **With no source** (an idea, or one you wrote): search the web for a photo of the dish
+  and pass it to `add_recipe` as `image_url`.
 - **From a photo in the chat** (a cookbook page, a handwritten card, a screenshot): read
-  it and write the recipe from it, and pass `upload_photos: ["source"]`. Then run the
-  `curl` command from the result in your code sandbox on that file (shared files are in
-  `/mnt/user-data/uploads/`). Several photos for one recipe (two pages): upload the first
-  page, and say the others weren't attached.
-- **A photo of the dish in the chat:** `upload_photos: ["photo"]` the same way; a shared
-  page and a dish photo together: `["source", "photo"]`.
+  it and write the recipe from it. Pass `upload_photos: ["source"]`, then run the `curl`
+  command from the result in your code sandbox on that file (shared files are in
+  `/mnt/user-data/uploads/`). Search the web for a dish photo as above. A recipe over
+  several photos (two pages): upload the first, and say the others weren't attached.
+- **A photo of the dish in the chat:** use it instead of a web photo:
+  `upload_photos: ["photo"]` the same way. A page and a dish photo together:
+  `["source", "photo"]`.
 - **Adding a photo later:** `edit_recipe` with empty `changes` and `upload_photos`.
+- `image_url` is the direct address of the image file (usually ending in `.jpg`,
+  `.png` or `.webp`), not the page it's on. If it can't be fetched the result has a
+  warning: try another photo. After two or three failures, leave it without one and say
+  so.
 - **Say what happened.** Only say a photo is attached when the upload answered 200. If it
   failed (no sandbox, network blocked, the link expired), say the recipe is saved without
   it, why, and that Serwan can add it in the editor (the recipe's link plus `/edit`).
-- **Photo rule:** the app is private (just Serwan and his partner, behind a login), so any
-  photo is fine. For a recipe from a web page, the app uses the page's own photo; pass an
-  `image_url` only if you found a better one. For a recipe with no photo of the dish (an
-  idea, one you wrote, one from a cookbook page), look for a photo on the web that shows
-  the dish well and pass its direct image address as `image_url`. No photo is fine too:
-  recipes without one look intentional. A source photo is never used as the dish photo.
+- Skip the dish photo only when Serwan asks for none. When editing, don't add or change a
+  photo unless asked; a source photo he shares in the chat counts as asking.
 ```
 
 ## Security

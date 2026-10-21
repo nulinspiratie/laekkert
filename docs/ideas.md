@@ -17,6 +17,13 @@ idea becomes a milestone, it moves into `docs/plan.md` and comes off this list.
 - **Photo search with an illustration fallback.** For a recipe added without a source photo,
   search for a fitting photo; if none is found, use an illustration.
 - **"Find image" button.** On a recipe, AI search picks the best photo.
+- **Source photos and photos from the chat.** Claude attaches the cookbook page or card a
+  recipe came from as its source photo, and a dish photo Serwan shares in the chat. A
+  `source_url` that is an image link is saved as the source photo; for a chat photo,
+  `add_recipe`/`edit_recipe` take `upload_photos` and return a one-time upload URL that
+  Claude `curl`s the file to from its code sandbox. No new MCP tools. Needs a Cloudflare
+  Access Bypass on `/upload/photo` and network access for Claude's sandbox. Spec:
+  `docs/superpowers/specs/2026-10-21-photo-from-chat-design.md`.
 - **Offline PWA.** The app keeps working without a connection, for example in the kitchen.
 - **Shopping list.** Built from a recipe's missing ingredients; for drinks, from the bar's
   fresh items.
