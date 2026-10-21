@@ -230,3 +230,27 @@ def test_list_have_on_drinks_is_refused(client):
 
 def test_list_blank_have_on_drinks_is_fine(client):
     assert client.get("/api/recipes?side=drinks&have=%20").status_code == 200
+
+
+def test_settings_returns_the_default_quick_tags(client):
+    response = client.get("/api/settings")
+    assert response.status_code == 200
+    assert response.json() == {
+        "food_quick_tags": [
+            "breakfast",
+            "dinner",
+            "kid approved",
+            "quick",
+            "vegetarian",
+        ]
+    }
+
+
+def test_settings_returns_configured_quick_tags(tmp_path):
+    settings = Settings(food_quick_tags=("quick", "Kid approved"))
+    with TestClient(create_app(settings, data_dir=tmp_path)) as c:
+        assert c.get("/api/settings").json() == {
+            "food_quick_tags": ["quick", "Kid approved"]
+        }
+    with TestClient(create_app(Settings(food_quick_tags=()), data_dir=tmp_path)) as c:
+        assert c.get("/api/settings").json() == {"food_quick_tags": []}

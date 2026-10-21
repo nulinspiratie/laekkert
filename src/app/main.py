@@ -67,7 +67,7 @@ def create_app(
     return Starlette(
         routes=[
             Route("/healthz", healthz),
-            *api_routes(store, catalog, uploads, bar),
+            *api_routes(store, catalog, uploads, bar, settings),
             *mcp_app.routes,
             *web_routes(static_dir),
         ],

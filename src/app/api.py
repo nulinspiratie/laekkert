@@ -23,6 +23,7 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
 from starlette.routing import Route
 
+from app.config import Settings
 from app.recipes.bar import Bar, BarChanges, BarView, InventoryUnavailable
 from app.recipes.catalog import Catalog, CatalogUnavailable
 from app.recipes.drafts import parse_draft
@@ -212,7 +213,11 @@ def with_bar(body: dict, recipe: Recipe, view: BarView) -> dict:
 
 
 def api_routes(
-    store: RecipeStore, catalog: Catalog, uploads: UploadStore, bar: Bar
+    store: RecipeStore,
+    catalog: Catalog,
+    uploads: UploadStore,
+    bar: Bar,
+    settings: Settings,
 ) -> list[Route]:
     def detail(recipe: Recipe) -> dict:
         """A recipe's JSON. A drink's builds the bar view, which reads every drink."""
@@ -413,6 +418,9 @@ def api_routes(
         # In a worker thread: an MCP change may hold the bar's lock for a while.
         return JSONResponse(await run_in_threadpool(lambda: bar.apply(changes).json()))
 
+    async def read_settings(request: Request) -> JSONResponse:
+        return JSONResponse({"food_quick_tags": list(settings.food_quick_tags)})
+
     async def unknown(request: Request) -> JSONResponse:
         return not_found()
 
@@ -431,6 +439,7 @@ def api_routes(
         Route("/api/bar", read_bar),
         Route("/api/bar", change_bar, methods=["POST"]),
         Route("/api/uploads", upload_image, methods=["POST"]),
+        Route("/api/settings", read_settings),
         # Without this, unknown /api paths would fall through to the SPA.
         Route("/api/{rest:path}", unknown, methods=ALL_METHODS),
     ]

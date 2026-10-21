@@ -38,3 +38,19 @@ def test_config_path_from_app_config_env(tmp_path, monkeypatch):
 
 def test_example_config_matches_defaults():
     assert load_settings("config.example.toml") == Settings()
+
+
+def test_config_quick_tags_list_becomes_a_tuple(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text('food_quick_tags = ["quick", "Kid approved"]\nunknown_key = 1\n')
+    assert load_settings(path) == Settings(food_quick_tags=("quick", "Kid approved"))
+
+
+def test_config_quick_tags_default():
+    assert Settings().food_quick_tags == (
+        "breakfast",
+        "dinner",
+        "kid approved",
+        "quick",
+        "vegetarian",
+    )

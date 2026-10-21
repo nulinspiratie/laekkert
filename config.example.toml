@@ -5,3 +5,7 @@
 
 # Copy the bundled example recipes into the data folder when it has no recipes yet.
 seed_examples = true
+
+# Tags shown as one-tap filters at the top of the Food page, in this order.
+# Tags no food recipe uses are left out. [] shows no tag row.
+food_quick_tags = ["breakfast", "dinner", "kid approved", "quick", "vegetarian"]

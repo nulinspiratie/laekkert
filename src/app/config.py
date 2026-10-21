@@ -17,6 +17,13 @@ DEFAULT_CONFIG_PATH = "/config/config.toml"
 @dataclass(frozen=True)
 class Settings:
     seed_examples: bool = True
+    food_quick_tags: tuple[str, ...] = (
+        "breakfast",
+        "dinner",
+        "kid approved",
+        "quick",
+        "vegetarian",
+    )
 
 
 def load_settings(path: str | os.PathLike[str] | None = None) -> Settings:
@@ -27,4 +34,11 @@ def load_settings(path: str | os.PathLike[str] | None = None) -> Settings:
     except FileNotFoundError:
         return Settings()
     known = {f.name for f in fields(Settings)}
-    return Settings(**{k: v for k, v in data.items() if k in known})
+    # TOML lists become tuples, so they compare equal to the (hashable) defaults.
+    return Settings(
+        **{
+            k: tuple(v) if isinstance(v, list) else v
+            for k, v in data.items()
+            if k in known
+        }
+    )
