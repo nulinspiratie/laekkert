@@ -1,10 +1,13 @@
 """The per-recipe timeline: <recipe folder>/timeline.jsonl, one JSON entry per line.
 
-Entries are appended, never edited. The file can be edited by hand on the NAS, so
+Entries are appended, never edited, with one exception: a rating changed again right
+away replaces the one before it (see `RecipeStore.add_rating`). The file can be edited
+by hand on the NAS, so
 a line that does not parse (or has an unknown kind) is skipped with a warning
 instead of taking the history down, and is kept when the file is rewritten.
 """
 
+import json
 import logging
 import secrets
 from datetime import UTC, datetime
@@ -142,20 +145,38 @@ def _why(err: ValidationError) -> str:
     return f"{where}: {first['msg']}" if where else first["msg"]
 
 
-def append_entries(folder: Path, entries: list[Entry]) -> None:
+def _line_id(line: bytes) -> str | None:
+    try:
+        raw = json.loads(line)
+    except ValueError:
+        return None
+    return raw.get("id") if isinstance(raw, dict) else None
+
+
+def append_entries(
+    folder: Path, entries: list[Entry], *, replacing: str | None = None
+) -> None:
     """Add entries to the end of the file, rewriting it whole and atomically.
 
-    Existing lines are kept as they are, including ones this app can't read.
+    Existing lines are kept as they are, including ones this app can't read, except
+    the entry with the id `replacing`, which is taken out.
     """
     path = Path(folder) / TIMELINE_FILE
     try:
         existing = path.read_bytes()
     except FileNotFoundError:
         existing = b""
+    if replacing is not None:
+        lines = existing.split(b"\n")
+        existing = b"\n".join(line for line in lines if _line_id(line) != replacing)
     if existing and not existing.endswith(b"\n"):
         existing += b"\n"
     added = "".join(entry.model_dump_json() + "\n" for entry in entries)
     atomic_write(path, existing + added.encode("utf-8"))
+
+
+def entry_time(entry: Entry) -> datetime:
+    return datetime.strptime(entry.at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
 
 
 def new_entry(kind_model: type[_Base], via: Via, **fields) -> Entry:

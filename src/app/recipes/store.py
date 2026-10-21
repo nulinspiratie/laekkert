@@ -54,6 +54,7 @@ from app.recipes.timeline import (
     Via,
     append_entries,
     current_rating,
+    entry_time,
     last_made,
     new_entry,
     read_timeline,
@@ -81,6 +82,9 @@ def already_saved(slug: str) -> str:
 
 PHOTO_GONE = "That photo is no longer available; pick it again"
 RATING_RANGE = "Ratings go from 0.5 to 5 in half stars"
+# A rating changed again within this many seconds (a half star is two taps on a phone)
+# replaces the last one instead of adding a second entry.
+RATING_REDO_SECONDS = 120
 NOTE_TOO_LONG = "A note can be at most 2000 characters"
 VERSION_CONFLICT = (
     "This recipe was changed somewhere else since you opened it; "
@@ -111,6 +115,14 @@ def _locked(method: Callable) -> Callable:
             return method(self, *args, **kwargs)
 
     return wrapper
+
+
+def _redone_rating(entries: list[Entry], via: Via) -> Rating | None:
+    """The last entry, if it is a rating from `via` made a moment ago."""
+    if not entries or entries[-1].kind != "rating" or entries[-1].via != via:
+        return None
+    age = datetime.now(UTC) - entry_time(entries[-1])
+    return entries[-1] if age.total_seconds() <= RATING_REDO_SECONDS else None
 
 
 def _ordered(marks) -> list[Mark]:
@@ -513,9 +525,15 @@ class RecipeStore:
     def add_rating(self, side: str, slug: str, rating: float, via: Via) -> Entry | None:
         if self.get(side, slug) is None:
             return None
-        previous = current_rating(read_timeline(self.recipes_dir / side / slug))
+        entries = read_timeline(self.recipes_dir / side / slug)
+        previous = current_rating(entries)
+        redone = _redone_rating(entries, via)
+        if redone is not None:
+            previous = redone.previous
         entry = _entry(Rating, via, rating=rating, previous=previous)
-        self._taste(side, slug, entry)
+        # Back where it started: the redone rating goes and nothing takes its place.
+        added = [] if redone is not None and rating == previous else [entry]
+        self._taste(side, slug, added, replacing=redone and redone.id)
         return entry
 
     @_locked
@@ -525,16 +543,20 @@ class RecipeStore:
         if self.get(side, slug) is None:
             return None
         entry = _entry(Made, via, rating=rating, note=note)
-        self._taste(side, slug, entry)
+        self._taste(side, slug, [entry])
         return entry
 
-    def _taste(self, side: str, slug: str, entry: Entry) -> None:
+    def _taste(
+        self, side: str, slug: str, entries: list[Entry], replacing: str | None = None
+    ) -> None:
         """A tasting adds tried and clears try next, without a marks entry."""
         recipe = self.get(side, slug)
         assert recipe is not None
         marks = _ordered((set(recipe.marks) | {"tried"}) - {"try_next"})
         recipe = recipe.model_copy(update={"marks": marks})
-        self._commit(self.recipes_dir / side / slug, recipe, [entry])
+        self._commit(
+            self.recipes_dir / side / slug, recipe, entries, replacing=replacing
+        )
 
     def _free_slug(self, side: Side, name: str) -> str:
         base = slugify(name.strip())
@@ -574,6 +596,7 @@ class RecipeStore:
         baseline: bytes | None = None,
         moves: Sequence[tuple[Path, Path]] = (),
         new_folder: bool = False,
+        replacing: str | None = None,
     ) -> None:
         """Write one change as a unit, or leave everything as it was."""
         recipe_path = folder / "recipe.json"
@@ -605,7 +628,7 @@ class RecipeStore:
                 atomic_write(path, content)
                 written.append(path)
             atomic_write(recipe_path, data)
-            append_entries(folder, entries)
+            append_entries(folder, entries, replacing=replacing)
             # Uploads move last, so nothing is lost if an earlier step failed.
             for src, dst in moves:
                 os.replace(src, dst)

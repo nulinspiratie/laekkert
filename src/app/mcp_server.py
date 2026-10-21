@@ -337,7 +337,8 @@ def build_mcp(
         refused for a syrup (give it another kind first) and for an item
         Lækkert has a recipe for. Names in have, dont_have and untrack that the
         bar doesn't know yet are added. kinds sets an item's kind (spirits,
-        liqueurs, aperitifs, bitters, syrups or other), keyed by item name.
+        liqueurs, aperitifs, bitters, syrups or other), keyed by item name; a
+        new name in have or dont_have can be given its kind here too.
         add_names and remove_names give an item other names, keyed by item name.
         fold maps an item to the item it is a duplicate of: the first is merged
         into the second and its name becomes another name for it. Names are

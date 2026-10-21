@@ -156,15 +156,15 @@ suite('browseQuery', () => {
 })
 
 suite('defaultQuery', () => {
-  it('shows all food quickest first, and all drinks', () => {
-    expect(defaultQuery('food')).toBe('sort=time')
+  it('shows all food favourites first, and all drinks', () => {
+    expect(defaultQuery('food')).toBe('sort=favourites')
     expect(defaultQuery('drinks')).toBe('')
   })
 
   it('keeps the drinks view when given one', () => {
     expect(defaultQuery('drinks', 'mocktails')).toBe('show=mocktails')
     expect(defaultQuery('drinks', 'can')).toBe('')
-    expect(defaultQuery('food', 'all')).toBe('sort=time')
+    expect(defaultQuery('food', 'all')).toBe('sort=favourites')
   })
 })
 
@@ -220,6 +220,25 @@ suite('applyBrowse', () => {
       't2',
       'n0',
       'n1',
+    ])
+  })
+
+  it('favourites sort puts favourites, then tried, then the rest, quickest first in each', () => {
+    const list = [
+      recipe({ slug: 'new-fast', name: 'New fast', time_minutes: 5 }),
+      recipe({ slug: 'tried-slow', name: 'Tried slow', time_minutes: 60, marks: ['tried'] }),
+      recipe({ slug: 'fav-slow', name: 'Fav slow', time_minutes: 90, marks: ['tried', 'favourite'] }),
+      recipe({ slug: 'tried-fast', name: 'Tried fast', time_minutes: 10, marks: ['tried', 'try_next'] }),
+      recipe({ slug: 'fav-fast', name: 'Fav fast', time_minutes: 15, marks: ['favourite'] }),
+      recipe({ slug: 'next', name: 'Next', time_minutes: 1, marks: ['try_next'] }),
+    ]
+    expect(applyBrowse(list, state({ sort: 'favourites' })).map((r) => r.slug)).toEqual([
+      'fav-fast',
+      'fav-slow',
+      'tried-fast',
+      'tried-slow',
+      'next',
+      'new-fast',
     ])
   })
 

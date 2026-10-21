@@ -65,7 +65,8 @@ export function nameList(names: string[], max = 2): string {
 
 /**
  * The line a drink's card shows about the bar; `also` is a drink you can make that uses untracked
- * items. `text` is the one-line version (two names and "+N"); `label` names everything.
+ * items. `text` is the short version (two names and "+N", up to two lines on a card); `label`
+ * names everything.
  */
 export function badge(bar: DrinkBar): { kind: DrinkStatus | 'also'; text: string; label: string } {
   const named = (prefix: string, names: string[]) => ({

@@ -1077,7 +1077,8 @@ a.browse-head-btn {
   min-height: 26px;
   padding: 3px 10px;
   border: 1px solid transparent;
-  border-radius: 999px;
+  /* A pill on one line, a rounded box on two. */
+  border-radius: 13px;
   font-size: 12px;
   font-weight: 600;
   line-height: 1.25;
@@ -1087,12 +1088,15 @@ a.browse-head-btn {
   flex: none;
 }
 
-/* One line; the full list is the badge's title and accessible name. */
+/* Up to two lines; the full list is the badge's title and accessible name. */
 .bar-badge > span {
+  display: -webkit-box;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .recipe-card-photo .bar-badge {

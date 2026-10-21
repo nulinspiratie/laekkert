@@ -114,7 +114,7 @@ One change model, used by the app and by Claude, applied all-or-nothing under on
 | `unsorted` | Clear the state (the app's undo). An unknown name is an error. |
 | `fresh` | Mark fresh and clear the state. An unknown name is added as a fresh item. |
 | `not_fresh` | Back on the shelf, unsorted. |
-| `kinds` | `{name: kind}`. |
+| `kinds` | `{name: kind}`. A new name in `have` or `dont_have` is added with this kind. |
 | `add_names`, `remove_names` | `{name: [other names]}`. |
 | `fold` | `{name: into}`. |
 | `delete` | `[names]`. The app only; Claude cannot delete. |

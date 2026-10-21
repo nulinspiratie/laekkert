@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 from app.recipes.files import atomic_write
 from app.recipes.timeline import (
+    TIMELINE_FILE,
     Change,
     Made,
     Note,
@@ -188,3 +189,15 @@ def test_change_accepts_the_notes_section():
     assert change.section == "notes"
     with pytest.raises(ValidationError):
         Change(section="groups", kind="changed", text="x")
+
+
+def test_append_entries_can_replace_an_entry(tmp_path):
+    first = new_entry(Rating, "app", rating=4, previous=None)
+    note = new_entry(Note, "app", text="hi")
+    append_entries(tmp_path, [first, note])
+    with (tmp_path / TIMELINE_FILE).open("ab") as f:
+        f.write(b"not json\n")
+    second = new_entry(Rating, "app", rating=3.5, previous=None)
+    append_entries(tmp_path, [second], replacing=first.id)
+    assert read_timeline(tmp_path) == [note, second]
+    assert b"not json\n" in (tmp_path / TIMELINE_FILE).read_bytes()

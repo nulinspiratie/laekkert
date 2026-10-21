@@ -36,7 +36,7 @@ test('nav links go to each side with its default query', () => {
   expect(nav).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Food' })).toHaveAttribute(
     'href',
-    '/food?sort=time',
+    '/food?sort=favourites',
   )
   expect(screen.getByRole('link', { name: 'Drinks' })).toHaveAttribute('href', '/drinks')
 })
