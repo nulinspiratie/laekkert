@@ -31,7 +31,8 @@ INSTRUCTIONS = (
     "Lækkert is Serwan's recipe app. Food and drinks are separate sides and are "
     "never mixed. You can list, search, read, add and edit recipes. Before adding "
     "or editing, read the style guide (get_style_guide or the laekkert://style-guide "
-    "resource) and follow it. Amounts are metric (g, ml)."
+    "resource) and follow it. Amounts are metric (g, ml). Every new recipe gets a "
+    "photo: when the source has none, search the web for one (see the style guide)."
     " The drinks side has a bar (read_bar, manage_inventory). Only bottles are "
     "tracked; fresh items, syrups and mixers never are, and ‘can make’ means "
     "every tracked bottle is in."
@@ -459,8 +460,10 @@ def build_mcp(
         Give source_url when the recipe comes from a web page: it is kept as the
         recipe's source and the page's main photo is fetched and attached.
         image_url attaches a photo from that link instead. If no photo can be
-        fetched the recipe is still saved, with a warning. A recipe already
-        saved with the same source_url on that side is refused.
+        fetched the recipe is still saved, with a warning. Every new recipe
+        gets a photo: with no source, or a source without one, find one on the
+        web (see the style guide). A recipe already saved with the same
+        source_url on that side is refused.
         """
         source_url = (source_url or "").strip() or None
         image_url = (image_url or "").strip() or None

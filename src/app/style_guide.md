@@ -99,18 +99,25 @@ Shown under the method. For what isn't a step: storage, make-ahead, swaps, servi
 
 ## Sources and photos
 
+- **Every new recipe gets a photo.** The app is private (just Serwan and his partner,
+  behind a login), so any photo from the web is fine. Pick one that shows this dish
+  finished and served, close to what the recipe makes: a daiquiri in a coupe, not a row
+  of cocktails; a dal in a bowl, not raw lentils. No collages, text overlays or logos.
 - **From a web page:** fetch the page yourself, write the recipe from it in this style,
   and pass the page's address as `source_url`. The app saves the link and takes the
-  page's main photo by itself.
-- **Photo rule:** the app is private (just Serwan and his partner, behind a login), so
-  any photo is fine. For a recipe from a web page, the app uses the page's own photo; pass
-  an `image_url` only if you found a better one. For a recipe with no source (an idea, or
-  one you wrote), look for a photo on the web that shows the dish well and pass its
-  direct image address as `image_url`. No photo is fine too: recipes without one look
-  intentional.
+  page's main photo by itself. If `add_recipe` comes back with `"photo": false`, search
+  the web for a photo of the dish and attach it with `edit_recipe` and `image_url`.
+- **With no source** (an idea, or one you wrote): search the web for a photo of the dish
+  and pass it to `add_recipe` as `image_url`.
 - **From a photo in the chat** (a cookbook page, a handwritten card): read it and write
-  the recipe from it. You can't attach that photo to the recipe; Serwan adds it in the
-  app if he wants it.
+  the recipe from it. You can't attach that photo to the recipe, so search the web
+  for one; Serwan can swap in his own in the app.
+- `image_url` is the direct address of the image file (usually ending in `.jpg`,
+  `.png` or `.webp`), not the page it's on. If it can't be fetched the result has a
+  warning: try another photo. After two or three failures, leave it without one and say
+  so.
+- Skip the photo only when Serwan asks for none. When editing, don't add or change a
+  photo unless asked.
 
 ## Editing
 
