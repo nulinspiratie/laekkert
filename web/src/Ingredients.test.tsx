@@ -130,12 +130,12 @@ test('pinch and dash print their unit once', () => {
 
 test('food page has no bar', () => {
   // A food recipe never has bar fields; even if one did, the food side shows none of it.
-  const withBar = ing({ item: 'olive oil', amount: 30, unit: 'ml', bar: { item: 'olive oil', state: 'have', fresh: false, recipe: null } })
+  const withBar = ing({ item: 'olive oil', amount: 30, unit: 'ml', bar: { item: 'olive oil', state: 'have', tracked: true, recipe: null } })
   render(<Ingredients ingredients={[withBar, chicken]} servings={4} side="food" />)
   expect(screen.getByRole('group', { name: 'Servings' })).toBeInTheDocument()
   expect(screen.queryByRole('group', { name: 'Drinks to make' })).not.toBeInTheDocument()
   expect(screen.queryByText(/in the bar/i)).not.toBeInTheDocument()
-  expect(screen.queryByText(/From your bar|Missing:|Buy fresh:/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/From your bar|Missing:|Also needs:/)).not.toBeInTheDocument()
   expect(screen.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual([
     'Fewer servings',
     'More servings',
@@ -153,6 +153,25 @@ test('a drink written for more than 12 starts at 12', () => {
   )
   expect(screen.getByText('12 drinks')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'More' })).toBeDisabled()
+})
+
+test('a mocktail with no tracked bottles shows only the Also needs line', () => {
+  const untracked = (item: string) =>
+    ing({ item, amount: 30, unit: 'ml', bar: { item, state: null, tracked: false, recipe: null } })
+  render(
+    <MemoryRouter>
+      <Ingredients
+        ingredients={[untracked('lime juice'), untracked('ginger beer')]}
+        servings={1}
+        side="drinks"
+        bar={{ status: 'can_make', missing: [], unsorted: [], untracked: ['lime juice', 'ginger beer'] }}
+      />
+    </MemoryRouter>,
+  )
+  const summary = document.querySelector<HTMLElement>('.ingredients-bar')!
+  expect(summary).toHaveTextContent(/^Also needs: lime juice, ginger beer$/)
+  expect(screen.queryByText(/From your bar|Missing:/)).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /in the bar|not sorted/i })).not.toBeInTheDocument()
 })
 
 test('ungrouped rows have no heading and sit in one list', () => {
@@ -206,7 +225,7 @@ test('ungrouped rows after a group are set off by a rule, not a heading', () => 
 })
 
 test('a drink in a group flips the bar state of its own row, not the same place in another run', async () => {
-  const bar = (item: string) => ({ item, state: 'dont' as const, fresh: false, recipe: null })
+  const bar = (item: string) => ({ item, state: 'dont' as const, tracked: true, recipe: null })
   const gin = ing({ item: 'gin', amount: 50, unit: 'ml', bar: bar('gin') })
   const lime = ing({ item: 'lime juice', amount: 25, unit: 'ml', group: 'Sour mix', bar: bar('lime juice') })
   const syrup = ing({ item: 'sugar syrup', amount: 15, unit: 'ml', group: 'Sour mix', bar: bar('sugar syrup') })

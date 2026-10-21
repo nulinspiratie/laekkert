@@ -90,7 +90,8 @@ Shown under the method. For what isn't a step: storage, make-ahead, swaps, servi
 ## Tags
 
 - Lowercase, few, and useful as filters: `vegetarian`, `vegan`, `batch cook`,
-  `date night`, `quick`, `kid approved`, `classic`, `mocktail`.
+  `date night`, `quick`, `kid approved`, `classic`.
+- Don't tag what the category already says (`mocktail`, `syrup`).
 - Use a tag already in use when one fits; look at existing recipes with
   `search_recipes` or `list_recipes` first.
 - Never set marks (favourite, try next, tried) or ratings. Those are for the people who

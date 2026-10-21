@@ -14,9 +14,10 @@ const daiquiri = {
   rating: null,
   last_made: null,
   image: null,
+  bar: { status: 'can_make', missing: [], unsorted: [], untracked: [] },
 }
 
-const NO_COUNTS = { can_make: 0, fresh_only: 0, missing: 0, unsorted: 0, total: 0 }
+const NO_COUNTS = { can_make: 0, missing: 0, unsorted: 0, total: 0 }
 
 function stubFetch(status: number, body: unknown) {
   const fetch = vi.fn(async () => new Response(JSON.stringify(body), { status }))
@@ -97,7 +98,7 @@ test('routes /bar to the bar and /drinks/bar to the recipe', async () => {
   }
   const fetch = vi.fn(async (url: string) => {
     if (url === '/api/bar') {
-      const bar = { items: [], set_up: false, counts: { can_make: 0, fresh_only: 0, missing: 0, unsorted: 0, total: 0 } }
+      const bar = { items: [], set_up: false, counts: { can_make: 0, missing: 0, unsorted: 0, total: 0 } }
       return new Response(JSON.stringify(bar), { status: 200 })
     }
     if (url === '/api/recipes/drinks/bar') return new Response(JSON.stringify(barRecipe), { status: 200 })

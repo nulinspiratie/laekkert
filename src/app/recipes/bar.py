@@ -2,9 +2,17 @@
 
 The catalog (`catalog/ingredients.json`) says what an item is: its name, other
 names, kind and whether it is fresh. The inventory (`inventory.json`) says only
-whether the household has it. The bar's items are every ingredient of every
-drink, resolved through the catalog, plus every catalog entry with a kind.
-Fresh items are never tracked.
+whether the household has it. The bar covers cocktails and mocktails: its items
+are every ingredient of those, resolved through the catalog, plus every catalog
+entry with a kind. Syrups and prep recipes are things you make: their
+ingredients don't fill the bar and they have no status.
+
+Only bottles are tracked. An item is not tracked when its kind is syrups (an
+item with no kind counts as syrups when its name has the word "syrup"), when
+Lækkert has a syrups or prep recipe for it, or when its entry is marked fresh.
+An item that is not tracked has no state, whatever the inventory says (its
+inventory entry is dropped on the next bar write), and never keeps a drink
+from being made.
 
 Reading is lenient, like the catalog: an inventory that cannot be read means
 everything is unsorted, with a warning. Changing is strict: `Bar.apply` refuses
@@ -36,14 +44,18 @@ from app.recipes.ingredients import (
     touched_json,
 )
 from app.recipes.model import SIDES, Recipe
+from app.recipes.search import words
 from app.recipes.store import RecipeStore
 
 INVENTORY_FORMAT_VERSION = 1
 MAX_NAMES = 200
 
 State = Literal["have", "dont"]
-Status = Literal["can_make", "fresh_only", "missing", "unsorted"]
+Status = Literal["can_make", "missing", "unsorted"]
+UntrackedBecause = Literal["syrups", "recipe", "marked"]
 STATES: tuple[State, ...] = ("have", "dont")
+BAR_CATEGORIES = ("cocktails", "mocktails")  # the drinks the bar covers
+MADE_CATEGORIES = ("syrups", "prep")  # recipes for items, with no bar status
 
 UNAVAILABLE = (
     "The bar's inventory can't be read, so it can't be changed. "
@@ -56,6 +68,14 @@ USED = "Only items no drink uses can be deleted."
 NO_DELETE = "Deleting isn't possible here."
 
 log = logging.getLogger("app.recipes")
+
+
+def effective_kind(kind: Kind | None, name: str) -> Kind:
+    """The kind an item counts as: its own, else syrups when its name has the
+    word "syrup" or "syrups", else other."""
+    if kind is not None:
+        return kind
+    return "syrups" if {"syrup", "syrups"} & set(words(name)) else "other"
 
 
 def _no_item(name: str) -> str:
@@ -78,6 +98,12 @@ def _two_ways(name: str) -> str:
     return f"‘{name}’ can't be changed two ways at once."
 
 
+def _still_untracked(name: str, because: UntrackedBecause) -> str:
+    if because == "syrups":
+        return f"Syrups aren't tracked. Give ‘{name}’ another kind first."
+    return f"Lækkert has a recipe for ‘{name}’, so it isn't tracked."
+
+
 class BarError(ValueError):
     """A change the bar refuses; `str(exc)` is the sentence to show."""
 
@@ -94,8 +120,8 @@ class BarChanges(BaseModel):
     have: list[str] = []
     dont_have: list[str] = []
     unsorted: list[str] = []
-    fresh: list[str] = []
-    not_fresh: list[str] = []
+    untrack: list[str] = []
+    track: list[str] = []
     kinds: dict[str, Kind] = {}
     add_names: dict[str, list[str]] = {}
     remove_names: dict[str, list[str]] = {}
@@ -117,8 +143,8 @@ class BarChanges(BaseModel):
             *self.have,
             *self.dont_have,
             *self.unsorted,
-            *self.fresh,
-            *self.not_fresh,
+            *self.untrack,
+            *self.track,
             *self.kinds,
             *self.fold,
             *self.fold.values(),
@@ -134,8 +160,9 @@ class BarChanges(BaseModel):
 class BarItem:
     name: str
     aliases: list[str]
-    kind: Kind
-    fresh: bool
+    kind: Kind  # the effective kind
+    tracked: bool
+    untracked_because: UntrackedBecause | None
     state: State | None
     used_in: list[dict]
     recipe: dict | None
@@ -189,7 +216,8 @@ class _Inventory:
 
 
 class _Registry:
-    """Which item each name means, for catalog entries (None = unreadable) and drinks.
+    """Which item each name means, for catalog entries (None = unreadable) and
+    every drink, whatever its category.
 
     An entry whose name is already taken by an earlier entry is left out, so
     every name means at most one entry, the first, as in `Catalog.entry`.
@@ -213,17 +241,26 @@ class _Registry:
                 if key := name_key(name):
                     self.index.setdefault(key, position)
         self.virtual: dict[str, str] = {}  # item key -> name
-        self.used_in: dict[str, list[Recipe]] = {}  # item key -> drinks
+        self.used_in: dict[str, list[Recipe]] = {}  # item key -> every drink
+        self.bar_used: dict[str, list[Recipe]] = {}  # item key -> bar drinks
+        self.made: dict[str, Recipe] = {}  # recipe name's key -> syrup or prep
         for recipe in drinks:
+            if recipe.category in MADE_CATEGORIES:
+                self.made.setdefault(name_key(recipe.name), recipe)
             for ingredient in recipe.ingredients:
                 key = name_key(ingredient.item)
                 if not key:
                     continue
                 if key not in self.index:
                     self.virtual.setdefault(key, ingredient.item)
-                users = self.used_in.setdefault(self.item_key(ingredient.item), [])
-                if not users or users[-1] is not recipe:
-                    users.append(recipe)
+                item = self.item_key(ingredient.item)
+                indexes = [self.used_in]
+                if recipe.category in BAR_CATEGORIES:
+                    indexes.append(self.bar_used)
+                for index in indexes:
+                    users = index.setdefault(item, [])
+                    if not users or users[-1] is not recipe:
+                        users.append(recipe)
 
     def item_key(self, name: str) -> str | None:
         """The item this name means: an entry (shown or not), a virtual item or None."""
@@ -237,13 +274,31 @@ class _Registry:
         return None if position is None else self.entries[position]
 
     def in_bar(self, item: str | None) -> bool:
-        """Shown on the bar: used by a drink, or an entry with a kind."""
+        """Shown on the bar: used by a cocktail or mocktail, or an entry with a
+        kind, unless it is an M4 leftover (see `made_only_other`)."""
         if item is None:
             return False
-        if item in self.used_in:
+        if item in self.bar_used:
             return True
         entry = self.entry(item)
-        return entry is not None and entry.kind is not None
+        return (
+            entry is not None
+            and entry.kind is not None
+            and not self.made_only_other(item)
+        )
+
+    def made_only_other(self, item: str) -> bool:
+        """Kind Other and used only by syrups and prep recipes: M4 sorted every
+        drink's ingredients, so it gave such items (sugar, water) kind Other and
+        a state. They are not on the bar, whatever state they kept. An Other
+        bottle no recipe uses stays."""
+        entry = self.entry(item)
+        return (
+            entry is not None
+            and entry.kind == "other"
+            and item in self.used_in
+            and item not in self.bar_used
+        )
 
     def name(self, item: str) -> str:
         entry = self.entry(item)
@@ -265,6 +320,28 @@ class _Registry:
         entry = self.entry(item)
         return entry is not None and entry.fresh
 
+    def kind(self, item: str) -> Kind:
+        """The item's effective kind (see `effective_kind`)."""
+        entry = self.entry(item)
+        return effective_kind(entry.kind if entry else None, self.name(item))
+
+    def recipe(self, item: str) -> Recipe | None:
+        """The syrups or prep recipe named like the item or one of its names."""
+        for name in (self.name(item), *self.aliases(item)):
+            if recipe := self.made.get(name_key(name)):
+                return recipe
+        return None
+
+    def untracked_because(self, item: str) -> UntrackedBecause | None:
+        """Why the item is not tracked, the first reason that holds; None if it is."""
+        if self.kind(item) == "syrups":
+            return "syrups"
+        if self.recipe(item) is not None:
+            return "recipe"
+        if self.fresh(item):
+            return "marked"
+        return None
+
     def keys(self, item: str) -> list[str]:
         """The keys of every name that means this item (`item_key` gives it)."""
         position = self.by_item.get(item)
@@ -280,8 +357,9 @@ class _Registry:
         return keys
 
     def state(self, item: str, inventory: _Inventory) -> State | None:
-        """The first inventory state under any of the item's names; None if fresh."""
-        if self.fresh(item):
+        """The first inventory state under any of the item's names; None if the
+        item is not tracked."""
+        if self.untracked_because(item) is not None:
             return None
         for name in inventory.names(self.keys(item)):
             if (state := inventory.items[name]) in STATES:
@@ -335,54 +413,53 @@ class BarView:
         self._registry = registry = _Registry(list(entries), drinks)
         self._drinks = drinks
         shelf = _Inventory(inventory)
-        syrups: dict[str, Recipe] = {}
-        for recipe in drinks:
-            if recipe.category == "syrups":
-                syrups.setdefault(name_key(recipe.name), recipe)
-        keys = set(registry.used_in)
+        keys = set(registry.bar_used)
         keys.update(key for key in registry.by_item if registry.in_bar(key))
         self._items: dict[str, BarItem] = {}
         for key in sorted(keys):
-            entry = registry.entry(key)
-            name = registry.name(key)
-            aliases = registry.aliases(key)
-            recipe = next(
-                (
-                    syrups[name_key(n)]
-                    for n in (name, *aliases)
-                    if name_key(n) in syrups
-                ),
-                None,
-            )
+            because = registry.untracked_because(key)
+            recipe = registry.recipe(key)
             self._items[key] = BarItem(
-                name=name,
-                aliases=aliases,
-                kind=(entry.kind if entry else None) or "other",
-                fresh=registry.fresh(key),
+                name=registry.name(key),
+                aliases=registry.aliases(key),
+                kind=registry.kind(key),
+                tracked=because is None,
+                untracked_because=because,
                 state=registry.state(key, shelf),
                 used_in=[_link(r) for r in registry.used_in.get(key, [])],
                 recipe=_link(recipe) if recipe else None,
             )
         self.items: list[BarItem] = list(self._items.values())
+        # Untracked items have no state, so only a tracked one sets the bar up.
         self.set_up: bool = any(i.state is not None for i in self.items)
 
     def item_for(self, text: str) -> BarItem | None:
         key = self._registry.item_key(text)
         return self._items.get(key) if key else None
 
-    def status(self, recipe: Recipe) -> dict:
+    def _line(self, text: str) -> tuple[str, bool, State | None]:
+        """An ingredient's item name, whether it is tracked, and its state."""
+        if item := self.item_for(text):
+            return item.name, item.tracked, item.state
+        # Not on the bar in this view (a recipe saved since): not sorted.
+        registry = self._registry
+        key = registry.item_key(text)
+        if key is None:
+            made = name_key(text) in registry.made
+            return text, not made and effective_kind(None, text) != "syrups", None
+        return registry.name(key), registry.untracked_because(key) is None, None
+
+    def status(self, recipe: Recipe) -> dict | None:
+        """What a cocktail or mocktail needs; None for a syrups or prep recipe."""
+        if recipe.category in MADE_CATEGORIES:
+            return None
         missing: list[str] = []
         unsorted: list[str] = []
-        fresh: list[str] = []
+        untracked: list[str] = []
         for ingredient in recipe.ingredients:
-            item = self.item_for(ingredient.item)
-            if item is None:
-                # Not in this view (a recipe saved since): an unsorted bottle.
-                name, is_fresh, state = ingredient.item, False, None
-            else:
-                name, is_fresh, state = item.name, item.fresh, item.state
-            if is_fresh:
-                group = fresh
+            name, tracked, state = self._line(ingredient.item)
+            if not tracked:
+                group = untracked
             elif state == "dont":
                 group = missing
             elif state is None:
@@ -395,15 +472,13 @@ class BarView:
             status: Status = "missing"
         elif unsorted:
             status = "unsorted"
-        elif fresh:
-            status = "fresh_only"
         else:
             status = "can_make"
         return {
             "status": status,
             "missing": missing,
             "unsorted": unsorted,
-            "fresh": fresh,
+            "untracked": untracked,
         }
 
     def ingredient(self, text: str) -> dict | None:
@@ -413,18 +488,19 @@ class BarView:
         return {
             "item": item.name,
             "state": item.state,
-            "fresh": item.fresh,
+            "tracked": item.tracked,
             "recipe": item.recipe,
         }
 
     def json(self) -> dict:
-        counts = {"can_make": 0, "fresh_only": 0, "missing": 0, "unsorted": 0}
+        counts = {"can_make": 0, "missing": 0, "unsorted": 0}
         for recipe in self._drinks:
-            counts[self.status(recipe)["status"]] += 1
+            if (status := self.status(recipe)) is not None:
+                counts[status["status"]] += 1
         return {
             "items": [item.json() for item in self.items],
             "set_up": self.set_up,
-            "counts": {**counts, "total": len(self._drinks)},
+            "counts": {**counts, "total": sum(counts.values())},
         }
 
 
@@ -483,17 +559,20 @@ class _Draft:
         return entry
 
     def touch(self, item: str) -> dict:
-        """The item's catalog entry, made if it is virtual, with a kind."""
+        """The item's catalog entry, made if it is virtual, with a kind (its
+        effective kind, when it had none)."""
         entry = self.raw_entry(item)
+        name = self.registry.name(item)
         if entry is None:
-            return self.add_entry({"name": self.registry.name(item), "kind": "other"})
+            return self.add_entry({"name": name, "kind": effective_kind(None, name)})
         if entry.get("kind") is None:
-            entry["kind"] = "other"
+            entry["kind"] = effective_kind(None, name)
             self.updated(item)
         return entry
 
     def new_item(self, name: str, **fields) -> str:
-        self.add_entry({"name": name.strip(), "kind": "other", **fields})
+        name = name.strip()
+        self.add_entry({"name": name, "kind": effective_kind(None, name), **fields})
         return self.key(name)
 
     def state(self, item: str) -> State | None:
@@ -504,13 +583,21 @@ class _Draft:
             self._shelf.remove(name)
 
     def set_state(self, item: str, state: State) -> None:
-        if self.registry.fresh(item):
-            return  # fresh items are never tracked
+        if self.registry.untracked_because(item) is not None:
+            return  # an untracked item has no state
         names = self.registry.inventory_names(item, self._shelf)
         if len(names) == 1 and self.inventory[names[0]] == state:
             return
         self.clear_state(item)
         self._shelf.set(self.registry.name(item), state)
+
+    def prune_untracked(self) -> None:
+        """Drop every inventory name whose item is not tracked."""
+        registry = self.registry
+        for name in list(self.inventory):
+            item = registry.item_key(name)
+            if item is not None and registry.untracked_because(item) is not None:
+                self._shelf.remove(name)
 
 
 def _check_conflicts(changes: BarChanges, draft: _Draft) -> None:
@@ -524,14 +611,14 @@ def _check_conflicts(changes: BarChanges, draft: _Draft) -> None:
 
     have, dont = keyed(changes.have), keyed(changes.dont_have)
     unsorted = keyed(changes.unsorted)
-    fresh, not_fresh = keyed(changes.fresh), keyed(changes.not_fresh)
+    untrack, track = keyed(changes.untrack), keyed(changes.track)
     others = keyed(
         [
             *changes.have,
             *changes.dont_have,
             *changes.unsorted,
-            *changes.fresh,
-            *changes.not_fresh,
+            *changes.untrack,
+            *changes.track,
             *changes.kinds,
             *changes.add_names,
             *changes.remove_names,
@@ -543,9 +630,9 @@ def _check_conflicts(changes: BarChanges, draft: _Draft) -> None:
         (have, dont),
         (have, unsorted),
         (dont, unsorted),
-        (fresh, not_fresh),
-        (have, fresh),
-        (dont, fresh),
+        (untrack, track),
+        (have, untrack),
+        (dont, untrack),
         (others, keyed(changes.delete)),
     ]
     for first, second in pairs:
@@ -577,15 +664,16 @@ def _fold(draft: _Draft, source: str, into: str) -> None:
     if a_raw is not None:
         draft.drop_entry(a_raw)
     if b_raw is None:
+        b_name = registry.name(b)
         b_raw = {
-            "name": registry.name(b),
-            "kind": (a_entry and a_entry.kind) or "other",
+            "name": b_name,
+            "kind": (a_entry and a_entry.kind) or effective_kind(None, b_name),
         }
         if a_entry and a_entry.fresh:
             b_raw["fresh"] = True
         draft.add_entry(b_raw)
     elif b_raw.get("kind") is None:
-        b_raw["kind"] = "other"
+        b_raw["kind"] = effective_kind(None, b_raw["name"])
     aliases = list(b_raw.get("aliases", []))
     known = {name_key(n) for n in (b_raw["name"], *aliases)}
     for name in a_names:
@@ -635,7 +723,7 @@ def _apply(changes: BarChanges, draft: _Draft) -> None:
     for item, names in changes.add_names.items():
         _add_names(draft, item, names)
 
-    for name in changes.fresh:
+    for name in changes.untrack:
         item = draft.registry.item_key(name)
         if item is None:
             draft.clear_state(draft.new_item(name, fresh=True))
@@ -645,8 +733,10 @@ def _apply(changes: BarChanges, draft: _Draft) -> None:
         if entry.get("fresh") is not True:
             entry["fresh"] = True
             draft.updated(item)
-    for name in changes.not_fresh:
+    tracked: dict[str, str] = {}  # item -> its name as given
+    for name in changes.track:
         item = draft.bar_item(name)
+        tracked.setdefault(item, name)
         draft.clear_state(item)
         entry = draft.touch(item)
         if "fresh" in entry:
@@ -657,7 +747,11 @@ def _apply(changes: BarChanges, draft: _Draft) -> None:
         item = draft.bar_item(name)
         entry = draft.touch(item)
         entry["kind"] = kind
-        draft.updated(item)
+        draft.updated(item)  # syrups: its state goes with `prune_untracked`
+    # Only now, so a new kind in the same change can make an item trackable.
+    for item, name in tracked.items():
+        if (because := draft.registry.untracked_because(item)) is not None:
+            raise BarError(_still_untracked(name, because))
 
     for names, state in ((changes.have, "have"), (changes.dont_have, "dont")):
         for name in names:
@@ -692,12 +786,13 @@ def _apply(changes: BarChanges, draft: _Draft) -> None:
 
 
 def _bar_states(raw: list, drinks: list[Recipe], shelf: _Inventory) -> dict:
-    """Each bar item's name and state, by item key."""
+    """Whether each bar item is tracked, and its state, by item key."""
     registry = _Registry([_parse(r) for r in raw], drinks)
-    keys = set(registry.used_in)
+    keys = set(registry.bar_used)
     keys.update(key for key in registry.by_item if registry.in_bar(key))
     return {
-        key: (registry.fresh(key), registry.state(key, shelf)) for key in sorted(keys)
+        key: (registry.untracked_because(key) is None, registry.state(key, shelf))
+        for key in sorted(keys)
     }
 
 
@@ -709,7 +804,7 @@ def _check_bar_kept(
     merges: dict[str, str],
 ) -> None:
     """Refuse merges that change the bar: the same items, each with its state,
-    unless a merge made it fresh (fresh items have no state).
+    unless a merge untracked it (untracked items have no state).
 
     A merged name can carry an inventory state no bar item showed (left from a
     drink since deleted); merged into a bar item, it would show there. The
@@ -718,7 +813,7 @@ def _check_bar_kept(
     before = _bar_states(raw, recipes["drinks"], shelf)
     after = _bar_states(new_raw, recipes["drinks"], shelf)
     if before.keys() == after.keys() and all(
-        after[key] == before[key] or (after[key][0] and not before[key][0])
+        after[key] == before[key] or (before[key][0] and not after[key][0])
         for key in before
     ):
         return
@@ -759,6 +854,7 @@ class Bar:
             draft = _Draft(raw, items, drinks)
             _check_conflicts(changes, draft)
             _apply(changes, draft)
+            draft.prune_untracked()
             if draft.raw != raw:
                 self._catalog.save_raw(draft.raw)
             if draft.inventory != items:
@@ -784,8 +880,14 @@ class Bar:
 
             def is_on_bar(name: str) -> bool:
                 item = registry.item_key(name)
-                return registry.in_bar(item) or (
-                    item is not None and registry.state(item, shelf) is not None
+                if item is None:
+                    return False
+                if registry.in_bar(item):
+                    return True
+                # An M4 leftover's stored state doesn't put it on the bar.
+                return (
+                    not registry.made_only_other(item)
+                    and registry.state(item, shelf) is not None
                 )
 
             def bar_kept(merged: list) -> None:

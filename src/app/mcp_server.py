@@ -32,8 +32,9 @@ INSTRUCTIONS = (
     "never mixed. You can list, search, read, add and edit recipes. Before adding "
     "or editing, read the style guide (get_style_guide or the laekkert://style-guide "
     "resource) and follow it. Amounts are metric (g, ml)."
-    " Drinks have a bar of bottles the household has or doesn't have (read_bar, "
-    "manage_inventory); fresh items such as limes are never tracked."
+    " The drinks side has a bar (read_bar, manage_inventory). Only bottles are "
+    "tracked; fresh items, syrups and mixers never are, and ‘can make’ means "
+    "every tracked bottle is in."
     " You can list the ingredient names in use (list_ingredients) and merge names "
     "that are the same ingredient (merge_ingredients); recipes keep their wording."
 )
@@ -42,7 +43,7 @@ INSTRUCTIONS = (
 STYLE_GUIDE = (resources.files("app") / "style_guide.md").read_text(encoding="utf-8")
 
 Sort = Literal["relevance", "name", "time", "rating", "recently_made"]
-BarStatus = Literal["can_make", "fresh_only"]
+BarStatus = Literal["can_make"]
 
 NO_PHOTO = "the page has no main photo"
 PHOTO_FAILED = "the photo could not be fetched"
@@ -212,10 +213,11 @@ def build_mcp(
 
         Each entry has slug, name, side, category, time_minutes, tags, marks,
         image, rating (stars, or null if unrated), last_made (when it was last
-        made, or null) and version. Drinks also have bar: whether the bar can
-        make them (status can_make, fresh_only, missing or unsorted) and which
-        bottles are missing, unsorted or fresh. Use read_recipe with the slug
-        for ingredients and steps.
+        made, or null) and version. Cocktails and mocktails also have bar:
+        whether the bar can make them (status can_make, missing or unsorted),
+        which tracked bottles are missing or unsorted, and which ingredients
+        are untracked. Syrups and prep have bar null. Use read_recipe with the
+        slug for ingredients and steps.
         """
         view = view_for(side)
         return [entry(r, view) for r in store.list(side)]
@@ -240,8 +242,9 @@ def build_mcp(
         relevance (best match first), name, time (shortest first), rating
         (highest first) or recently_made (latest first); recipes without a
         time, rating or made date come last. At most limit entries come back.
-        bar (drinks only) keeps the drinks the bar can make now (can_make) or
-        can make once fresh items such as limes are at hand (fresh_only).
+        bar (drinks only) keeps the cocktails and mocktails the bar can make
+        now (can_make); syrups and prep are left out. Mocktails are a category
+        (category="mocktails"), not a tag.
         have (food only) lists ingredients on hand, like ["chicken", "leeks"]:
         it keeps recipes that use at least one, fewest missing first, instead of
         sort. Each entry then has have: matched and missing ingredients (salt to
@@ -265,8 +268,10 @@ def build_mcp(
                 and recipe.category.casefold() != category.casefold()
             ):
                 continue
-            if bar is not None and view.status(recipe)["status"] != bar:
-                continue
+            if bar is not None:
+                status = view.status(recipe)
+                if status is None or status["status"] != bar:
+                    continue
             found.append(recipe)
         if terms:
             return [
@@ -297,12 +302,16 @@ def build_mcp(
     def read_bar() -> dict[str, Any]:
         """Read the bar: the drink ingredients the household has or doesn't have.
 
-        items lists every bottle with name, aliases (other names that mean it),
-        kind, fresh, state (have, dont or null when not sorted yet), used_in
-        (the drinks that use it) and recipe (the syrup recipe that makes it, or
-        null). set_up is false until something has been sorted. counts says how
-        many drinks can be made, can be made with fresh items, are missing a
-        bottle or have an unsorted one. Use manage_inventory to change it.
+        Only bottles are tracked. items lists every ingredient the drinks use
+        with name, aliases (other names that mean it), kind, tracked (false for
+        fresh items, syrups and anything Lækkert has a recipe for),
+        untracked_because (syrups, recipe, marked or null when tracked), state
+        (have, dont or null when not sorted yet; always null when untracked),
+        used_in (the drinks that use it) and recipe (the recipe that makes it,
+        or null). set_up is false until something has been sorted. counts says
+        how many cocktails and mocktails (total) can be made (can_make), are
+        missing a tracked bottle (missing) or have an unsorted one (unsorted).
+        Use manage_inventory to change it.
         """
         return bar.view().json()
 
@@ -310,8 +319,8 @@ def build_mcp(
     def manage_inventory(
         have: list[str] = Field(default_factory=list),  # noqa: B008
         dont_have: list[str] = Field(default_factory=list),  # noqa: B008
-        fresh: list[str] = Field(default_factory=list),  # noqa: B008
-        not_fresh: list[str] = Field(default_factory=list),  # noqa: B008
+        untrack: list[str] = Field(default_factory=list),  # noqa: B008
+        track: list[str] = Field(default_factory=list),  # noqa: B008
         kinds: dict[str, str] = Field(default_factory=dict),  # noqa: B008
         add_names: dict[str, list[str]] = Field(default_factory=dict),  # noqa: B008
         remove_names: dict[str, list[str]] = Field(default_factory=dict),  # noqa: B008
@@ -320,10 +329,13 @@ def build_mcp(
         """Change the bar, all or nothing, and return it as read_bar does.
 
         Every argument is optional. have and dont_have mark bottles the household
-        has or doesn't have. fresh marks items such as limes and mint as fresh,
-        and not_fresh undoes that; fresh items are never tracked, so they are
-        neither had nor not had. Names in have, dont_have and fresh that the bar
-        doesn't know yet are added. kinds sets an item's kind (spirits,
+        has or doesn't have. Only bottles are tracked: fresh items such as limes
+        and mint, syrups and anything Lækkert has a recipe for are not, so they
+        are neither had nor not had, and have or dont_have on them is skipped.
+        untrack marks an item as not tracked, and track undoes that; track is
+        refused for a syrup (give it another kind first) and for an item
+        Lækkert has a recipe for. Names in have, dont_have and untrack that the
+        bar doesn't know yet are added. kinds sets an item's kind (spirits,
         liqueurs, aperitifs, bitters, syrups or other), keyed by item name.
         add_names and remove_names give an item other names, keyed by item name.
         fold maps an item to the item it is a duplicate of: the first is merged
@@ -343,8 +355,8 @@ def build_mcp(
                 {
                     "have": have,
                     "dont_have": dont_have,
-                    "fresh": fresh,
-                    "not_fresh": not_fresh,
+                    "untrack": untrack,
+                    "track": track,
                     "kinds": kinds,
                     "add_names": add_names,
                     "remove_names": remove_names,

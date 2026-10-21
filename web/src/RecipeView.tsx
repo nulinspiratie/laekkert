@@ -5,7 +5,7 @@ import { Fragment, useCallback, useEffect, useId, useRef, useState, type FormEve
 import { Link, useLocation } from 'react-router'
 import { addEntry, changeBar, getRecipe, getTimeline, recipeImageUrl, restoreVersion, setMarks } from './api'
 import { messageOf as barMessageOf, withBar } from './bar'
-import { browseQuery, MARK_LABELS, type FilterMark } from './browse'
+import { browseQuery, MARK_LABELS, type DrinksView, type FilterMark } from './browse'
 import { capitalise, formatTime } from './format'
 import { runs } from './groups'
 import { Back, Bookmark, Check, Clock, Edit, Heart, People } from './icons'
@@ -188,6 +188,9 @@ function Page({ recipe, onRecipe }: { recipe: Recipe; onRecipe: (recipe: Recipe)
     )
 
   const editHref = `/${side}/${encodeURIComponent(slug)}/edit`
+  // A tag shows the drinks view that holds this recipe: All drinks has no syrups or prep.
+  const tagView: DrinksView | null =
+    side !== 'drinks' ? null : recipe.category === 'syrups' || recipe.category === 'prep' ? 'syrups' : 'all'
 
   return (
     <article className="recipe">
@@ -247,7 +250,7 @@ function Page({ recipe, onRecipe }: { recipe: Recipe; onRecipe: (recipe: Recipe)
             <ul className="recipe-tags" aria-label="Tags">
               {recipe.tags.map((tag) => (
                 <li key={tag}>
-                  <Link to={`/${side}?${browseQuery({ q: '', category: null, marks: [], tags: [tag], sort: 'name', bar: null, have: [] })}`}>
+                  <Link to={`/${side}?${browseQuery({ q: '', category: null, marks: [], tags: [tag], sort: 'name', show: tagView, have: [] })}`}>
                     {tag}
                   </Link>
                 </li>
@@ -305,7 +308,7 @@ function Page({ recipe, onRecipe }: { recipe: Recipe; onRecipe: (recipe: Recipe)
           ingredients={recipe.ingredients}
           servings={recipe.servings}
           side={side}
-          bar={recipe.bar}
+          bar={recipe.bar ?? undefined}
           onBar={side === 'drinks' ? setBarState : undefined}
           busy={busy}
           barError={

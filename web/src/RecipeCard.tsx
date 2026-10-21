@@ -1,5 +1,5 @@
 // One recipe in the browse page, three ways: a grid card, a phone list row and a
-// desktop table row. All are links to the recipe. Drinks also wear what the bar
+// desktop table row. All are links to the recipe. Cocktails and mocktails also wear what the bar
 // says about them; food wears what is missing for a "what you have" list.
 
 import type { ReactNode } from 'react'
@@ -11,7 +11,6 @@ import { Basket, Bookmark, Check, Chevron, Clock, Heart, MinusCircle, Question, 
 import { haveBadge } from './haveBadge'
 import { PhotoTile } from './PhotoTile'
 import type { DrinkStatus, RecipeSummary } from './types'
-import { useIsDesktop } from './useIsDesktop'
 
 // Only these marks show on cards, in this order.
 const CARD_MARKS: readonly FilterMark[] = ['favourite', 'try_next']
@@ -41,20 +40,22 @@ function RatingBadge({ rating, size }: { rating: number | null; size: number }) 
   )
 }
 
-const BADGE_ICONS: Record<DrinkStatus, () => ReactNode> = {
+const BADGE_ICONS: Record<DrinkStatus | 'also', () => ReactNode> = {
   can_make: () => <Check size={15} strokeWidth={2.5} />,
-  fresh_only: () => <Basket size={15} strokeWidth={2} />,
+  also: () => <Basket size={15} strokeWidth={2} />,
   missing: () => <MinusCircle size={15} />,
   unsorted: () => <Question size={15} strokeWidth={2} />,
 }
 
-/** "Can make now", "Missing: orgeat" and so on, with an icon; nothing on food. */
+/**
+ * "Can make now", "Also needs: lime juice", "Missing: orgeat" and so on, with an icon; nothing on food,
+ * syrups or prep. The full list of names is the badge's title and accessible name.
+ */
 function BarBadge({ recipe }: { recipe: RecipeSummary }) {
-  const desktop = useIsDesktop()
   if (!recipe.bar) return null
-  const { kind, text } = badge(recipe.bar, !desktop)
+  const { kind, text, label } = badge(recipe.bar)
   return (
-    <span className={`bar-badge bar-badge--${kind}`}>
+    <span className={`bar-badge bar-badge--${kind}`} role="img" aria-label={label} title={label}>
       {BADGE_ICONS[kind]()}
       <span>{text}</span>
     </span>

@@ -25,10 +25,9 @@ def test_get_bar_shape(client):
     assert set(bar) == {"items", "set_up", "counts"}
     assert bar["set_up"] is False
     assert bar["counts"] == {
-        "can_make": 0,
-        "fresh_only": 0,
+        "can_make": 1,
         "missing": 0,
-        "unsorted": 2,
+        "unsorted": 1,
         "total": 2,
     }
     assert [i["name"] for i in bar["items"]] == sorted(
@@ -38,12 +37,17 @@ def test_get_bar_shape(client):
         "name",
         "aliases",
         "kind",
-        "fresh",
         "state",
         "used_in",
         "recipe",
+        "tracked",
+        "untracked_because",
     }
     assert item(bar, "white rum")["state"] is None
+    assert item(bar, "white rum")["tracked"] is True
+    assert item(bar, "white rum")["untracked_because"] is None
+    assert item(bar, "simple syrup")["untracked_because"] == "syrups"
+    assert item(bar, "lime juice")["untracked_because"] == "marked"
     assert item(bar, "white rum")["used_in"] == [
         {"slug": "daiquiri", "name": "Daiquiri"}
     ]
@@ -131,14 +135,27 @@ def test_drinks_list_has_bar(client):
     assert daiquiri["bar"] == {
         "status": "unsorted",
         "missing": [],
-        "unsorted": ["white rum", "simple syrup"],
-        "fresh": ["lime juice"],
+        "unsorted": ["white rum"],
+        "untracked": ["lime juice", "simple syrup"],
     }
-    client.post("/api/bar", json={"have": ["white rum"], "dont_have": ["simple syrup"]})
+    client.post("/api/bar", json={"dont_have": ["white rum"]})
     recipes = client.get("/api/recipes?side=drinks").json()["recipes"]
     daiquiri = next(r for r in recipes if r["slug"] == "daiquiri")
     assert daiquiri["bar"]["status"] == "missing"
-    assert daiquiri["bar"]["missing"] == ["simple syrup"]
+    assert daiquiri["bar"]["missing"] == ["white rum"]
+
+
+def test_syrups_recipe_has_no_bar(client):
+    detail = client.get("/api/recipes/drinks/daiquiri").json()
+    draft = draft_from(detail)
+    syrup = {**draft, "side": "drinks", "name": "Honey syrup", "category": "syrups"}
+    assert client.post("/api/recipes", json=syrup).status_code == 201
+    recipes = client.get("/api/recipes?side=drinks").json()["recipes"]
+    made = next(r for r in recipes if r["slug"] == "honey-syrup")
+    assert made["bar"] is None
+    body = client.get("/api/recipes/drinks/honey-syrup").json()
+    assert body["bar"] is None
+    assert all(i["bar"] is None for i in body["ingredients"])
 
 
 def test_food_list_has_no_bar(client):
@@ -153,20 +170,49 @@ def test_food_detail_has_no_bar(client):
 
 
 def test_drink_detail_has_ingredient_bar(client):
-    client.post("/api/bar", json={"have": ["white rum"], "fresh": ["lime juice"]})
+    client.post("/api/bar", json={"have": ["white rum"]})
     body = client.get("/api/recipes/drinks/daiquiri").json()
-    assert body["bar"]["status"] == "unsorted"
-    assert body["bar"]["unsorted"] == ["simple syrup"]
-    assert body["bar"]["fresh"] == ["lime juice"]
+    assert body["bar"] == {
+        "status": "can_make",
+        "missing": [],
+        "unsorted": [],
+        "untracked": ["lime juice", "simple syrup"],
+    }
     rum, lime, syrup = body["ingredients"]
     assert rum["bar"] == {
         "item": "white rum",
         "state": "have",
-        "fresh": False,
+        "tracked": True,
         "recipe": None,
     }
-    assert lime["bar"]["fresh"] is True and lime["bar"]["state"] is None
-    assert syrup["bar"]["state"] is None
+    assert lime["bar"]["tracked"] is False and lime["bar"]["state"] is None
+    assert syrup["bar"]["tracked"] is False and syrup["bar"]["state"] is None
+
+
+def test_post_bar_untrack_and_track(client):
+    response = client.post("/api/bar", json={"untrack": ["white rum"]})
+    assert response.status_code == 200
+    assert item(response.json(), "white rum")["tracked"] is False
+    assert item(response.json(), "white rum")["untracked_because"] == "marked"
+    response = client.post("/api/bar", json={"track": ["white rum"]})
+    assert response.status_code == 200
+    assert item(response.json(), "white rum")["tracked"] is True
+
+
+def test_post_bar_fresh_is_gone(client):
+    response = client.post("/api/bar", json={"fresh": ["lime juice"]})
+    assert response.status_code == 400
+    assert response.json() == {"error": "The change has an unknown field: fresh"}
+    response = client.post("/api/bar", json={"not_fresh": ["lime juice"]})
+    assert response.status_code == 400
+
+
+def test_post_bar_track_refused_for_a_syrup_is_400(client):
+    response = client.post("/api/bar", json={"track": ["simple syrup"]})
+    assert response.status_code == 400
+    assert response.json() == {
+        "error": "Syrups aren't tracked. Give ‘simple syrup’ another kind first."
+    }
 
 
 def test_ingredient_bar_is_null_when_the_bar_does_not_know_it(client, monkeypatch):

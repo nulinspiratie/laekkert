@@ -1,11 +1,11 @@
 // The bar (/bar): every bottle the household's drinks use, as have or don't have, and
-// the fresh items that are never tracked. Layout follows BarPhone, BarDesktop,
-// BarFirstVisitPhone and BarSearchEmptyPhone in docs/design/artboards.
+// the things that are not tracked: fresh items, syrups and mixers. Layout follows BarPhone,
+// BarDesktop, BarFirstVisitPhone and BarSearchEmptyPhone in docs/design/artboards.
 
 import { useEffect, useId, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { changeBar, getBar } from './api'
-import { fresh, groupByKind, KIND_LABELS, matchItem, messageOf, shelf, usedText } from './bar'
+import { groupByKind, KIND_LABELS, matchItem, messageOf, shelf, unsorted, untracked, usedText } from './bar'
 import { BarItemSheet } from './BarItemSheet'
 import { capitalise } from './format'
 import { Back, Basket, Bottle, Check, Chevron, DrinksTab, MinusCircle, More, Plus, Question, Search } from './icons'
@@ -13,14 +13,20 @@ import { Shell } from './Shell'
 import type { Bar, BarChanges, BarItem, BarState } from './types'
 import { useIsDesktop } from './useIsDesktop'
 
-/** The bar with some items' states replaced: writes in flight, or a rollback. */
-function withStates(bar: Bar, states: ReadonlyMap<string, BarState | null>): Bar {
-  if (states.size === 0) return bar
+/** What a write in flight changes about an item, or what a rollback puts back. */
+type Patch = Pick<BarItem, 'state' | 'tracked' | 'untracked_because'>
+
+/** The bar with some items patched: writes in flight, or a rollback. */
+function withPatches(bar: Bar, patches: ReadonlyMap<string, Patch>): Bar {
+  if (patches.size === 0) return bar
   return {
     ...bar,
-    items: bar.items.map((item) => (states.has(item.name) ? { ...item, state: states.get(item.name)! } : item)),
+    items: bar.items.map((item) => (patches.has(item.name) ? { ...item, ...patches.get(item.name)! } : item)),
   }
 }
+
+/** An item the person stopped tracking, as the server will return it. */
+const UNTRACKED: Patch = { state: null, tracked: false, untracked_because: 'marked' }
 
 /** Opens the item sheet for `name`; `from` gets the focus back when it closes. */
 type OpenSheet = (name: string, from: HTMLElement) => void
@@ -57,8 +63,8 @@ export function BarPage() {
   const [query, setQuery] = useState('')
   // The name of the item in the sheet.
   const [open, setOpen] = useState<string | null>(null)
-  // Toggles in flight, by item name, with the state they set. One write per item at a time.
-  const pending = useRef(new Map<string, BarState | null>())
+  // Toggles in flight, by item name, with what they set. One write per item at a time.
+  const pending = useRef(new Map<string, Patch>())
   const adding = useRef(false)
   const returnTo = useRef<{ name: string; element: HTMLElement } | null>(null)
   const page = useRef<HTMLDivElement>(null)
@@ -86,30 +92,43 @@ export function BarPage() {
   }, [open])
 
   /** The server's bar replaces the page's copy, with the toggles still in flight laid over it. */
-  const take = (server: Bar) => setBar(withStates(server, new Map(pending.current)))
+  const take = (server: Bar) => setBar(withPatches(server, new Map(pending.current)))
 
   /** Optimistic: the rows change at once and roll back if the server refuses. */
-  const setStates = (names: string[], state: BarState, at = atItem(names[0])) => {
+  const write = (names: string[], send: (free: string[]) => BarChanges, patch: Patch, at: string) => {
     if (!bar) return
-    const free = names.filter((name) => !pending.current.has(name))
+    const free = names.filter((name) => !pending.current.has(name) && bar.items.some((item) => item.name === name))
     if (free.length === 0) return
-    const previous = new Map(free.map((name) => [name, bar.items.find((item) => item.name === name)?.state ?? null]))
-    for (const name of free) pending.current.set(name, state)
+    const previous = new Map<string, Patch>()
+    for (const item of bar.items.filter((item) => free.includes(item.name))) {
+      previous.set(item.name, { state: item.state, tracked: item.tracked, untracked_because: item.untracked_because })
+      pending.current.set(item.name, patch)
+    }
     setProblem(null)
     const optimistic = new Map(pending.current)
-    setBar((current) => current && withStates(current, optimistic))
-    changeBar(state === 'have' ? { have: free } : { dont_have: free }).then(
+    setBar((current) => current && withPatches(current, optimistic))
+    changeBar(send(free)).then(
       (server) => {
         for (const name of free) pending.current.delete(name)
         take(server)
       },
       (err: unknown) => {
         for (const name of free) pending.current.delete(name)
-        setBar((current) => current && withStates(current, previous))
+        setBar((current) => current && withPatches(current, previous))
         setProblem({ at, message: messageOf(err) })
       },
     )
   }
+
+  const setStates = (names: string[], state: BarState, at = atItem(names[0])) =>
+    write(
+      names,
+      (free) => (state === 'have' ? { have: free } : { dont_have: free }),
+      { state, tracked: true, untracked_because: null },
+      at,
+    )
+
+  const untrack = (name: string) => write([name], (free) => ({ untrack: free }), UNTRACKED, atItem(name))
 
   /** Adds what the search found nothing for, then clears the search. */
   const add = async (changes: BarChanges) => {
@@ -155,18 +174,18 @@ export function BarPage() {
   const bottles = shelf(bar.items)
   const total = bottles.length
   const have = bottles.filter((item) => item.state === 'have').length
-  const allUnsorted = bottles.filter((item) => item.state === null)
+  const allUnsorted = unsorted(bar.items)
   const q = query.trim()
   const visible = (items: BarItem[]) => items.filter((item) => matchItem(item, q).ok)
   const unsortedShown = visible(allUnsorted)
   const sortedShown = visible(bottles.filter((item) => item.state !== null))
-  const freshShown = visible(fresh(bar.items))
-  const noMatch = q !== '' && unsortedShown.length + sortedShown.length + freshShown.length === 0
+  const notTrackedShown = visible(untracked(bar.items))
+  const noMatch = q !== '' && unsortedShown.length + sortedShown.length + notTrackedShown.length === 0
   const canMake = bar.counts.can_make === 1 ? '1 drink' : `${bar.counts.can_make} drinks`
   const sheetItem = open === null ? null : (bar.items.find((item) => item.name === open) ?? null)
 
   const verb = desktop ? 'Click' : 'Tap'
-  const rowProps = { desktop, query: q, problem, onToggle: setStates, onOpen: openSheet }
+  const rowProps = { desktop, query: q, problem, onToggle: setStates, onUntrack: untrack, onOpen: openSheet }
 
   const title = (
     <div className="bar-title">
@@ -226,11 +245,11 @@ export function BarPage() {
       desktop={desktop}
       problem={problem}
       onAdd={() => add({ have: [q] })}
-      onFresh={() => add({ fresh: [q] })}
+      onUntracked={() => add({ untrack: [q] })}
     />
   )
 
-  const freshSection = freshShown.length > 0 && <FreshSection items={freshShown} onOpen={openSheet} />
+  const notTrackedSection = notTrackedShown.length > 0 && <NotTrackedSection items={notTrackedShown} onOpen={openSheet} />
 
   return (
     <Shell side="drinks" phoneBar={false}>
@@ -246,7 +265,7 @@ export function BarPage() {
             <>
               {title}
               {bar.set_up && (
-                <Link to="/drinks?bar=can" className="bar-can">
+                <Link to="/drinks" className="bar-can">
                   <DrinksTab size={20} strokeWidth={2} />
                   <span className="bar-can-text">
                     You can make <strong>{canMake}</strong> now
@@ -268,7 +287,7 @@ export function BarPage() {
             </div>
             <aside className="bar-aside">
               {bar.set_up && (
-                <Link to="/drinks?bar=can" className="bar-can-card">
+                <Link to="/drinks" className="bar-can-card">
                   <span className="bar-can-eyebrow">From this bar</span>
                   <span className="bar-can-title">You can make {canMake} now</span>
                   <span className="bar-can-see">
@@ -283,7 +302,7 @@ export function BarPage() {
                   Every bottle is sorted
                 </div>
               )}
-              {freshSection}
+              {notTrackedSection}
             </aside>
           </div>
         ) : (
@@ -291,7 +310,7 @@ export function BarPage() {
             {unsortedSection}
             {groups}
             {noMatchSection}
-            {freshSection}
+            {notTrackedSection}
             {q === '' && (
               <button type="button" className="bar-add-more" onClick={focusSearch}>
                 <Plus />
@@ -343,6 +362,7 @@ interface RowProps {
   /** A refused write, shown in the row it belongs to. */
   problem: Problem | null
   onToggle: (names: string[], state: BarState, at?: string) => void
+  onUntrack: (name: string) => void
   onOpen: OpenSheet
 }
 
@@ -442,8 +462,8 @@ function UnsortedSection({
       </div>
       <p className="bar-unsorted-help">
         {setUp
-          ? 'New from drinks you added. Until you sort them, drinks that use them count as missing.'
-          : 'Nothing is sorted yet, so no drink shows under ‘Can make now’. Tap what you have, then mark the rest in one go.'}
+          ? "New from drinks you added. Until you sort them, drinks that use them don't show under Can make."
+          : "Nothing is sorted yet, so drinks that need bottles don't show under Can make. Tap what you have, then mark the rest in one go."}
       </p>
       {groupByKind(items).map((group) => (
         <div key={group.kind} className="bar-unsorted-group">
@@ -471,6 +491,14 @@ function UnsortedSection({
                   <MinusCircle />
                   Don't have
                 </button>
+                <button
+                  type="button"
+                  className="bar-untrack"
+                  aria-label={`${name}: don't track`}
+                  onClick={() => row.onUntrack(item.name)}
+                >
+                  Don't track
+                </button>
                 <ProblemNote problem={row.problem} at={atItem(item.name)} />
               </div>
             )
@@ -485,15 +513,15 @@ function UnsortedSection({
   )
 }
 
-function FreshSection({ items, onOpen }: { items: BarItem[]; onOpen: OpenSheet }) {
+function NotTrackedSection({ items, onOpen }: { items: BarItem[]; onOpen: OpenSheet }) {
   const id = useId()
   return (
-    <section className="bar-fresh" aria-labelledby={id}>
-      <div className="bar-fresh-head">
+    <section className="bar-untracked" aria-labelledby={id}>
+      <div className="bar-untracked-head">
         <Basket />
-        <h2 id={id}>Fresh, so never tracked</h2>
+        <h2 id={id}>Not tracked</h2>
       </div>
-      <p>Buy these when a drink needs them. Those drinks say ‘Buy fresh’.</p>
+      <p>Fresh things, syrups and mixers. Drinks that use them still show under Can make and say what else they need.</p>
       <div className="bar-chips">
         {items.map((item) => (
           <button
@@ -508,7 +536,7 @@ function FreshSection({ items, onOpen }: { items: BarItem[]; onOpen: OpenSheet }
           </button>
         ))}
       </div>
-      <p className="bar-fresh-foot">Open a bottle or a fresh item to move it between the two.</p>
+      <p className="bar-untracked-foot">Open an item to start or stop tracking it.</p>
     </section>
   )
 }
@@ -518,13 +546,13 @@ function NoMatch({
   desktop,
   problem,
   onAdd,
-  onFresh,
+  onUntracked,
 }: {
   query: string
   desktop: boolean
   problem: Problem | null
   onAdd: () => void
-  onFresh: () => void
+  onUntracked: () => void
 }) {
   return (
     <section className="bar-nomatch" aria-live="polite">
@@ -540,8 +568,8 @@ function NoMatch({
         <Plus size={20} />
         Add ‘{query}’ to the bar
       </button>
-      <button type="button" className="bar-nomatch-fresh" onClick={onFresh}>
-        It's fresh: add it without tracking
+      <button type="button" className="bar-nomatch-untracked" onClick={onUntracked}>
+        Add it without tracking
       </button>
     </section>
   )

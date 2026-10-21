@@ -920,15 +920,15 @@
 
 /* ---- The bar, on drinks ---- */
 
-/* "From your bar" in the desktop filter panel (DrinksDesktop). */
+/* The "Show" views in the desktop filter panel (DrinksDesktop). */
 
-.filter-bar {
+.filter-views {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.filter-bar-option {
+.filter-view {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -940,13 +940,13 @@
   text-align: left;
 }
 
-.filter-bar-option[aria-checked='true'] {
+.filter-view[aria-checked='true'] {
   background: var(--accent-soft);
   color: var(--accent-soft-ink);
   font-weight: 600;
 }
 
-.filter-bar-option[aria-checked='true'] .filter-count {
+.filter-view[aria-checked='true'] .filter-count {
   color: inherit;
 }
 
@@ -959,7 +959,7 @@
   background: var(--surface);
 }
 
-.filter-bar-option[aria-checked='true'] .filter-radio {
+.filter-view[aria-checked='true'] .filter-radio {
   border-color: var(--accent);
   box-shadow: inset 0 0 0 3px var(--surface);
   background: var(--accent);
@@ -1001,21 +1001,24 @@
   text-decoration: underline;
 }
 
-/* The phone's bar chips and unsorted banner, inside the Drinks masthead. */
+/* The phone's view chips and unsorted banner, inside the Drinks masthead. */
 
 a.browse-head-btn {
   text-decoration: none;
 }
 
-.browse-bar-chips {
+.browse-view-chips {
   display: flex;
   gap: 8px;
   overflow-x: auto;
   scrollbar-width: none;
 }
 
-.browse-bar-chips button {
+.browse-view-chips button {
+  display: inline-flex;
   flex: none;
+  align-items: center;
+  gap: 6px;
   min-height: 44px;
   padding: 0 14px;
   border: 1px solid var(--masthead-border);
@@ -1027,8 +1030,8 @@ a.browse-head-btn {
   white-space: nowrap;
 }
 
-/* DrinksPhone: the selected chip is the drinks green. */
-.browse-bar-chips button[aria-checked='true'] {
+/* DrinksPhone: the selected chip is the drinks green, and wears a check (not colour alone). */
+.browse-view-chips button[aria-checked='true'] {
   border-color: var(--accent);
   background: var(--accent);
   color: var(--on-accent);
@@ -1084,6 +1087,14 @@ a.browse-head-btn {
   flex: none;
 }
 
+/* One line; the full list is the badge's title and accessible name. */
+.bar-badge > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .recipe-card-photo .bar-badge {
   position: absolute;
   top: 8px;
@@ -1101,10 +1112,11 @@ a.browse-head-btn {
   color: #f2f5ee;
 }
 
-.bar-badge--fresh_only {
-  border-color: #d9be84;
-  background: #f6ead0;
-  color: #6a460c;
+/* Can make, and more to get: the basket icon says so, the words name it. */
+.bar-badge--also {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-soft-ink);
 }
 
 .bar-badge--missing {
@@ -1120,7 +1132,7 @@ a.browse-head-btn {
 }
 
 /* "What you have" badges: food colours from the theme, an icon and words. They sit where
-   the drinks badges sit and keep to one line, the full list being in the title. */
+   the drinks badges sit. */
 
 .bar-badge--have_all {
   background: var(--accent);
@@ -1133,15 +1145,7 @@ a.browse-head-btn {
   color: var(--text);
 }
 
-.bar-badge--have_all > span,
-.bar-badge--have_missing > span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Why the bar filter leaves nothing (DrinksNoBar, DrinksFilterEmpty). */
+/* The bar is not set up, or Can make leaves nothing (DrinksNoBar, DrinksFilterEmpty). */
 
 .browse-bar-empty {
   display: flex;
@@ -1209,6 +1213,20 @@ a.browse-head-btn {
   padding: 0 16px;
   color: var(--accent-ink);
   font-weight: 600;
+}
+
+/* "N more in All drinks": under the results of a search the view cuts short. */
+.browse-more {
+  margin: 12px 0 0;
+}
+
+.browse-more a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--accent-ink);
+  font-weight: 600;
+  text-decoration: underline;
 }
 
 @media (min-width: 768px) {

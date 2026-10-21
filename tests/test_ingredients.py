@@ -528,7 +528,11 @@ def test_merge_may_copy_fresh_onto_a_bar_item(catalog, store, bar):
     ]
     assert result["fresh"] is True
     [mint] = [i for i in bar.view().items if i.name == "mint"]
-    assert (mint.fresh, mint.state) == (True, None)
+    assert (mint.tracked, mint.untracked_because, mint.state) == (
+        False,
+        "marked",
+        None,
+    )
 
 
 def test_new_entry_for_a_drink_item_keeps_the_bar_name(catalog, store, bar):

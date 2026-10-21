@@ -195,15 +195,18 @@ export function Ingredients({
   )
 }
 
-/** "Missing: a, b" or "From your bar: 2 of 2", and "Buy fresh: x" when the drink has fresh items. */
+/**
+ * "Missing: a, b" or "From your bar: 2 of 2 bottles", and "Also needs: x" for what the bar does
+ * not track (fresh items, syrups, prep).
+ */
 function BarSummary({ bar, ingredients }: { bar: DrinkBar; ingredients: RecipeIngredient[] }) {
   // Unsorted bottles count as missing here; the names go in recipe order.
   const order = (name: string) => ingredients.findIndex((ing) => (ing.bar?.item ?? ing.item) === name)
   const missing = [...bar.missing, ...bar.unsorted].sort((a, b) => order(a) - order(b))
   const shelf = new Set(
-    ingredients.flatMap((ing) => (ing.bar && !ing.bar.fresh ? [normalise(ing.bar.item)] : [])),
+    ingredients.flatMap((ing) => (ing.bar?.tracked ? [normalise(ing.bar.item)] : [])),
   ).size
-  if (missing.length === 0 && shelf === 0 && bar.fresh.length === 0) return null
+  if (missing.length === 0 && shelf === 0 && bar.untracked.length === 0) return null
   return (
     <p className="ingredients-bar" aria-live="polite">
       {missing.length > 0 ? (
@@ -215,14 +218,14 @@ function BarSummary({ bar, ingredients }: { bar: DrinkBar; ingredients: RecipeIn
         shelf > 0 && (
           <span className="ingredients-bar-have">
             <Check size={16} strokeWidth={2.5} />
-            From your bar: {shelf} of {shelf}
+            From your bar: {shelf} of {shelf} bottles
           </span>
         )
       )}
-      {bar.fresh.length > 0 && (
-        <span className="ingredients-bar-fresh">
+      {bar.untracked.length > 0 && (
+        <span className="ingredients-bar-also">
           <Basket size={16} strokeWidth={2} />
-          Buy fresh: {bar.fresh.join(', ')}
+          Also needs: {bar.untracked.join(', ')}
         </span>
       )}
     </p>
@@ -308,29 +311,20 @@ function DrinkRow({
               state={location.state}
               className="ingredient-recipe"
             >
-              {bar.state === 'dont' ? 'Out? Make it: ' : 'Recipe: '}
-              {bar.recipe.name}
+              Recipe: {bar.recipe.name}
               <Chevron size={14} strokeWidth={2.25} />
             </Link>
           )}
         </span>
-        {bar?.fresh ? (
-          <span className="ingredient-fresh">
-            <Basket size={16} strokeWidth={2} />
-            {desktop ? 'Fresh, buy when needed' : 'Fresh'}
-          </span>
-        ) : (
-          bar &&
-          onToggle && (
-            <StateButton
-              bar={bar}
-              desktop={desktop}
-              waiting={waiting}
-              pending={pending}
-              buttonRef={buttonRef}
-              onClick={() => onToggle(bar)}
-            />
-          )
+        {bar?.tracked && onToggle && (
+          <StateButton
+            bar={bar}
+            desktop={desktop}
+            waiting={waiting}
+            pending={pending}
+            buttonRef={buttonRef}
+            onClick={() => onToggle(bar)}
+          />
         )}
       </div>
       {problem && (

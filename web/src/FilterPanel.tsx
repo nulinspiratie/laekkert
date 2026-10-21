@@ -1,8 +1,8 @@
-// The browse filters: search (desktop only), what you have (desktop food only), the bar
-// (desktop drinks only), marks, category and tags. `aside` is the desktop side panel;
-// `sheet` is the same controls bigger, inside the phone's filter sheet (FilterSheet
-// below). On a phone the bar filter is chips under the heading and what you have is a
-// header button with its own panel (BarChips and the have panel in Browse).
+// The browse filters: search (desktop only), what you have (desktop food only), the Drinks
+// views (desktop drinks only), marks, category (food only) and tags. `aside` is the desktop
+// side panel; `sheet` is the same controls bigger, inside the phone's filter sheet
+// (FilterSheet below). On a phone the views are chips under the heading and what you have is
+// a header button with its own panel (ViewChips and the have panel in Browse).
 
 import { useEffect, useRef, type ReactNode, type Ref } from 'react'
 import { Link } from 'react-router'
@@ -10,7 +10,8 @@ import {
   FILTER_MARKS,
   MARK_LABELS,
   SORT_OPTIONS,
-  type BarFilter,
+  VIEW_LABELS,
+  availableViews,
   type BrowseState,
   type FilterMark,
   type facetCounts,
@@ -34,8 +35,8 @@ export interface FilterPanelProps {
   variant?: 'aside' | 'sheet'
   /** The search field, shown when given (the phone has a search button instead). */
   search?: { value: string; onChange: (value: string) => void }
-  /** The "From your bar" section, shown when given (drinks, once the bar has loaded). */
-  bar?: BarSummary
+  /** The "Show" section, shown when given (desktop drinks; the phone has chips under the heading). */
+  views?: ViewsProps
   /** The "What you have" section, shown when given (desktop food; the phone has a button and panel). */
   have?: Omit<HaveFieldProps, 'inputRef'>
 }
@@ -47,7 +48,15 @@ export interface BarSummary {
   unsorted: number
 }
 
-export function FilterPanel({ side, state, counts, onChange, variant = 'aside', search, bar, have }: FilterPanelProps) {
+/** What the Drinks views need: whether Can make is on offer, and the bar once it has loaded. */
+export interface ViewsProps {
+  /** False when the bar failed to load: Can make cannot be worked out, so it is not offered. */
+  canMake: boolean
+  /** Null while the bar loads, and when it failed: no Edit link and no unsorted note then. */
+  bar: BarSummary | null
+}
+
+export function FilterPanel({ side, state, counts, onChange, variant = 'aside', search, views, have }: FilterPanelProps) {
   const sheet = variant === 'sheet'
   const Heading = sheet ? 'h3' : 'h2'
 
@@ -70,7 +79,7 @@ export function FilterPanel({ side, state, counts, onChange, variant = 'aside', 
         </section>
       )}
 
-      {bar && <BarSection bar={bar} state={state} counts={counts} onChange={onChange} />}
+      {views && <ViewSection views={views} state={state} counts={counts} onChange={onChange} />}
 
       <section className="filter-section">
         <Heading>Marks</Heading>
@@ -98,35 +107,38 @@ export function FilterPanel({ side, state, counts, onChange, variant = 'aside', 
         })}
       </section>
 
-      <section className="filter-section">
-        <Heading>{side === 'drinks' ? 'Style' : 'Category'}</Heading>
-        {sheet ? (
-          <div role="radiogroup" aria-label={side === 'drinks' ? 'Style' : 'Category'} className="filter-pills">
-            <CategoryPill name="All" on={state.category === null} onPick={() => onChange({ category: null })} />
-            {categories.map(([name]) => (
-              <CategoryPill
-                key={name}
-                name={capitalise(name)}
-                on={state.category === name}
-                onPick={() => onChange({ category: name })}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="filter-categories">
-            <CategoryRow name="All" n={total} on={state.category === null} onPick={() => onChange({ category: null })} />
-            {categories.map(([name, n]) => (
-              <CategoryRow
-                key={name}
-                name={capitalise(name)}
-                n={n}
-                on={state.category === name}
-                onPick={() => onChange({ category: name })}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+      {/* Drinks pick a view instead (ViewSection). */}
+      {side === 'food' && (
+        <section className="filter-section">
+          <Heading>Category</Heading>
+          {sheet ? (
+            <div role="radiogroup" aria-label="Category" className="filter-pills">
+              <CategoryPill name="All" on={state.category === null} onPick={() => onChange({ category: null })} />
+              {categories.map(([name]) => (
+                <CategoryPill
+                  key={name}
+                  name={capitalise(name)}
+                  on={state.category === name}
+                  onPick={() => onChange({ category: name })}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="filter-categories">
+              <CategoryRow name="All" n={total} on={state.category === null} onPick={() => onChange({ category: null })} />
+              {categories.map(([name, n]) => (
+                <CategoryRow
+                  key={name}
+                  name={capitalise(name)}
+                  n={n}
+                  on={state.category === name}
+                  onPick={() => onChange({ category: name })}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {tags.length > 0 && (
         <section className="filter-section">
@@ -150,49 +162,45 @@ export function FilterPanel({ side, state, counts, onChange, variant = 'aside', 
   )
 }
 
-type BarCount = keyof ReturnType<typeof facetCounts>['bar']
-
-const BAR_OPTIONS: readonly { value: BarFilter | null; label: string; count: BarCount }[] = [
-  { value: null, label: 'Everything', count: 'all' },
-  { value: 'can', label: 'Can make now', count: 'can' },
-  { value: 'fresh', label: 'Only need fresh items', count: 'fresh' },
-]
-
-function BarSection({
-  bar,
+/** The desktop "Show" section: the views as radios with counts, then the bar's link and unsorted note. */
+function ViewSection({
+  views,
   state,
   counts,
   onChange,
 }: {
-  bar: BarSummary
+  views: ViewsProps
   state: BrowseState
   counts: ReturnType<typeof facetCounts>
   onChange: (patch: Partial<BrowseState>) => void
 }) {
+  const { bar } = views
   return (
     <section className="filter-section">
-      <h2>From your bar</h2>
-      <div role="radiogroup" aria-label="Inventory" className="filter-bar">
-        {BAR_OPTIONS.map(({ value, label, count }) => (
+      <h2>Show</h2>
+      <div role="radiogroup" aria-label="Show" className="filter-views">
+        {availableViews(views.canMake).map((value) => (
           <button
-            key={value ?? 'all'}
+            key={value}
             type="button"
             role="radio"
-            aria-checked={state.bar === value}
-            className="filter-bar-option"
-            onClick={() => onChange({ bar: value })}
+            aria-checked={state.show === value}
+            className="filter-view"
+            onClick={() => onChange({ show: value })}
           >
             <span className="filter-radio" aria-hidden="true" />
-            <span className="filter-grow">{label}</span>{' '}
-            <span className="filter-count">{counts.bar[count]}</span>
+            <span className="filter-grow">{VIEW_LABELS[value]}</span>{' '}
+            <span className="filter-count">{counts.views[value]}</span>
           </button>
         ))}
       </div>
-      <Link to="/bar" className="filter-bar-edit">
-        <Bottle size={18} strokeWidth={1.75} />
-        {bar.setUp ? 'Edit the bar' : 'Set up the bar'}
-      </Link>
-      {bar.setUp && bar.unsorted > 0 && (
+      {bar && (
+        <Link to="/bar" className="filter-bar-edit">
+          <Bottle size={18} strokeWidth={1.75} />
+          {bar.setUp ? 'Edit the bar' : 'Set up the bar'}
+        </Link>
+      )}
+      {bar && bar.setUp && bar.unsorted > 0 && (
         <Link to="/bar" className="filter-bar-unsorted">
           <Question size={20} />
           <span>
@@ -253,7 +261,7 @@ function CategoryPill({ name, on, onPick }: { name: string; on: boolean; onPick:
   )
 }
 
-export interface FilterSheetProps extends Omit<FilterPanelProps, 'variant' | 'search' | 'bar' | 'have'> {
+export interface FilterSheetProps extends Omit<FilterPanelProps, 'variant' | 'search' | 'views' | 'have'> {
   open: boolean
   /** How many recipes the filters leave, for the "Show N recipes" button. */
   count: number
