@@ -88,6 +88,21 @@ designs:
   and for items that have a recipe;
 - on a drink's page, the bar summary counts bottles and says what else the drink needs.
 
+## Built in M7
+
+Food quick filters, with no artboard and no Claude Design session (spec:
+`docs/superpowers/specs/2026-10-21-food-quick-filters-design.md`, mockup linked there).
+They reuse what the app already has:
+- category tabs (All, Mains, Sides, …) and quick tag chips (the `food_quick_tags` setting)
+  at the top of the Food page, each with the count it would leave; a tab or chip that would
+  leave nothing is dimmed. The chips are the Drinks view chips (M6) in the Food tokens; the
+  tabs are text tabs with the accent underline;
+- on a phone the two rows scroll sideways with a fade at the right edge and stick to the top
+  of the screen once the heading has gone; on desktop they wrap, between the heading and the
+  results;
+- the filter sheet and the desktop aside lose Category, and Tags becomes More tags without
+  the quick tags. The sheet button's badge counts marks and those other tags only.
+
 ## Still not built
 
 - Drag handles in the editor. Rows and steps move with "Move up" and "Move down" buttons.
@@ -107,6 +122,14 @@ M4 (the bar), where the app and the artboards differ:
   syrup is 44 px tall rather than 32 px.
 - A status badge with a long name wraps to two lines on a phone card instead of being cut
   off at the artboard's fixed 26 px height.
+
+M7 (Food quick filters), where the app and the spec differ:
+
+- The spec puts the phone rows in `PageHeading`'s `below` slot. A sticky element only
+  sticks inside its parent, and the heading ends right under the rows, so they render as
+  the heading's next sibling instead: the same place on screen.
+- Desktop shows More only when there are other tags for it to move to; a phone always shows
+  it (the sheet still has Marks and Sort).
 
 Earlier milestones:
 
@@ -145,6 +168,18 @@ Layout: desktop is `(min-width: 768px)`; phone has 16 px gutters (`.gutter` in `
 every control is at least 44 x 44 px.
 
 ## Screenshots
+
+`screenshots/m7/` holds the Food quick filters, phone (390 x 844) and desktop (1280 x 860),
+both at 2x:
+- `food-nothing-on-*`, `food-breakfast-*` (Kid approved and Dinner dimmed),
+  `food-mains-kid-approved-*` and `food-other-tag-*` (`tag=batch cook`, a tag that is not a
+  quick tag: a soft chip at the end of the row, and the badge counts it);
+- `food-stuck-phone` (scrolled, the rows stuck to the top with the hairline) and
+  `food-more-sheet-phone` (More opened the sheet: Marks, More tags, Sort).
+
+They were taken from a scratch data directory with the eleven food recipes the spec's mockup
+uses, plus a `batch cook` tag on the jambalaya. The app has one theme, so there are no dark
+shots.
 
 `screenshots/m6/` holds the drinks views and the untracked items:
 - `drinks-can-make-*`, `drinks-mocktails-*` and `drinks-syrups-*` (the three views other than
