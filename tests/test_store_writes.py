@@ -78,7 +78,7 @@ def test_create_writes_recipe_version_and_created_entry(store):
     assert (recipe.slug, recipe.side, recipe.format_version) == (
         "daiquiri-2",
         "drinks",
-        2,
+        3,
     )
     # An existing Daiquiri is already there, so this one is daiquiri-2.
     assert store.get("drinks", "daiquiri-2") == recipe
@@ -282,11 +282,11 @@ def test_update_keeps_marks_and_slug_on_rename(store):
     assert store.get("drinks", "daiquiri").name == "Classic Daiquiri"
 
 
-def test_update_writes_format_2_with_marks_in_order(store):
+def test_update_writes_format_3_with_marks_in_order(store):
     seed = store.get("drinks", "daiquiri")
     store.update("drinks", "daiquiri", draft_of(seed, servings=2), "app")
     data = json.loads(raw(store, "drinks", "daiquiri"))
-    assert data["format_version"] == 2
+    assert data["format_version"] == 3
     assert data["marks"] == ["favourite", "tried"]
 
 
@@ -335,6 +335,31 @@ def test_restore_unknown_recipe_and_unreadable_version(store):
     store.create("drinks", draft(name="Zombie"), "app")
     (folder(store, "drinks", "zombie") / "versions" / "0001.json").write_text("{nope")
     assert store.restore("drinks", "zombie", 1, "app") is None
+
+
+def test_restore_of_v2_snapshot(store):
+    v2 = {
+        "format_version": 2,
+        "slug": "zombie",
+        "side": "drinks",
+        "name": "Zombie",
+        "category": "cocktails",
+        "servings": 1,
+        "ingredients": [{"amount": 50, "unit": "ml", "item": "white rum"}],
+        "steps": ["Shake.", "Strain."],
+    }
+    folder(store, "drinks", "zombie").mkdir()
+    (folder(store, "drinks", "zombie") / "versions").mkdir()
+    for name in ("recipe.json", "versions/0001.json"):
+        (folder(store, "drinks", "zombie") / name).write_text(json.dumps(v2))
+    restored = store.restore("drinks", "zombie", 1, "app")
+    assert [s.text for s in restored.steps] == ["Shake.", "Strain."]
+    data = json.loads(raw(store, "drinks", "zombie"))
+    assert data["format_version"] == 3
+    assert data["steps"] == [
+        {"text": "Shake.", "group": ""},
+        {"text": "Strain.", "group": ""},
+    ]
 
 
 # --- delete ---
@@ -433,7 +458,7 @@ def test_marks_make_no_version_and_rewrite_legacy_as_format_2(store):
     path.write_text(json.dumps({**data, "format_version": 1, "marks": ["tried"]}))
     store.set_marks("drinks", "daiquiri", ["favourite"], [], "app")
     assert versions(store, "drinks", "daiquiri") == []
-    assert json.loads(path.read_text())["format_version"] == 2
+    assert json.loads(path.read_text())["format_version"] == 3
 
 
 def test_set_marks_same_mark_added_and_removed_is_an_error(store):

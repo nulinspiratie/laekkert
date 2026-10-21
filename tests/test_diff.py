@@ -3,6 +3,13 @@ from app.recipes.model import FORMAT_VERSION, Recipe
 from app.recipes.timeline import Change
 
 
+def steps(*texts: str, groups: tuple[str, ...] = ()) -> list[dict]:
+    """Steps from texts; groups, when given, line up with the texts."""
+    return [
+        {"text": t, "group": groups[k] if groups else ""} for k, t in enumerate(texts)
+    ]
+
+
 def make(**overrides) -> Recipe:
     data = {
         "format_version": FORMAT_VERSION,
@@ -16,7 +23,7 @@ def make(**overrides) -> Recipe:
             {"amount": 25, "unit": "ml", "item": "lime juice"},
             {"amount": 60, "unit": "ml", "item": "gin"},
         ],
-        "steps": ["Shake", "Strain", "Garnish"],
+        "steps": steps("Shake", "Strain", "Garnish"),
         "tags": [],
         "marks": [],
     }
@@ -170,25 +177,69 @@ def test_repeated_items_pair_in_order():
 
 
 def test_step_added_changed_removed():
-    old = make(steps=["Shake", "Strain", "Garnish"])
-    added = make(steps=["Shake", "Strain", "Garnish", "Serve"])
+    old = make(steps=steps("Shake", "Strain", "Garnish"))
+    added = make(steps=steps("Shake", "Strain", "Garnish", "Serve"))
     assert changes(old, added) == [("method", "added", "step 4: Serve")]
-    changed = make(steps=["Shake", "Double strain", "Garnish"])
+    changed = make(steps=steps("Shake", "Double strain", "Garnish"))
     assert changes(old, changed) == [("method", "changed", "step 2: Double strain")]
-    removed = make(steps=["Shake", "Garnish"])
+    removed = make(steps=steps("Shake", "Garnish"))
     assert changes(old, removed) == [("method", "removed", "step 2: Strain")]
 
 
 def test_removed_step_uses_the_old_number():
-    old = make(steps=["a", "b", "c"])
-    assert changes(old, make(steps=["a", "b"])) == [("method", "removed", "step 3: c")]
+    old = make(steps=steps("a", "b", "c"))
+    assert changes(old, make(steps=steps("a", "b"))) == [
+        ("method", "removed", "step 3: c")
+    ]
 
 
 def test_long_step_is_cut():
-    new = make(steps=["Shake", "Strain", "x" * 200])
-    [(_, kind, text)] = changes(make(steps=["Shake", "Strain"]), new)
+    new = make(steps=steps("Shake", "Strain", "x" * 200))
+    [(_, kind, text)] = changes(make(steps=steps("Shake", "Strain")), new)
     assert kind == "added"
     assert text == "step 3: " + "x" * 80 + "…"
+
+
+def test_step_text_change_still_reported_with_groups():
+    old = make(steps=steps("Shake", "Strain", groups=("", "To serve")))
+    new = make(steps=steps("Shake", "Double strain", groups=("", "To serve")))
+    assert changes(old, new) == [("method", "changed", "step 2: Double strain")]
+
+
+def test_step_group_move_is_not_an_edit():
+    old = make(steps=steps("Shake", "Strain", "Garnish"))
+    new = make(steps=steps("Shake", "Strain", "Garnish", groups=("", "To serve", "")))
+    assert changes(old, new) == [("method", "changed", "step 2 moved to “To serve”")]
+
+
+def test_step_group_move_wordings():
+    plain = make(steps=steps("Shake", "Strain"))
+    served = make(steps=steps("Shake", "Strain", groups=("", "To serve")))
+    assert changes(served, plain) == [
+        ("method", "changed", "step 2 moved out of “To serve”")
+    ]
+    a = make(steps=steps("Shake", "Strain", groups=("Mix", "Mix")))
+    b = make(steps=steps("Shake", "Strain", groups=("Mix", "Serve")))
+    assert changes(a, b) == [
+        ("method", "changed", "step 2 moved from “Mix” to “Serve”")
+    ]
+
+
+def test_step_group_rename():
+    old = make(steps=steps("Shake", "Strain", groups=("Day before",) * 2))
+    new = make(steps=steps("Shake", "Strain", groups=("The day before",) * 2))
+    assert changes(old, new) == [
+        ("method", "changed", "group “Day before” → “The day before”")
+    ]
+
+
+def test_step_move_and_edit_are_both_reported():
+    old = make(steps=steps("Shake", "Strain", "Garnish"))
+    new = make(steps=steps("Shake", "Garnish!", "Garnish", groups=("", "", "Serve")))
+    assert changes(old, new) == [
+        ("method", "changed", "step 3 moved to “Serve”"),
+        ("method", "changed", "step 2: Garnish!"),
+    ]
 
 
 def test_source_link_changes():
@@ -233,7 +284,7 @@ def test_changes_come_in_section_order():
     new = make(
         name="Gin sour",
         ingredients=[ing("lime juice", 20), ing("gin", 60)],
-        steps=["Shake"],
+        steps=steps("Shake"),
         source={"url": "https://a.example"},
         tags=["quick"],
         image="photo/a.jpg",
@@ -248,3 +299,130 @@ def test_changes_come_in_section_order():
         "tags",
         "photo",
     ]
+
+
+def test_notes_added_removed_changed():
+    assert changes(make(), make(notes="x")) == [("notes", "added", "notes added")]
+    assert changes(make(notes="x"), make()) == [("notes", "removed", "notes removed")]
+    assert changes(make(notes="x"), make(notes="y")) == [
+        ("notes", "changed", "notes changed")
+    ]
+
+
+def test_sections_come_in_reading_order():
+    old = make()
+    new = make(
+        name="Gin sour",
+        ingredients=[ing("lime juice", 20), ing("gin", 60)],
+        steps=steps("Shake", "Strain"),
+        notes="Use fresh lime",
+        tags=["quick"],
+        source={"url": "https://example.com/sour"},
+    )
+    assert [section for section, _, _ in changes(old, new)] == [
+        "details",
+        "ingredients",
+        "method",
+        "notes",
+        "source",
+        "tags",
+    ]
+
+
+def test_ingredient_moved_between_groups():
+    old = make(ingredients=[ing("lime juice"), ing("gin", 60)])
+    into = make(ingredients=[ing("lime juice", group="Sour mix"), ing("gin", 60)])
+    assert changes(old, into) == [
+        ("ingredients", "changed", "lime juice moved to “Sour mix”")
+    ]
+    assert changes(into, old) == [
+        ("ingredients", "changed", "lime juice moved out of “Sour mix”")
+    ]
+    a = make(ingredients=[ing("lime juice", group="A"), ing("gin", 60, group="A")])
+    b = make(ingredients=[ing("lime juice", group="B"), ing("gin", 60, group="A")])
+    assert changes(a, b) == [
+        ("ingredients", "changed", "lime juice moved from “A” to “B”")
+    ]
+
+
+def test_group_rename_is_one_line():
+    old = make(ingredients=[ing("garlic", group="Sauce"), ing("oil", group="Sauce")])
+    new = make(
+        ingredients=[
+            ing("garlic", group="Garlic sauce"),
+            ing("oil", group="Garlic sauce"),
+        ]
+    )
+    assert changes(old, new) == [
+        ("ingredients", "changed", "group “Sauce” → “Garlic sauce”")
+    ]
+
+
+def test_rename_alongside_a_row_edit():
+    old = make(ingredients=[ing("garlic", 2, group="Sauce"), ing("oil", group="Sauce")])
+    new = make(
+        ingredients=[ing("garlic", 3, group="Dressing"), ing("oil", group="Dressing")]
+    )
+    assert changes(old, new) == [
+        ("ingredients", "changed", "group “Sauce” → “Dressing”"),
+        ("ingredients", "changed", "garlic 2 → 3 ml"),
+    ]
+
+
+def test_rows_split_across_groups_are_moves_not_a_rename():
+    old = make(ingredients=[ing("garlic", group="Sauce"), ing("oil", group="Sauce")])
+    new = make(ingredients=[ing("garlic", group="Base"), ing("oil", group="Topping")])
+    assert changes(old, new) == [
+        ("ingredients", "changed", "garlic moved from “Sauce” to “Base”"),
+        ("ingredients", "changed", "oil moved from “Sauce” to “Topping”"),
+    ]
+
+
+def test_moving_into_an_existing_group_is_not_a_rename():
+    old = make(ingredients=[ing("garlic", group="A"), ing("oil", group="B")])
+    new = make(ingredients=[ing("garlic", group="B"), ing("oil", group="B")])
+    assert changes(old, new) == [
+        ("ingredients", "changed", "garlic moved from “A” to “B”")
+    ]
+
+
+def test_a_shared_item_pairs_within_its_own_group_first():
+    old = make(
+        ingredients=[
+            ing("chicken", 500, "g"),
+            ing("garlic", 4, "g", group="Sauce"),
+            ing("oil", group="Sauce"),
+        ]
+    )
+    new = make(
+        ingredients=[
+            ing("garlic", 3, "g", group="Marinade"),
+            ing("chicken", 500, "g", group="Marinade"),
+            ing("garlic", 4, "g", group="Sauce"),
+            ing("oil", group="Sauce"),
+        ]
+    )
+    assert changes(old, new) == [
+        ("ingredients", "changed", "chicken moved to “Marinade”"),
+        ("ingredients", "added", "3 g garlic"),
+    ]
+
+
+def test_swapping_groups_that_share_an_item_is_only_a_reorder():
+    old = make(
+        ingredients=[
+            ing("garlic", 4, "g", group="Marinade"),
+            ing("oil", group="Marinade"),
+            ing("garlic", 2, "g", group="Sauce"),
+            ing("salt", 1, "g", group="Sauce"),
+        ]
+    )
+    new = make(
+        ingredients=[
+            ing("garlic", 2, "g", group="Sauce"),
+            ing("salt", 1, "g", group="Sauce"),
+            ing("garlic", 4, "g", group="Marinade"),
+            ing("oil", group="Marinade"),
+        ]
+    )
+    assert changes(old, new) == [("ingredients", "changed", "ingredients reordered")]

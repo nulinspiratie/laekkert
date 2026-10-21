@@ -1,5 +1,5 @@
 {
-  "format_version": 2,
+  "format_version": 3,
   "slug": "red-lentil-dal",
   "side": "food",
   "name": "Red lentil dal",
@@ -18,9 +18,9 @@
     {"unit": "to taste", "item": "salt", "no_scale": true}
   ],
   "steps": [
-    "Soften the onion in the butter for 8 minutes, then add the garlic, ginger and turmeric for 1 minute.",
-    "Add the lentils, coconut milk and water and simmer for 20 minutes, stirring now and then, until thick.",
-    "Season with salt and serve with rice."
+    {"text": "Soften the onion in the butter for 8 minutes, then add the garlic, ginger and turmeric for 1 minute."},
+    {"text": "Add the lentils, coconut milk and water and simmer for 20 minutes, stirring now and then, until thick."},
+    {"text": "Season with salt and serve with rice."}
   ],
   "tags": ["vegetarian"],
   "marks": ["try_next"]

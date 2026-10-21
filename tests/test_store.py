@@ -37,9 +37,9 @@ def test_seed_recipes_are_valid():
             assert (r.side, r.slug) == (side, folder.name)
 
 
-def test_seeds_are_format_2():
+def test_seeds_are_format_3():
     for path in SEED_DIR.glob("*/*/recipe.json"):
-        assert json.loads(path.read_text())["format_version"] == 2, path
+        assert json.loads(path.read_text())["format_version"] == 3, path
 
 
 def test_loads_v1_file_from_disk(store):
@@ -49,7 +49,7 @@ def test_loads_v1_file_from_disk(store):
     data.update(format_version=1, tags=["batch cook"], marks=["tried", "kid_approved"])
     path.write_text(json.dumps(data))
     r = store.get("food", "chicken-leek-traybake")
-    assert r is not None and r.format_version == 2
+    assert r is not None and r.format_version == 3
     assert r.marks == ["tried"]
     assert r.tags == ["batch cook", "kid approved"]
 

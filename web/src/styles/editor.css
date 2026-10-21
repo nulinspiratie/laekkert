@@ -392,6 +392,59 @@
   gap: 4px;
 }
 
+/* ---- Group headings ---- */
+
+.ed-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* The name reads like the recipe page's group heading, in a plain box. */
+.editor .ed-group input {
+  flex: 1 1 0;
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+
+.ed-group-tools {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+
+.ed-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ---- Notes ---- */
+
+.ed-notes-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ed-tool {
+  min-width: 64px;
+}
+
+.ed-tool--bold {
+  font-weight: 800;
+}
+
+.ed-tool--italic {
+  font-style: italic;
+}
+
+.editor .ed-notes textarea {
+  min-height: 140px;
+}
+
 /* ---- Photo, source, tags ---- */
 
 .ed-card .photo-tile {

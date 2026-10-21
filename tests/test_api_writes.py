@@ -83,12 +83,34 @@ def test_create_converts_tsp(client):
     assert (mystery["unit"], mystery["amount"]) == ("ml", 5)
 
 
+def test_put_keeps_groups_and_notes(client):
+    create(client)
+    grouped = {
+        **DRAFT,
+        "ingredients": [
+            {"amount": 50, "unit": "ml", "item": "tequila", "group": "Spirit"},
+            {"amount": 25, "unit": "ml", "item": "lime juice"},
+        ],
+        "steps": [{"text": "Shake.", "group": "Make"}],
+        "notes": "**Best** cold.",
+    }
+    response = post_json(client, "/api/recipes/drinks/margarita", grouped, "put")
+    assert response.status_code == 200, response.text
+    for body in (response.json(), client.get("/api/recipes/drinks/margarita").json()):
+        assert body["ingredients"][0]["group"] == "Spirit"
+        assert body["steps"] == [{"text": "Shake.", "group": "Make"}]
+        assert body["notes"] == "**Best** cold."
+
+
 def test_update_and_timeline_newest_first(client):
     create(client)
     changed = {**DRAFT, "steps": ["Shake hard.", "Strain."]}
     response = post_json(client, "/api/recipes/drinks/margarita", changed, "put")
     assert response.status_code == 200
-    assert response.json()["steps"] == ["Shake hard.", "Strain."]
+    assert response.json()["steps"] == [
+        {"text": "Shake hard.", "group": ""},
+        {"text": "Strain.", "group": ""},
+    ]
     body = client.get("/api/recipes/drinks/margarita/timeline").json()
     assert [e["kind"] for e in body["entries"]] == ["edit", "created"]
     assert body["entries"][0]["changes"]
@@ -179,7 +201,7 @@ def test_restore(client):
         client, "/api/recipes/drinks/margarita/restore", {"version": 1}
     )
     assert response.status_code == 200
-    assert response.json()["steps"] == ["Shake."]
+    assert response.json()["steps"] == [{"text": "Shake.", "group": ""}]
     entries = client.get("/api/recipes/drinks/margarita/timeline").json()["entries"]
     assert entries[0]["restored_from"] == 1
     missing = post_json(client, "/api/recipes/drinks/margarita/restore", {"version": 9})

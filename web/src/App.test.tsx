@@ -92,6 +92,7 @@ test('routes /bar to the bar and /drinks/bar to the recipe', async () => {
     servings: 1,
     ingredients: [],
     steps: [],
+    notes: '',
     source: null,
     version: 0,
   }

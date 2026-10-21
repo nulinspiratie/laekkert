@@ -13,11 +13,15 @@ const dal: Recipe = {
   servings: 4,
   time_minutes: 35,
   ingredients: [
-    { amount: 250, unit: 'g', item: 'red lentils', note: 'rinsed', no_scale: false, original: '', g_per_tsp: null },
-    { amount: null, unit: 'g', item: 'flour', note: '', no_scale: false, original: '1 cup', g_per_tsp: null },
-    { amount: 1, unit: 'piece', item: 'onion', note: '', no_scale: true, original: '', g_per_tsp: null },
+    { amount: 250, unit: 'g', item: 'red lentils', note: 'rinsed', no_scale: false, original: '', group: '', g_per_tsp: null },
+    { amount: null, unit: 'g', item: 'flour', note: '', no_scale: false, original: '1 cup', group: '', g_per_tsp: null },
+    { amount: 1, unit: 'piece', item: 'onion', note: '', no_scale: true, original: '', group: '', g_per_tsp: null },
   ],
-  steps: ['Cook the lentils.', 'Serve.'],
+  steps: [
+    { text: 'Cook the lentils.', group: '' },
+    { text: 'Serve.', group: '' },
+  ],
+  notes: '',
   source: null,
   tags: ['weeknight'],
   marks: [],
@@ -171,8 +175,9 @@ test('new recipe posts the draft and opens it', async () => {
       category: 'mains',
       servings: 2,
       time_minutes: 20,
-      ingredients: [{ amount: 2, unit: 'g', item: 'salt', note: '', no_scale: false, original: '' }],
-      steps: ['Boil.'],
+      ingredients: [{ amount: 2, unit: 'g', item: 'salt', note: '', no_scale: false, original: '', group: '' }],
+      steps: [{ text: 'Boil.', group: '' }],
+      notes: '',
       source: null,
       tags: [],
       image: null,
@@ -257,7 +262,7 @@ test('tsp row is sent as tsp', async () => {
   fireEvent.click(save())
   await waitFor(() => expect(location()).toBe('/food/soup'))
   const [body] = writes(fetch, 'POST', '/api/recipes')
-  expect(body.ingredients).toEqual([{ amount: 1.5, unit: 'tsp', item: 'salt', note: '', no_scale: false, original: '' }])
+  expect(body.ingredients).toEqual([{ amount: 1.5, unit: 'tsp', item: 'salt', note: '', no_scale: false, original: '', group: '' }])
 })
 
 test('a number box with unreadable text is an error, not a blank', async () => {
@@ -564,7 +569,7 @@ test('steps move and remove', async () => {
   expect(screen.queryByLabelText('Step 2')).not.toBeInTheDocument()
   fireEvent.click(save())
   await waitFor(() => expect(writes(fetch, 'PUT')).toHaveLength(1))
-  expect(writes(fetch, 'PUT')[0].steps).toEqual(['Serve.'])
+  expect(writes(fetch, 'PUT')[0].steps).toEqual([{ text: 'Serve.', group: '' }])
 })
 
 test('a row stored as written shows it and keeps it', async () => {
@@ -573,7 +578,7 @@ test('a row stored as written shows it and keeps it', async () => {
   expect(screen.getByText('As written: 1 cup')).toBeInTheDocument()
   fireEvent.click(save())
   await waitFor(() => expect(writes(fetch, 'PUT')).toHaveLength(1))
-  expect((writes(fetch, 'PUT')[0].ingredients as unknown[])[1]).toMatchObject({ amount: null, original: '1 cup' })
+  expect((writes(fetch, 'PUT')[0].ingredients as unknown[])[1]).toMatchObject({ amount: null, original: '1 cup', group: '' })
 })
 
 test('typing an amount on a row stored as written replaces it', async () => {
@@ -583,7 +588,7 @@ test('typing an amount on a row stored as written replaces it', async () => {
   expect(screen.queryByText('As written: 1 cup')).not.toBeInTheDocument()
   fireEvent.click(save())
   await waitFor(() => expect(writes(fetch, 'PUT')).toHaveLength(1))
-  expect((writes(fetch, 'PUT')[0].ingredients as unknown[])[1]).toMatchObject({ amount: 120, original: '' })
+  expect((writes(fetch, 'PUT')[0].ingredients as unknown[])[1]).toMatchObject({ amount: 120, original: '', group: '' })
 })
 
 test('tags are added with Enter or the button, lower-cased, without repeats', async () => {
@@ -723,3 +728,231 @@ test('/:side/new is the editor, not a recipe called new', () => {
   expect(screen.getByRole('heading', { name: 'New recipe' })).toBeInTheDocument()
   expect(fetch).not.toHaveBeenCalledWith('/api/recipes/food/new')
 })
+
+// ---- Groups and notes ----
+
+const stew: Recipe = {
+  ...dal,
+  slug: 'stew',
+  name: 'Stew',
+  ingredients: [
+    { amount: 500, unit: 'g', item: 'beef', note: '', no_scale: false, original: '', group: 'Meat', g_per_tsp: null },
+    { amount: 2, unit: 'piece', item: 'onion', note: '', no_scale: true, original: '', group: 'Meat', g_per_tsp: null },
+    { amount: 5, unit: 'g', item: 'salt', note: '', no_scale: false, original: '', group: '', g_per_tsp: null },
+    { amount: 200, unit: 'ml', item: 'stock', note: 'hot', no_scale: false, original: '', group: 'Sauce', g_per_tsp: null },
+  ],
+  steps: [
+    { text: 'Brown the meat.', group: 'Meat' },
+    { text: 'Season.', group: '' },
+    { text: 'Simmer.', group: 'Sauce' },
+  ],
+  notes: 'Better the next day.\n\n- freezes well',
+}
+
+const ingredientsCard = () => within(screen.getByRole('region', { name: 'Ingredients' }))
+
+const shown = (label: string | RegExp) =>
+  screen.getAllByLabelText(label).map((el) => (el as HTMLInputElement).value)
+
+test('a loaded grouped recipe shows headings with their names, numbering rows only', async () => {
+  stubApi([stew])
+  await editing(stew)
+  expect(shown('Group name')).toEqual(['Meat', '', 'Sauce', 'Meat', '', 'Sauce'])
+  // The first entry is a heading, and the first row is still Ingredient 1.
+  expect(shown(/^Ingredient \d$/)).toEqual(['beef', 'onion', 'salt', 'stock'])
+  expect(screen.getByLabelText('Ingredient 1')).toHaveValue('beef')
+  expect(screen.getByLabelText('Step 3')).toHaveValue('Simmer.')
+  screen.getAllByLabelText('Group name').forEach((el) => expect(el).toHaveAttribute('placeholder', 'Group name (none)'))
+})
+
+test('saving a grouped recipe unchanged sends its ingredients, steps and notes as they were', async () => {
+  const fetch = stubApi([stew], { update: () => json(stew) })
+  await editing(stew)
+  fireEvent.click(save())
+  await waitFor(() => expect(writes(fetch, 'PUT')).toHaveLength(1))
+  const body = writes(fetch, 'PUT')[0]
+  expect(body.ingredients).toEqual(stew.ingredients.map(({ g_per_tsp: _g, ...ing }) => ing))
+  expect(body.steps).toEqual(stew.steps)
+  expect(body.notes).toBe(stew.notes)
+})
+
+test('Add group under the ingredients focuses a blank heading with one blank row after it', async () => {
+  const fetch = stubApi([], { create: () => json({ ...dal, slug: 'soup', name: 'Soup' }, 201) })
+  renderAt('/food/new')
+  type('Name', 'Soup')
+  type('Amount for ingredient 1', '2')
+  type('Ingredient 1', 'salt')
+  fireEvent.click(screen.getAllByRole('button', { name: 'Add group' })[0])
+  // Steps have their own Add group; the first button belongs to the ingredients.
+  const heading = screen.getAllByLabelText('Group name')[0]
+  expect(heading).toHaveFocus()
+  expect(heading).toHaveValue('')
+  expect(screen.getAllByLabelText(/^Ingredient \d$/)).toHaveLength(2)
+  fireEvent.change(heading, { target: { value: 'Sauce' } })
+  type('Amount for ingredient 2', '3')
+  type('Ingredient 2', 'tomato')
+  fireEvent.click(save())
+  await waitFor(() => expect(writes(fetch, 'POST', '/api/recipes')).toHaveLength(1))
+  const ingredients = writes(fetch, 'POST', '/api/recipes')[0].ingredients as { item: string; group: string }[]
+  expect(ingredients.map((i) => [i.item, i.group])).toEqual([
+    ['salt', ''],
+    ['tomato', 'Sauce'],
+  ])
+})
+
+test('Add group under the steps does the same for steps', async () => {
+  const fetch = stubApi([], { create: () => json({ ...dal, slug: 'soup', name: 'Soup' }, 201) })
+  renderAt('/food/new')
+  fillNew()
+  type('Step 1', 'Boil.')
+  const adders = screen.getAllByRole('button', { name: 'Add group' })
+  expect(adders).toHaveLength(2)
+  fireEvent.click(adders[1])
+  const heading = screen.getByLabelText('Group name')
+  expect(heading).toHaveFocus()
+  expect(screen.getAllByLabelText(/^Step \d$/)).toHaveLength(2)
+  fireEvent.change(heading, { target: { value: 'Serve' } })
+  type('Step 2', 'Plate.')
+  fireEvent.click(save())
+  await waitFor(() => expect(writes(fetch, 'POST', '/api/recipes')).toHaveLength(1))
+  expect(writes(fetch, 'POST', '/api/recipes')[0].steps).toEqual([
+    { text: 'Boil.', group: '' },
+    { text: 'Plate.', group: 'Serve' },
+  ])
+})
+
+test('moving a heading up past a row puts that row in the heading’s group', async () => {
+  const fetch = stubApi([stew], { update: () => json(stew) })
+  await editing(stew)
+  // Entries: [Meat] beef onion [none] salt [Sauce] stock. Moving "Sauce" up past salt.
+  fireEvent.click(ingredientsCard().getByRole('button', { name: 'Move group Sauce up' }))
+  fireEvent.click(save())
+  await waitFor(() => expect(writes(fetch, 'PUT')).toHaveLength(1))
+  const ingredients = writes(fetch, 'PUT')[0].ingredients as { item: string; group: string }[]
+  expect(ingredients.map((i) => [i.item, i.group])).toEqual([
+    ['beef', 'Meat'],
+    ['onion', 'Meat'],
+    ['salt', 'Sauce'],
+    ['stock', 'Sauce'],
+  ])
+})
+
+test('moving a heading down past a row moves that row out of the group', async () => {
+  const fetch = stubApi([stew], { update: () => json(stew) })
+  await editing(stew)
+  // The blank heading before salt moves below it, so salt joins Meat.
+  fireEvent.click(ingredientsCard().getByRole('button', { name: 'Move group down' }))
+  fireEvent.click(save())
+  await waitFor(() => expect(writes(fetch, 'PUT')).toHaveLength(1))
+  const ingredients = writes(fetch, 'PUT')[0].ingredients as { item: string; group: string }[]
+  expect(ingredients.map((i) => [i.item, i.group])).toEqual([
+    ['beef', 'Meat'],
+    ['onion', 'Meat'],
+    ['salt', 'Meat'],
+    ['stock', 'Sauce'],
+  ])
+})
+
+test('the first heading cannot move up and the last entry cannot move down', async () => {
+  stubApi([stew])
+  await editing(stew)
+  expect(ingredientsCard().getByRole('button', { name: 'Move group Meat up' })).toBeDisabled()
+  // The last ingredient entry is the stock row.
+  expect(screen.getByRole('button', { name: 'Move ingredient 4 down' })).toBeDisabled()
+  // A heading in the middle is free to move either way.
+  expect(ingredientsCard().getByRole('button', { name: 'Move group down' })).toBeEnabled()
+})
+
+test('removing a heading merges its rows into the group above', async () => {
+  const fetch = stubApi([stew], { update: () => json(stew) })
+  await editing(stew)
+  fireEvent.click(ingredientsCard().getByRole('button', { name: 'Remove group Sauce' }))
+  fireEvent.click(save())
+  await waitFor(() => expect(writes(fetch, 'PUT')).toHaveLength(1))
+  const body = writes(fetch, 'PUT')[0]
+  expect((body.ingredients as { group: string }[]).map((i) => i.group)).toEqual(['Meat', 'Meat', '', ''])
+  expect((body.steps as { group: string }[]).map((s) => s.group)).toEqual(['Meat', '', 'Sauce'])
+})
+
+test('Add ingredient adds after the last entry, headings included', async () => {
+  stubApi([stew])
+  await editing(stew)
+  fireEvent.click(screen.getByRole('button', { name: 'Add ingredient' }))
+  expect(screen.getAllByLabelText(/^Ingredient \d$/)).toHaveLength(5)
+  expect(screen.getByRole('button', { name: 'Move ingredient 5 down' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Move ingredient 4 down' })).toBeEnabled()
+})
+
+function notesBox() {
+  return screen.getByLabelText('Notes') as HTMLTextAreaElement
+}
+
+test('Italic wraps the selected text and keeps it selected, with focus in the box', async () => {
+  await stubAndEdit()
+  const notes = notesBox()
+  fireEvent.change(notes, { target: { value: 'a soft b' } })
+  notes.setSelectionRange(2, 6)
+  fireEvent.click(screen.getByRole('button', { name: 'Italic' }))
+  expect(notes).toHaveValue('a *soft* b')
+  expect(notes).toHaveFocus()
+  expect([notes.selectionStart, notes.selectionEnd]).toEqual([3, 7])
+})
+
+test('Bold wraps the selected text in two asterisks', async () => {
+  await stubAndEdit()
+  const notes = notesBox()
+  fireEvent.change(notes, { target: { value: 'a soft b' } })
+  notes.setSelectionRange(2, 6)
+  fireEvent.click(screen.getByRole('button', { name: 'Bold' }))
+  expect(notes).toHaveValue('a **soft** b')
+  expect([notes.selectionStart, notes.selectionEnd]).toEqual([4, 8])
+})
+
+test('Bold with nothing selected puts the caret between the pair', async () => {
+  await stubAndEdit()
+  const notes = notesBox()
+  fireEvent.change(notes, { target: { value: 'ab' } })
+  notes.setSelectionRange(1, 1)
+  fireEvent.click(screen.getByRole('button', { name: 'Bold' }))
+  expect(notes).toHaveValue('a****b')
+  expect([notes.selectionStart, notes.selectionEnd]).toEqual([3, 3])
+})
+
+test('List puts a bullet on every selected line and takes them off again', async () => {
+  await stubAndEdit()
+  const notes = notesBox()
+  fireEvent.change(notes, { target: { value: 'one\ntwo' } })
+  notes.setSelectionRange(0, 7)
+  fireEvent.click(screen.getByRole('button', { name: 'List' }))
+  expect(notes).toHaveValue('- one\n- two')
+  expect([notes.selectionStart, notes.selectionEnd]).toEqual([0, 11])
+  fireEvent.click(screen.getByRole('button', { name: 'List' }))
+  expect(notes).toHaveValue('one\ntwo')
+})
+
+test('the notes toolbar is labelled and its buttons are text', async () => {
+  await stubAndEdit()
+  const bar = screen.getByRole('toolbar', { name: 'Notes formatting' })
+  expect(within(bar).getAllByRole('button').map((b) => b.textContent)).toEqual(['Bold', 'Italic', 'List'])
+  expect(notesBox()).toHaveAttribute('rows', '6')
+  expect(
+    screen.getByText('New lines are kept. **bold**, *italic*, and - at the start of a line for a bullet.'),
+  ).toBeInTheDocument()
+})
+
+test('notes are saved, and an edit to them counts as a change', async () => {
+  const fetch = stubApi([dal], { update: () => json(dal) })
+  await editing()
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+  fireEvent.change(notesBox(), { target: { value: 'Keeps.\n\n- a\n- b' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  expect(confirm).toHaveBeenCalled()
+  fireEvent.click(save())
+  await waitFor(() => expect(writes(fetch, 'PUT')).toHaveLength(1))
+  expect(writes(fetch, 'PUT')[0].notes).toBe('Keeps.\n\n- a\n- b')
+})
+
+async function stubAndEdit() {
+  stubApi([dal], { update: () => json(dal) })
+  await editing()
+}

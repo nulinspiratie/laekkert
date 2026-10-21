@@ -159,6 +159,19 @@ full-page shots, the rest are 390 x 844 and 1440 x 900. They were taken from a s
 directory with the seed recipes plus eight test drinks. The app has one theme, so there are
 no dark shots.
 
+`screenshots/groups/` holds ingredient groups, step groups and notes:
+- `recipe-groups-phone` and `recipe-groups-desktop` (a food recipe with three ingredient
+  groups, three step groups and notes with bold, italic and a bullet list), both full page;
+- `editor-groups-phone` (390 x 844, scrolled to a heading row among the ingredients) and
+  `editor-groups-desktop` (full page: heading rows, Add group, the Notes card);
+- `drink-groups-phone` (a drink with an ungrouped spirit, a "Sour mix" group and two step
+  groups, full page, in the drinks green).
+
+They were taken the same way as M5's, from a scratch data directory with the seed recipes
+plus a grouped food recipe and a grouped drink added through the API, with metric units.
+Phone shots are 390 wide and desktop 1440, at 1x. The app has one theme, so there are no
+dark shots.
+
 `screenshots/m5/` holds "Cook with what you have":
 - `food-have-desktop` and `food-have-phone` (`?have=chicken&have=leeks`, with the phone
   panel open);

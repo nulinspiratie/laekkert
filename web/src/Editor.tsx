@@ -2,27 +2,32 @@
 // phone is one column with Cancel and Save in a fixed bottom bar. The pure parts (state,
 // validation, the draft) are in editor.ts.
 
-import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Link, useBlocker, useNavigate, useParams } from 'react-router'
 import { createRecipe, deleteRecipe, getRecipe, recipeImageUrl, updateRecipe, uploadImage } from './api'
 import { CATEGORIES } from './browse'
 import {
+  blankHeading,
   blankRow,
   blankStep,
   emptyState,
   isDirty,
+  isHeading,
   move,
   stateFromRecipe,
   toDraft,
   UNITS,
   validate,
   type BadInput,
+  type EditorHeading,
   type EditorRow,
   type EditorState,
+  type IngredientEntry,
   type SourceMode,
 } from './editor'
 import { capitalise } from './format'
 import { Back, Check, Chevron, Close, Plus } from './icons'
+import { toggleBullets, wrap, type Edit } from './noteTools'
 import { PhotoTile } from './PhotoTile'
 import { Shell } from './Shell'
 import { isSide, SIDE_LABELS, type Recipe, type Side } from './types'
@@ -267,6 +272,7 @@ function Form({ side, recipe }: { side: Side; recipe: Recipe | null }) {
   const basics = <Basics side={side} state={state} onChange={patch} servingsBox={servingsBox} timeBox={timeBox} />
   const ingredients = <Ingredients rows={state.rows} desktop={desktop} onRows={(rows) => patch({ rows })} />
   const steps = <Steps steps={state.steps} onSteps={(next) => patch({ steps: next })} />
+  const notes = <NotesSection notes={state.notes} onNotes={(next) => patch({ notes: next })} />
   const deleteButton = recipe && (
     <button type="button" className="ed-delete" disabled={busy} onClick={() => void remove()}>
       Delete recipe
@@ -307,6 +313,7 @@ function Form({ side, recipe }: { side: Side; recipe: Recipe | null }) {
               {basics}
               {ingredients}
               {steps}
+              {notes}
             </div>
             <aside className="ed-aside">
               {photoSection}
@@ -321,6 +328,7 @@ function Form({ side, recipe }: { side: Side; recipe: Recipe | null }) {
             {photoSection}
             {ingredients}
             {steps}
+            {notes}
             {sourceSection}
             {tagsSection}
             {deleteButton}
@@ -427,23 +435,30 @@ function Basics({
 function MoveButtons({
   what,
   number,
+  name,
+  first,
   last,
   onMove,
   onRemove,
 }: {
-  what: 'ingredient' | 'step'
+  what: 'ingredient' | 'step' | 'group'
+  /** Of the ingredient or step, counting rows only; unused for a group. */
   number: number
+  /** A group's name, when it has one. */
+  name?: string
+  first: boolean
   last: boolean
   onMove: (delta: -1 | 1) => void
   onRemove: () => void
 }) {
+  const label = what === 'group' ? (name?.trim() ? `group ${name.trim()}` : 'group') : `${what} ${number}`
   return (
     <>
       <button
         type="button"
         className="ed-icon-btn"
-        aria-label={`Move ${what} ${number} up`}
-        disabled={number === 1}
+        aria-label={`Move ${label} up`}
+        disabled={first}
         onClick={() => onMove(-1)}
       >
         <Chevron className="ed-up" />
@@ -451,16 +466,66 @@ function MoveButtons({
       <button
         type="button"
         className="ed-icon-btn"
-        aria-label={`Move ${what} ${number} down`}
+        aria-label={`Move ${label} down`}
         disabled={last}
         onClick={() => onMove(1)}
       >
         <Chevron className="ed-down" />
       </button>
-      <button type="button" className="ed-icon-btn" aria-label={`Remove ${what} ${number}`} onClick={onRemove}>
+      <button type="button" className="ed-icon-btn" aria-label={`Remove ${label}`} onClick={onRemove}>
         <Close />
       </button>
     </>
+  )
+}
+
+/** A group heading among the ingredients or steps: its name, and the same move and remove buttons. */
+function GroupRow({
+  heading,
+  first,
+  last,
+  focus,
+  onName,
+  onMove,
+  onRemove,
+}: {
+  heading: EditorHeading
+  first: boolean
+  last: boolean
+  /** Focus the name box when the row appears (a group just added). */
+  focus: boolean
+  onName: (name: string) => void
+  onMove: (delta: -1 | 1) => void
+  onRemove: () => void
+}) {
+  const box = useRef<HTMLInputElement>(null)
+  // Read once, when the row appears: a later re-render must not take focus back.
+  const focusOnMount = useRef(focus)
+  useEffect(() => {
+    if (focusOnMount.current) box.current?.focus()
+  }, [])
+  return (
+    <li className="ed-group">
+      <input
+        ref={box}
+        type="text"
+        aria-label="Group name"
+        placeholder="Group name (none)"
+        value={heading.name}
+        onChange={(e) => onName(e.target.value)}
+      />
+      <div className="ed-group-tools">
+        <MoveButtons
+          what="group"
+          number={0}
+          name={heading.name}
+          first={first}
+          last={last}
+          onMove={onMove}
+          onRemove={onRemove}
+        />
+      </div>
+    </li>
   )
 }
 
@@ -469,12 +534,14 @@ function Ingredients({
   desktop,
   onRows,
 }: {
-  rows: EditorRow[]
+  rows: IngredientEntry[]
   desktop: boolean
-  onRows: (rows: EditorRow[]) => void
+  onRows: (rows: IngredientEntry[]) => void
 }) {
   const change = (key: string, changes: Partial<EditorRow>) =>
-    onRows(rows.map((row) => (row.key === key ? { ...row, ...changes } : row)))
+    onRows(rows.map((row) => (row.key === key && !isHeading(row) ? { ...row, ...changes } : row)))
+  // The heading added last, whose name box takes focus as it appears.
+  const [fresh, setFresh] = useState<string | null>(null)
   return (
     <section className="ed-card" aria-labelledby="ed-ingredients">
       <h2 id="ed-ingredients">Ingredients</h2>
@@ -489,7 +556,21 @@ function Ingredients({
         </div>
         <ul className="ed-rows">
           {rows.map((row, index) => {
-            const n = index + 1
+            if (isHeading(row)) {
+              return (
+                <GroupRow
+                  key={row.key}
+                  heading={row}
+                  first={index === 0}
+                  last={index === rows.length - 1}
+                  focus={row.key === fresh}
+                  onName={(name) => onRows(rows.map((r) => (r.key === row.key ? { ...row, name } : r)))}
+                  onMove={(delta) => onRows(move(rows, index, delta))}
+                  onRemove={() => onRows(rows.filter((r) => r.key !== row.key))}
+                />
+              )
+            }
+            const n = rows.slice(0, index).filter((r) => !isHeading(r)).length + 1
             const amount = (
               <div className="ed-cell ed-cell--amount">
                 <span className="ed-cap" aria-hidden="true">
@@ -570,6 +651,7 @@ function Ingredients({
                 <MoveButtons
                   what="ingredient"
                   number={n}
+                  first={index === 0}
                   last={index === rows.length - 1}
                   onMove={(delta) => onRows(move(rows, index, delta))}
                   onRemove={() => onRows(rows.filter((r) => r.key !== row.key))}
@@ -602,10 +684,24 @@ function Ingredients({
           })}
         </ul>
       </div>
-      <button type="button" className="ed-add" onClick={() => onRows([...rows, blankRow()])}>
-        <Plus />
-        Add ingredient
-      </button>
+      <div className="ed-add-row">
+        <button type="button" className="ed-add" onClick={() => onRows([...rows, blankRow()])}>
+          <Plus />
+          Add ingredient
+        </button>
+        <button
+          type="button"
+          className="ed-add"
+          onClick={() => {
+            const heading = blankHeading()
+            setFresh(heading.key)
+            onRows([...rows, heading, blankRow()])
+          }}
+        >
+          <Plus />
+          Add group
+        </button>
+      </div>
     </section>
   )
 }
@@ -617,12 +713,27 @@ function Steps({
   steps: EditorState['steps']
   onSteps: (steps: EditorState['steps']) => void
 }) {
+  const [fresh, setFresh] = useState<string | null>(null)
   return (
     <section className="ed-card" aria-labelledby="ed-steps">
       <h2 id="ed-steps">Steps</h2>
       <ol className="ed-steps">
         {steps.map((step, index) => {
-          const n = index + 1
+          if (isHeading(step)) {
+            return (
+              <GroupRow
+                key={step.key}
+                heading={step}
+                first={index === 0}
+                last={index === steps.length - 1}
+                focus={step.key === fresh}
+                onName={(name) => onSteps(steps.map((s) => (s.key === step.key ? { ...step, name } : s)))}
+                onMove={(delta) => onSteps(move(steps, index, delta))}
+                onRemove={() => onSteps(steps.filter((s) => s.key !== step.key))}
+              />
+            )
+          }
+          const n = steps.slice(0, index).filter((s) => !isHeading(s)).length + 1
           return (
             <li key={step.key} className="ed-step">
               <span className="ed-step-n" aria-hidden="true">
@@ -632,12 +743,13 @@ function Steps({
                 aria-label={`Step ${n}`}
                 rows={2}
                 value={step.text}
-                onChange={(e) => onSteps(steps.map((s) => (s.key === step.key ? { ...s, text: e.target.value } : s)))}
+                onChange={(e) => onSteps(steps.map((s) => (s.key === step.key && !isHeading(s) ? { ...s, text: e.target.value } : s)))}
               />
               <div className="ed-step-tools">
                 <MoveButtons
                   what="step"
                   number={n}
+                  first={index === 0}
                   last={index === steps.length - 1}
                   onMove={(delta) => onSteps(move(steps, index, delta))}
                   onRemove={() => onSteps(steps.filter((s) => s.key !== step.key))}
@@ -647,10 +759,86 @@ function Steps({
           )
         })}
       </ol>
-      <button type="button" className="ed-add" onClick={() => onSteps([...steps, blankStep()])}>
-        <Plus />
-        Add step
-      </button>
+      <div className="ed-add-row">
+        <button type="button" className="ed-add" onClick={() => onSteps([...steps, blankStep()])}>
+          <Plus />
+          Add step
+        </button>
+        <button
+          type="button"
+          className="ed-add"
+          onClick={() => {
+            const heading = blankHeading()
+            setFresh(heading.key)
+            onSteps([...steps, heading, blankStep()])
+          }}
+        >
+          <Plus />
+          Add group
+        </button>
+      </div>
+    </section>
+  )
+}
+
+const NOTE_TOOLS: { label: string; apply: (text: string, start: number, end: number) => Edit; style: string }[] = [
+  { label: 'Bold', apply: (text, start, end) => wrap(text, start, end, '**'), style: 'ed-tool--bold' },
+  { label: 'Italic', apply: (text, start, end) => wrap(text, start, end, '*'), style: 'ed-tool--italic' },
+  { label: 'List', apply: toggleBullets, style: '' },
+]
+
+function NotesSection({ notes, onNotes }: { notes: string; onNotes: (notes: string) => void }) {
+  const heading = useId()
+  const box = useRef<HTMLTextAreaElement>(null)
+  // The selection to put back once the new text is in the box.
+  const restore = useRef<{ start: number; end: number } | null>(null)
+
+  const place = () => {
+    const wanted = restore.current
+    const el = box.current
+    if (!wanted || !el) return
+    restore.current = null
+    el.focus()
+    el.setSelectionRange(wanted.start, wanted.end)
+  }
+  // After the render that carries the edit, so React has not reset the caret by then.
+  useLayoutEffect(place, [notes])
+
+  const apply = (tool: (typeof NOTE_TOOLS)[number]) => {
+    const el = box.current
+    if (!el) return
+    const edit = tool.apply(notes, el.selectionStart, el.selectionEnd)
+    restore.current = { start: edit.start, end: edit.end }
+    onNotes(edit.text)
+    // Nothing to re-render when the text did not change; put the selection back now.
+    if (edit.text === notes) place()
+  }
+
+  return (
+    <section className="ed-card ed-notes">
+      <h2 id={heading}>Notes</h2>
+      <div className="ed-notes-tools" role="toolbar" aria-label="Notes formatting">
+        {NOTE_TOOLS.map((tool) => (
+          <button
+            key={tool.label}
+            type="button"
+            className={tool.style ? `ed-btn ed-tool ${tool.style}` : 'ed-btn ed-tool'}
+            // Keeps the selection in the box when the button is pressed with a mouse.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => apply(tool)}
+          >
+            {tool.label}
+          </button>
+        ))}
+      </div>
+      <textarea
+        ref={box}
+        aria-labelledby={heading}
+        rows={6}
+        value={notes}
+        onChange={(e) => onNotes(e.target.value)}
+      />
+      <p className="ed-hint">New lines are kept. **bold**, *italic*, and - at the start of a line for a bullet.</p>
     </section>
   )
 }

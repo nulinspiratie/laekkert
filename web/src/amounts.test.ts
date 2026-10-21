@@ -10,6 +10,7 @@ function ing(over: Partial<RecipeIngredient>): RecipeIngredient {
     note: '',
     no_scale: false,
     original: '',
+    group: '',
     g_per_tsp: null,
     ...over,
   }

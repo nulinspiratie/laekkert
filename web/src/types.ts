@@ -17,12 +17,20 @@ export interface Ingredient {
   note: string
   no_scale: boolean
   original: string
+  /** The ingredient group heading it sits under; '' is no group. */
+  group: string
 }
 
 export interface RecipeIngredient extends Ingredient {
   g_per_tsp: number | null
   /** Drinks only: the bar item this ingredient is, or null when none matches. */
   bar?: IngredientBar | null
+}
+
+/** One method step; `group` is the heading it sits under, '' for none. */
+export interface Step {
+  text: string
+  group: string
 }
 
 export interface Source {
@@ -59,7 +67,9 @@ export interface Recipe extends RecipeSummary {
   format_version: number
   servings: number
   ingredients: RecipeIngredient[]
-  steps: string[]
+  steps: Step[]
+  /** Free text with line breaks, **bold**, *italic* and - bullets; '' is none. */
+  notes: string
   source: Source | null
   /** Counts saved changes; 0 for a recipe that predates versions. Sent back with an edit. */
   version: number
@@ -138,7 +148,7 @@ export function isSide(value: string | undefined): value is Side {
 
 /** One line of an edit's readable diff. */
 export interface Change {
-  section: 'details' | 'ingredients' | 'method' | 'source' | 'tags' | 'photo'
+  section: 'details' | 'ingredients' | 'method' | 'notes' | 'source' | 'tags' | 'photo'
   kind: 'added' | 'removed' | 'changed'
   text: string
 }
@@ -177,7 +187,8 @@ export interface RecipeDraft {
   servings: number
   time_minutes: number | null
   ingredients: DraftIngredient[]
-  steps: string[]
+  steps: Step[]
+  notes: string
   source: Source | null
   tags: string[]
   image: string | null

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
 import { Ingredients } from './Ingredients'
 import type { RecipeIngredient } from './types'
 
@@ -11,6 +11,7 @@ function ing(over: Partial<RecipeIngredient> & Pick<RecipeIngredient, 'item'>): 
     note: '',
     no_scale: false,
     original: '',
+    group: '',
     g_per_tsp: null,
     ...over,
   }
@@ -171,4 +172,82 @@ test('a mocktail with no tracked bottles shows only the Also needs line', () => 
   expect(summary).toHaveTextContent(/^Also needs: lime juice, ginger beer$/)
   expect(screen.queryByText(/From your bar|Missing:/)).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /in the bar|not sorted/i })).not.toBeInTheDocument()
+})
+
+test('ungrouped rows have no heading and sit in one list', () => {
+  const { container } = renderIngredients()
+  expect(screen.queryByRole('heading', { level: 3 })).not.toBeInTheDocument()
+  expect(screen.queryByRole('separator')).not.toBeInTheDocument()
+  expect(container.querySelectorAll('ul')).toHaveLength(1)
+})
+
+test('groups get a heading each, the first row has none above it, and every run is its own list', () => {
+  const rows = [
+    ing({ item: 'chicken thighs', amount: 800 }),
+    ing({ item: 'soy sauce', amount: 40, unit: 'ml', group: 'Marinade' }),
+    ing({ item: 'honey', amount: 20, group: 'Marinade' }),
+    ing({ item: 'stock', amount: 200, unit: 'ml', group: 'Sauce' }),
+  ]
+  const { container } = renderIngredients(rows)
+  expect(screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['Marinade', 'Sauce'])
+  const lists = container.querySelectorAll('ul')
+  expect(lists).toHaveLength(3)
+  expect([...lists].map((ul) => ul.querySelectorAll('li').length)).toEqual([1, 2, 1])
+  // The ungrouped first run opens the card without a heading or a rule.
+  expect(screen.queryByRole('separator')).not.toBeInTheDocument()
+  expect(container.querySelector('.ingredient-list')).toBe(lists[0])
+  expect(lists[0].previousElementSibling?.tagName).not.toBe('H3')
+})
+
+test('scaling changes the rows in every group', () => {
+  const rows = [
+    ing({ item: 'chicken thighs', amount: 800 }),
+    ing({ item: 'soy sauce', amount: 40, group: 'Marinade' }),
+    ing({ item: 'stock', amount: 200, group: 'Sauce' }),
+  ]
+  renderIngredients(rows, 4)
+  fireEvent.click(screen.getByRole('button', { name: 'Fewer servings' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Fewer servings' }))
+  expect(within(row('chicken thighs')).getByText('400 g')).toBeInTheDocument()
+  expect(within(row('soy sauce')).getByText('20 g')).toBeInTheDocument()
+  expect(within(row('stock')).getByText('100 g')).toBeInTheDocument()
+})
+
+test('ungrouped rows after a group are set off by a rule, not a heading', () => {
+  const rows = [
+    ing({ item: 'soy sauce', amount: 40, unit: 'ml', group: 'Marinade' }),
+    ing({ item: 'honey', amount: 20, group: 'Marinade' }),
+    ing({ item: 'salt', amount: null, unit: 'to taste' }),
+  ]
+  renderIngredients(rows)
+  expect(screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['Marinade'])
+  expect(screen.getAllByRole('separator')).toHaveLength(1)
+})
+
+test('a drink in a group flips the bar state of its own row, not the same place in another run', async () => {
+  const bar = (item: string) => ({ item, state: 'dont' as const, tracked: true, recipe: null })
+  const gin = ing({ item: 'gin', amount: 50, unit: 'ml', bar: bar('gin') })
+  const lime = ing({ item: 'lime juice', amount: 25, unit: 'ml', group: 'Sour mix', bar: bar('lime juice') })
+  const syrup = ing({ item: 'sugar syrup', amount: 15, unit: 'ml', group: 'Sour mix', bar: bar('sugar syrup') })
+  const onBar = vi.fn().mockResolvedValue(true)
+  render(
+    <MemoryRouter>
+      <Ingredients ingredients={[gin, lime, syrup]} servings={1} side="drinks" onBar={onBar} />
+    </MemoryRouter>,
+  )
+  // Lime juice is first in its run, like gin in its own: only the whole-recipe index tells them apart.
+  fireEvent.click(within(row('lime juice')).getByRole('button', { name: /Lime juice is not in the bar/ }))
+  expect(onBar).toHaveBeenCalledTimes(1)
+  expect(onBar).toHaveBeenCalledWith('lime juice', 'have')
+  const status = await within(row('lime juice')).findByRole('status')
+  expect(status).toHaveTextContent('Marked as in the bar.')
+  expect(within(row('gin')).queryByRole('status')).not.toBeInTheDocument()
+  expect(within(row('gin')).queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument()
+  expect(within(row('sugar syrup')).queryByRole('status')).not.toBeInTheDocument()
+
+  // The last row of the run answers to its own index too.
+  fireEvent.click(within(row('sugar syrup')).getByRole('button', { name: /Sugar syrup is not in the bar/ }))
+  expect(onBar).toHaveBeenLastCalledWith('sugar syrup', 'have')
+  expect(await within(row('sugar syrup')).findByRole('status')).toHaveTextContent('Marked as in the bar.')
+  expect(within(row('gin')).queryByRole('status')).not.toBeInTheDocument()
 })

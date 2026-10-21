@@ -51,7 +51,9 @@ class Change(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    section: Literal["details", "ingredients", "method", "source", "tags", "photo"]
+    section: Literal[
+        "details", "ingredients", "method", "notes", "source", "tags", "photo"
+    ]
     kind: Literal["added", "removed", "changed"]
     text: str
 

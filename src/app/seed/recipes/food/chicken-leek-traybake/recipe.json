@@ -1,5 +1,5 @@
 {
-  "format_version": 2,
+  "format_version": 3,
   "slug": "chicken-leek-traybake",
   "side": "food",
   "name": "Chicken and leek traybake",
@@ -16,10 +16,10 @@
     {"unit": "to taste", "item": "salt", "no_scale": true}
   ],
   "steps": [
-    "Heat the oven to 200 °C.",
-    "Toss the potatoes and leeks with half the oil and a little salt in a large tray.",
-    "Rub the chicken with the rest of the oil, the paprika, lemon zest and salt, and lay it skin up on the vegetables.",
-    "Roast for 40 minutes until the skin is crisp, then squeeze over the lemon juice."
+    {"text": "Heat the oven to 200 °C."},
+    {"text": "Toss the potatoes and leeks with half the oil and a little salt in a large tray."},
+    {"text": "Rub the chicken with the rest of the oil, the paprika, lemon zest and salt, and lay it skin up on the vegetables."},
+    {"text": "Roast for 40 minutes until the skin is crisp, then squeeze over the lemon juice."}
   ],
   "tags": ["batch cook", "kid approved"],
   "marks": ["tried"]
