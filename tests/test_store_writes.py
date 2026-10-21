@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from app.recipes import store as store_module
 from app.recipes.catalog import Catalog
 from app.recipes.drafts import parse_draft
 from app.recipes.store import RecipeStore, VersionConflict
@@ -497,7 +498,9 @@ def test_tasting_keeps_favourite_and_other_marks(store):
     assert store.get("drinks", "daiquiri").marks == ["favourite", "tried"]
 
 
-def test_rating_records_previous_and_made_rating_counts(store):
+def test_rating_records_previous_and_made_rating_counts(store, monkeypatch):
+    # Each rating stands on its own, however quickly the next one comes.
+    monkeypatch.setattr(store_module, "RATING_REDO_SECONDS", -1)
     store.add_rating("drinks", "daiquiri", 4, "app")
     second = store.add_rating("drinks", "daiquiri", 4.5, "app")
     assert second.previous == 4
@@ -507,6 +510,39 @@ def test_rating_records_previous_and_made_rating_counts(store):
     # A made entry without a rating doesn't reset it.
     store.add_made("drinks", "daiquiri", None, "", "app")
     assert store.add_rating("drinks", "daiquiri", 2, "app").previous == 5
+
+
+def test_rating_changed_right_away_replaces_the_last(store):
+    store.add_rating("drinks", "daiquiri", 3, "app")
+    store.add_note("drinks", "daiquiri", "too sour", "app")
+    store.add_rating("drinks", "daiquiri", 4, "app")
+    # The second tap on the same star: a half star less.
+    again = store.add_rating("drinks", "daiquiri", 3.5, "app")
+    assert (again.rating, again.previous) == (3.5, 3)
+    timeline = store.timeline("drinks", "daiquiri")
+    assert kinds(timeline) == ["rating", "note", "rating"]
+    assert (timeline[-1].id, timeline[-1].rating, timeline[-1].previous) == (
+        again.id,
+        3.5,
+        3,
+    )
+    assert store.derived("drinks", "daiquiri")["rating"] == 3.5
+
+
+def test_rating_changed_back_right_away_leaves_no_entry(store):
+    store.add_rating("drinks", "daiquiri", 3, "app")
+    store.add_note("drinks", "daiquiri", "too sour", "app")
+    store.add_rating("drinks", "daiquiri", 4, "app")
+    store.add_rating("drinks", "daiquiri", 3, "app")
+    assert kinds(store.timeline("drinks", "daiquiri")) == ["rating", "note"]
+
+
+def test_rating_later_or_from_elsewhere_is_a_new_entry(store, monkeypatch):
+    store.add_rating("drinks", "daiquiri", 4, "app")
+    assert store.add_rating("drinks", "daiquiri", 4.5, "claude").previous == 4
+    monkeypatch.setattr(store_module, "RATING_REDO_SECONDS", -1)
+    assert store.add_rating("drinks", "daiquiri", 4, "claude").previous == 4.5
+    assert kinds(store.timeline("drinks", "daiquiri")) == ["rating"] * 3
 
 
 @pytest.mark.parametrize("rating", [0, 0.25, 5.5, 6, -1, float("nan")])

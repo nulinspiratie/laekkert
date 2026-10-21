@@ -562,33 +562,61 @@
   color: var(--muted);
 }
 
-.bar-nomatch-add,
+/* Adding what the search found nothing for: one tap per kind, so it lands in its group. */
+.bar-nomatch-add {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bar-nomatch-add h3 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.bar-nomatch-kinds {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.bar-nomatch-kinds button {
+  min-height: 52px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--bar-cta);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* An odd one out takes the whole last row. */
+.bar-nomatch-kinds button:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
 .bar-nomatch-untracked {
   align-self: stretch;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border-radius: 14px;
-  overflow-wrap: anywhere;
-}
-
-.bar-nomatch-add {
-  min-height: 56px;
-  border: 0;
-  background: var(--bar-cta);
-  color: #fff;
-  font-size: 17px;
-  font-weight: 700;
-}
-
-.bar-nomatch-untracked {
   min-height: 48px;
   border: 1px solid var(--bar-quiet-border);
+  border-radius: 14px;
   background: transparent;
   color: var(--text);
   font-size: 15px;
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 /* ---- Desktop ---- */
@@ -694,7 +722,16 @@
   margin: 0;
 }
 
-.bar-page--desktop .bar-nomatch-add,
+.bar-page--desktop .bar-nomatch-add h3 {
+  justify-content: flex-start;
+}
+
+.bar-page--desktop .bar-nomatch-kinds {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.bar-page--desktop .bar-nomatch-kinds button,
 .bar-page--desktop .bar-nomatch-untracked {
   align-self: flex-start;
   min-height: 48px;

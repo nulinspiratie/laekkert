@@ -5,12 +5,22 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { changeBar, getBar } from './api'
-import { groupByKind, KIND_LABELS, matchItem, messageOf, shelf, unsorted, untracked, usedText } from './bar'
+import {
+  groupByKind,
+  KIND_LABELS,
+  matchItem,
+  messageOf,
+  shelf,
+  TRACKED_KINDS,
+  unsorted,
+  untracked,
+  usedText,
+} from './bar'
 import { BarItemSheet } from './BarItemSheet'
 import { capitalise } from './format'
 import { Back, Basket, Bottle, Check, Chevron, DrinksTab, MinusCircle, More, Plus, Question, Search } from './icons'
 import { Shell } from './Shell'
-import type { Bar, BarChanges, BarItem, BarState } from './types'
+import type { Bar, BarChanges, BarItem, BarState, Kind } from './types'
 import { useIsDesktop } from './useIsDesktop'
 
 /** What a write in flight changes about an item, or what a rollback puts back. */
@@ -244,7 +254,8 @@ export function BarPage() {
       query={q}
       desktop={desktop}
       problem={problem}
-      onAdd={() => add({ have: [q] })}
+      // Other is what a new name gets anyway; leaving it out keeps a syrup a syrup.
+      onAdd={(kind) => add(kind === 'other' ? { have: [q] } : { have: [q], kinds: { [q]: kind } })}
       onUntracked={() => add({ untrack: [q] })}
     />
   )
@@ -551,9 +562,10 @@ function NoMatch({
   query: string
   desktop: boolean
   problem: Problem | null
-  onAdd: () => void
+  onAdd: (kind: Kind) => void
   onUntracked: () => void
 }) {
+  const addId = useId()
   return (
     <section className="bar-nomatch" aria-live="polite">
       {!desktop && <Bottle />}
@@ -564,10 +576,19 @@ function NoMatch({
           : 'Check the spelling, or add it. It goes in as a bottle you have, and you can change that after.'}
       </p>
       <ProblemNote problem={problem} at="add" />
-      <button type="button" className="bar-nomatch-add" onClick={onAdd}>
-        <Plus size={20} />
-        Add ‘{query}’ to the bar
-      </button>
+      <div role="group" aria-labelledby={addId} className="bar-nomatch-add">
+        <h3 id={addId}>
+          <Plus size={20} />
+          Add ‘{query}’ to the bar as
+        </h3>
+        <div className="bar-nomatch-kinds">
+          {TRACKED_KINDS.map((kind) => (
+            <button key={kind} type="button" onClick={() => onAdd(kind)}>
+              {KIND_LABELS[kind]}
+            </button>
+          ))}
+        </div>
+      </div>
       <button type="button" className="bar-nomatch-untracked" onClick={onUntracked}>
         Add it without tracking
       </button>

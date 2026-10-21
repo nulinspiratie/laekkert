@@ -229,8 +229,8 @@ test('says why an add was refused next to the add button', async () => {
   stubBar(everyday, refuse)
   await openBar()
   fireEvent.change(screen.getByRole('searchbox', { name: 'Find a bottle' }), { target: { value: 'Falernum' } })
-  const add = screen.getByRole('button', { name: 'Add ‘Falernum’ to the bar' })
-  fireEvent.click(add)
+  const add = screen.getByRole('group', { name: 'Add ‘Falernum’ to the bar as' })
+  fireEvent.click(within(add).getByRole('button', { name: 'Other' }))
   expect(await within(add.parentElement!).findByRole('alert')).toHaveTextContent(refusal)
   expect(screen.getByRole('searchbox', { name: 'Find a bottle' })).toHaveValue('Falernum')
 })
@@ -282,10 +282,28 @@ test('offers to add a bottle with no match', async () => {
   expect(
     screen.getByText('Check the spelling, or add it. It goes in as a bottle you have, and you can change that after.'),
   ).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Add ‘Falernum’ to the bar' }))
-  expect(posted(fetch)).toEqual([{ have: ['Falernum'] }])
+  const add = within(screen.getByRole('group', { name: 'Add ‘Falernum’ to the bar as' }))
+  expect(add.getAllByRole('button').map((button) => button.textContent)).toEqual([
+    'Spirits',
+    'Liqueurs',
+    'Aperitifs and vermouth',
+    'Bitters',
+    'Other',
+  ])
+  fireEvent.click(add.getByRole('button', { name: 'Liqueurs' }))
+  expect(posted(fetch)).toEqual([{ have: ['Falernum'], kinds: { Falernum: 'liqueurs' } }])
   await waitFor(() => expect(search).toHaveValue(''))
   expect(screen.getByRole('button', { name: "Falernum: have. Tap if you've run out." })).toBeInTheDocument()
+})
+
+test('adds a bottle as other without naming its kind', async () => {
+  const added = { ...everyday, items: [...ITEMS, item({ name: 'Falernum', state: 'have' })] }
+  const fetch = stubBar(everyday, () => json(added))
+  await openBar()
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Find a bottle' }), { target: { value: 'Falernum' } })
+  const add = within(screen.getByRole('group', { name: 'Add ‘Falernum’ to the bar as' }))
+  fireEvent.click(add.getByRole('button', { name: 'Other' }))
+  expect(posted(fetch)).toEqual([{ have: ['Falernum'] }])
 })
 
 test('adds an item without tracking it', async () => {

@@ -737,6 +737,15 @@ def test_have_on_new_syrup_word_item_makes_a_syrup(bar, catalog):
     assert item.state is None and not item.tracked
 
 
+def test_new_item_can_come_with_its_kind(bar, catalog):
+    view = bar.apply(BarChanges(have=["Cynar"], kinds={"cynar": "aperitifs"}))
+    assert catalog.raw()[-1] == {"name": "Cynar", "kind": "aperitifs"}
+    (item,) = view.items
+    assert (item.name, item.kind, item.state) == ("Cynar", "aperitifs", "have")
+    # Without have or dont_have, an unknown name is still not an item.
+    refused(bar, "There is no ‘Amaro’ in the bar.", kinds={"Amaro": "liqueurs"})
+
+
 def test_touch_and_fold_write_the_effective_kind(bar, store, catalog):
     entries(catalog, {"name": "honey syrup"})
     drink(store, "X", "honey syrup", "Ginger syrup", "ginger syrup (homemade)")

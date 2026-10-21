@@ -4,7 +4,7 @@ import { normalise } from './bar'
 import type { Mark, RecipeSummary, Side } from './types'
 
 export type FilterMark = Extract<Mark, 'favourite' | 'try_next'>
-export type SortKey = 'time' | 'rating' | 'made' | 'name'
+export type SortKey = 'favourites' | 'time' | 'rating' | 'made' | 'name'
 /** The Drinks views: what you can make, every drink, the mocktails, and the syrups and prep. */
 export type DrinksView = 'can' | 'all' | 'mocktails' | 'syrups'
 
@@ -50,6 +50,7 @@ export const MAX_HAVE_TERMS = 20
 
 /** The sort choices the browse page offers, in display order. */
 export const SORT_OPTIONS: readonly { key: SortKey; label: string }[] = [
+  { key: 'favourites', label: 'Favourites first' },
   { key: 'time', label: 'Cooking time' },
   { key: 'rating', label: 'Rating' },
   { key: 'made', label: 'Recently made' },
@@ -178,7 +179,7 @@ export function browseQuery(state: BrowseState): string {
 
 /** The query a reset goes to; drinks keep the view they are on. */
 export function defaultQuery(side: Side, show: DrinksView | null = null): string {
-  if (side === 'food') return 'sort=time'
+  if (side === 'food') return 'sort=favourites'
   return show && show !== 'can' ? `show=${show}` : ''
 }
 
@@ -208,7 +209,13 @@ const byMade = (a: RecipeSummary, b: RecipeSummary) => {
   return a.last_made < b.last_made ? 1 : -1
 }
 
+// Favourites, then the rest that were tried, then the others; quickest first within each.
+const markRank = (recipe: RecipeSummary) =>
+  recipe.marks.includes('favourite') ? 0 : recipe.marks.includes('tried') ? 1 : 2
+const byFavourites = (a: RecipeSummary, b: RecipeSummary) => markRank(a) - markRank(b) || byTime(a, b)
+
 const SORTERS: Record<SortKey, (a: RecipeSummary, b: RecipeSummary) => number> = {
+  favourites: byFavourites,
   time: byTime,
   rating: byRating,
   made: byMade,
@@ -233,6 +240,7 @@ export function applyBrowse(recipes: RecipeSummary[], state: BrowseState): Recip
 }
 
 const SORT_DESCRIPTIONS: Record<SortKey, string> = {
+  favourites: 'favourites and tried first',
   time: 'quickest first',
   rating: 'highest rated first',
   made: 'recently made first',

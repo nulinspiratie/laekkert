@@ -743,7 +743,12 @@ def _apply(changes: BarChanges, draft: _Draft) -> None:
             del entry["fresh"]
             draft.updated(item)
 
+    adding = {name_key(name): name for name in (*changes.have, *changes.dont_have)}
     for name, kind in changes.kinds.items():
+        if draft.registry.item_key(name) is None and name_key(name) in adding:
+            # A bottle added with its kind; its state is set below.
+            draft.new_item(adding[name_key(name)], kind=kind)
+            continue
         item = draft.bar_item(name)
         entry = draft.touch(item)
         entry["kind"] = kind
