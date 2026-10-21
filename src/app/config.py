@@ -33,12 +33,17 @@ def load_settings(path: str | os.PathLike[str] | None = None) -> Settings:
         data = tomllib.loads(Path(path).read_text(encoding="utf-8"))
     except FileNotFoundError:
         return Settings()
+    lists = {f.name for f in fields(Settings) if isinstance(f.default, tuple)}
     known = {f.name for f in fields(Settings)}
-    # TOML lists become tuples, so they compare equal to the (hashable) defaults.
-    return Settings(
-        **{
-            k: tuple(v) if isinstance(v, list) else v
-            for k, v in data.items()
-            if k in known
-        }
-    )
+    values = {}
+    for k, v in data.items():
+        if k not in known:
+            continue
+        if k in lists:
+            # A list setting that is not a list of strings keeps its default.
+            if not (isinstance(v, list) and all(isinstance(x, str) for x in v)):
+                continue
+            # Tuples, so they compare equal to the (hashable) defaults.
+            v = tuple(v)
+        values[k] = v
+    return Settings(**values)

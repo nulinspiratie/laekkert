@@ -46,6 +46,14 @@ def test_config_quick_tags_list_becomes_a_tuple(tmp_path):
     assert load_settings(path) == Settings(food_quick_tags=("quick", "Kid approved"))
 
 
+def test_config_quick_tags_not_a_list_keeps_the_default(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text('food_quick_tags = "breakfast"\n')
+    assert load_settings(path) == Settings()
+    path.write_text("food_quick_tags = [1, 2]\n")
+    assert load_settings(path) == Settings()
+
+
 def test_config_quick_tags_default():
     assert Settings().food_quick_tags == (
         "breakfast",

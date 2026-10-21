@@ -261,7 +261,15 @@ export default function Browse({ side }: { side: Side }) {
     setText(value)
     navigate(search(browseQuery({ ...state, q: value.trim() })), { replace: true })
   }
-  const reset = () => navigate(search(defaultQuery(side, state.show)))
+  // The sheet's Reset clears what the sheet shows. On food the rows above the list show the
+  // category and the quick tags, so those stay.
+  const reset = () => {
+    const base = parseBrowse(side, new URLSearchParams(defaultQuery(side, state.show)))
+    const kept = quick
+      ? { category: state.category, tags: state.tags.filter((tag) => quick.quick.includes(tag)) }
+      : {}
+    navigate(search(browseQuery({ ...base, ...kept })))
+  }
   // "Clear filters" clears the search, marks and tags. Drinks keep the view; food drops every param.
   const clearedQuery = side === 'drinks' ? defaultQuery(side, state.show) : ''
   const clearFilters = () => navigate({ pathname: `/${side}`, ...search(clearedQuery) })

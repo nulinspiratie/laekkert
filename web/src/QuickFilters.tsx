@@ -11,7 +11,7 @@ const plural = (n: number) => `${n} ${n === 1 ? 'recipe' : 'recipes'}`
 
 export interface QuickFiltersProps {
   tabs: QuickTab[]
-  /** Null until the settings have arrived: no chip row yet. */
+  /** Null until the settings have arrived: no chip row yet. More and Clear show without chips. */
   chips: QuickChip[] | null
   /** A category or a tag is on: the chip row ends with Clear. */
   active: boolean
@@ -64,7 +64,7 @@ export function QuickFilters({ tabs, chips, active, state, onChange, onMore, des
             </button>
           ))}
         </div>
-        {chips && chips.length > 0 && (
+        {chips && (chips.length > 0 || onMore || active) && (
           <div role="group" aria-label="Quick tags" className="quick-chips">
             {chips.map((chip) => (
               <button

@@ -1416,8 +1416,9 @@ a.browse-head-btn {
 .quick-filters--phone .quick-chips {
   overflow-x: auto;
   scrollbar-width: none;
-  -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent);
-  mask-image: linear-gradient(90deg, #000 85%, transparent);
+  /* A fixed-width fade no wider than the end padding, so the last item is clear once scrolled to. */
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent);
 }
 
 .quick-filters--phone .quick-tabs::-webkit-scrollbar,

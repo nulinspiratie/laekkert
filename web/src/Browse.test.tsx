@@ -300,13 +300,26 @@ test('settings that fail to load mean the default quick tags', async () => {
   expect(chipNames()).toEqual(['Kid approved, 2 recipes', 'Vegetarian, 2 recipes', 'More'])
 })
 
-test('no quick tags means no chip row', async () => {
+test('no quick tags means no tag chips, but More and Clear stay', async () => {
+  stubViewport(false)
   const fetch = stubFetch(food, SORTED_BAR, [])
-  renderAt('/food')
-  await screen.findByText('A to Z · 4 recipes')
+  renderAt('/food?cat=mains&sort=favourites')
+  await screen.findByText(/favourites and tried first · \d+ recipes?/)
   await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/settings', expect.anything()))
   expect(screen.getByRole('radiogroup', { name: 'Category' })).toBeInTheDocument()
-  expect(screen.queryByRole('group', { name: 'Quick tags' })).not.toBeInTheDocument()
+  expect(chipNames()).toEqual(['More', 'Clear'])
+  fireEvent.click(quickChips().getByRole('button', { name: 'Clear' }))
+  expect(location()).toBe(DEFAULT_FOOD)
+  expect(chipNames()).toEqual(['More'])
+})
+
+test('the phone sheet Reset keeps the category and quick tags the rows show', async () => {
+  stubViewport(false)
+  stubFetch()
+  renderAt('/food?cat=mains&mark=favourite&tag=vegetarian&tag=weeknight&sort=time')
+  fireEvent.click(await screen.findByRole('button', { name: 'Filters, 2 active' }))
+  fireEvent.click(within(screen.getByRole('dialog', { name: 'Filters' })).getByRole('button', { name: 'Reset' }))
+  expect(location()).toBe('/food?cat=mains&tag=vegetarian&sort=favourites')
 })
 
 test('a tap on a chip adds the tag, a second tap removes it', async () => {
