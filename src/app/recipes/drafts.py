@@ -135,10 +135,16 @@ def _blank(row: DraftIngredient) -> bool:
     )
 
 
-def _normal_tags(tags: list[str]) -> list[str]:
+def normal_tag(tag: str) -> str:
+    """A tag as it is saved: lowercase, single spaces."""
+    return " ".join(tag.split()).lower()
+
+
+def normal_tags(tags: list[str]) -> list[str]:
+    """The tags as saved, without blanks or repeats, in their first order."""
     seen: dict[str, None] = {}
     for tag in tags:
-        tag = " ".join(tag.split()).lower()
+        tag = normal_tag(tag)
         if tag:
             seen[tag] = None
     return list(seen)
@@ -274,7 +280,7 @@ def to_recipe(
             steps=steps,
             notes=notes,
             source=source,
-            tags=_normal_tags(draft.tags),
+            tags=normal_tags(draft.tags),
             marks=marks,
             image=(draft.image or "").strip() or None,
         )

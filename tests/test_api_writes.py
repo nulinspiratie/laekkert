@@ -185,6 +185,7 @@ def test_unknown_recipe_is_404(client, tmp_path):
         client.delete(base),
         post_json(client, f"{base}/restore", {"version": 1}),
         post_json(client, f"{base}/marks", {"add": ["tried"]}),
+        post_json(client, f"{base}/tags", {"add": ["quick"]}),
         post_json(client, f"{base}/timeline", {"kind": "note", "text": "hi"}),
         client.get(f"{base}/timeline"),
     ]
@@ -242,6 +243,30 @@ def test_marks_route_applies_rules(client):
 def test_marks_body_is_checked(client, body):
     create(client)
     response = post_json(client, "/api/recipes/drinks/margarita/marks", body)
+    assert response.status_code == 400
+    assert response.json()["error"]
+
+
+def test_tags_route_adds_and_removes(client):
+    create(client)
+    url = "/api/recipes/drinks/margarita/tags"
+    response = post_json(client, url, {"add": ["Kid approved"]})
+    assert response.status_code == 200
+    assert response.json()["tags"] == ["kid approved"]
+    assert response.json()["version"] == 2
+    response = post_json(client, url, {"remove": ["kid approved"]})
+    assert response.json()["tags"] == []
+    response = post_json(client, url, {"add": ["quick"], "remove": ["quick"]})
+    assert response.status_code == 400
+    assert response.json() == {"error": "A tag can't be added and taken off at once"}
+
+
+@pytest.mark.parametrize(
+    "body", [{"add": "quick"}, {"remove": [1]}, {"add": [["quick"]]}, ["quick"]]
+)
+def test_tags_body_is_checked(client, body):
+    create(client)
+    response = post_json(client, "/api/recipes/drinks/margarita/tags", body)
     assert response.status_code == 400
     assert response.json()["error"]
 
@@ -390,6 +415,7 @@ WRITES = [
     ("put", "/api/recipes/drinks/daiquiri"),
     ("post", "/api/recipes/drinks/daiquiri/restore"),
     ("post", "/api/recipes/drinks/daiquiri/marks"),
+    ("post", "/api/recipes/drinks/daiquiri/tags"),
     ("post", "/api/recipes/drinks/daiquiri/timeline"),
 ]
 

@@ -31,7 +31,7 @@ from pydantic import ValidationError
 
 from app.recipes.catalog import Catalog
 from app.recipes.diff import describe_changes
-from app.recipes.drafts import RecipeDraft, slugify, to_recipe
+from app.recipes.drafts import RecipeDraft, normal_tag, normal_tags, slugify, to_recipe
 from app.recipes.files import atomic_write
 from app.recipes.model import (
     SIDES,
@@ -400,9 +400,36 @@ class RecipeStore:
             marks=_ordered(current.marks),
             catalog=self._catalog,
         )
+        return self._save_edit(current, recipe, via)
+
+    @_locked
+    def set_tags(
+        self, side: str, slug: str, add: list[str], remove: list[str], via: Via
+    ) -> Recipe | None:
+        """Add and take off tags; saved as a new version, like any edit.
+
+        Added tags go at the end; a tag the recipe already has stays where it is.
+        """
+        current = self.get(side, slug)
+        if current is None:
+            return None
+        added, removed = normal_tags(add), set(normal_tags(remove))
+        if removed & set(added):
+            raise ValueError("A tag can't be added and taken off at once")
+        tags = [t for t in current.tags if normal_tag(t) not in removed]
+        have = {normal_tag(t) for t in tags}
+        tags += [t for t in added if t not in have]
+        recipe = Recipe.model_validate(
+            {**current.model_dump(), "tags": tags, "marks": _ordered(current.marks)}
+        )
+        return self._save_edit(current, recipe, via)
+
+    def _save_edit(self, current: Recipe, recipe: Recipe, via: Via) -> Recipe:
+        """Save `recipe` over `current` as the next version; nothing if they match."""
         if _content(recipe) == _content(current):
             return current
-        moves = self._photo_moves(current.side, slug, recipe)
+        side, slug = current.side, current.slug
+        moves = self._photo_moves(side, slug, recipe)
         folder = self.recipes_dir / side / slug
         number = self.current_version(side, slug)
         entries: list[Entry] = []

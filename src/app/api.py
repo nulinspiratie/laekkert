@@ -198,6 +198,13 @@ def mark_list(body: dict, key: str) -> list[Mark]:
     return value
 
 
+def tag_list(body: dict, key: str) -> list[str]:
+    value = body.get(key, [])
+    if not isinstance(value, list) or not all(isinstance(t, str) for t in value):
+        raise ValueError(f"{key} must be a list of tags")
+    return value
+
+
 def with_bar(body: dict, recipe: Recipe, view: BarView) -> dict:
     """A drink's JSON with its bar status, and each ingredient's if it has some.
 
@@ -361,6 +368,20 @@ def api_routes(
         return not_found() if recipe is None else JSONResponse(detail(recipe))
 
     @write_route
+    async def set_tags(request: Request) -> JSONResponse:
+        if (refusal := needs_json(request)) is not None:
+            return refusal
+        body = await json_object(request)
+        recipe = store.set_tags(
+            request.path_params["side"],
+            request.path_params["slug"],
+            tag_list(body, "add"),
+            tag_list(body, "remove"),
+            VIA,
+        )
+        return not_found() if recipe is None else JSONResponse(detail(recipe))
+
+    @write_route
     async def add_entry(request: Request) -> JSONResponse:
         if (refusal := needs_json(request)) is not None:
             return refusal
@@ -433,6 +454,7 @@ def api_routes(
         Route(recipe, delete_recipe, methods=["DELETE"]),
         Route(f"{recipe}/restore", restore_recipe, methods=["POST"]),
         Route(f"{recipe}/marks", set_marks, methods=["POST"]),
+        Route(f"{recipe}/tags", set_tags, methods=["POST"]),
         Route(f"{recipe}/timeline", timeline),
         Route(f"{recipe}/timeline", add_entry, methods=["POST"]),
         Route(f"{recipe}/files/{{name}}", recipe_file),

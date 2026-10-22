@@ -146,6 +146,176 @@
   border-color: var(--accent);
 }
 
+/* ---- The food tag picker: + after the tags, a sheet on a phone, a popover on desktop ---- */
+
+.recipe-tags-row {
+  position: relative;
+}
+
+.tag-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.tag-add:hover,
+.tag-add[aria-expanded='true'] {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.tag-add:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.tag-picker {
+  flex-direction: column;
+  gap: 16px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.tag-picker--sheet {
+  position: fixed;
+  inset: auto 0 0;
+  width: 100%;
+  max-width: none;
+  max-height: 85dvh;
+  margin: 0;
+  padding: 0 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  border: 0;
+  border-radius: 22px 22px 0 0;
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.3);
+  overflow-y: auto;
+}
+
+.tag-picker--sheet[open] {
+  display: flex;
+}
+
+.tag-picker--sheet::backdrop {
+  background: rgba(30, 20, 12, 0.5);
+}
+
+/* Above the sticky header, so a click anywhere outside closes the popover first. */
+.tag-picker-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.tag-picker--popover {
+  display: flex;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 21;
+  width: min(400px, 100%);
+  padding: 16px 18px 18px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(60, 40, 20, 0.18);
+}
+
+.tag-picker--popover:focus {
+  outline: none;
+}
+
+.tag-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tag-picker-head h2 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 400;
+}
+
+.tag-picker-done {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--cta);
+  color: var(--cta-ink);
+  font-weight: 600;
+}
+
+.tag-picker-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-pick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px 0 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+}
+
+.tag-pick svg {
+  color: var(--accent-ink);
+}
+
+.tag-pick:hover {
+  border-color: var(--accent);
+}
+
+.tag-pick[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.tag-pick[aria-pressed='true'] svg {
+  color: var(--on-accent);
+}
+
+.tag-picker-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.tag-picker-error {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #f7e4dc;
+  color: #6e2a15;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
 /* ---- Marks, rating and Made it ---- */
 
 .recipe-marks {

@@ -462,6 +462,44 @@ def test_marks_make_no_version_and_rewrite_legacy_as_format_2(store):
     assert json.loads(path.read_text())["format_version"] == 3
 
 
+def test_set_tags_saves_a_version_with_the_change(store):
+    store.create("drinks", draft(name="Zombie", tags=["tiki"]), "app")
+    recipe = store.set_tags("drinks", "zombie", ["Kid  Approved"], [], "app")
+    assert recipe.tags == ["tiki", "kid approved"]
+    assert json.loads(raw(store, "drinks", "zombie"))["tags"] == [
+        "tiki",
+        "kid approved",
+    ]
+    assert versions(store, "drinks", "zombie") == ["0001.json", "0002.json"]
+    edit = store.timeline("drinks", "zombie")[-1]
+    assert (edit.kind, edit.version) == ("edit", 2)
+    assert [(c.section, c.kind, c.text) for c in edit.changes] == [
+        ("tags", "added", "“kid approved”")
+    ]
+    recipe = store.set_tags("drinks", "zombie", [], ["TIKI"], "app")
+    assert recipe.tags == ["kid approved"]
+    assert store.current_version("drinks", "zombie") == 3
+
+
+def test_set_tags_without_change_writes_nothing(store):
+    store.create("drinks", draft(name="Zombie", tags=["tiki"]), "app")
+    before = raw(store, "drinks", "zombie", "timeline.jsonl")
+    # Already there, not there, and the category ("cocktail") which is never a tag.
+    recipe = store.set_tags("drinks", "zombie", ["tiki", "cocktail"], ["quick"], "app")
+    assert recipe.tags == ["tiki"]
+    assert raw(store, "drinks", "zombie", "timeline.jsonl") == before
+    assert versions(store, "drinks", "zombie") == ["0001.json"]
+
+
+def test_set_tags_keeps_marks_and_refuses_both_ways(store):
+    store.set_marks("drinks", "daiquiri", ["favourite"], [], "app")
+    recipe = store.set_tags("drinks", "daiquiri", ["party"], [], "app")
+    assert recipe.marks == ["favourite", "tried"]
+    with pytest.raises(ValueError):
+        store.set_tags("drinks", "daiquiri", ["party"], ["Party"], "app")
+    assert store.set_tags("drinks", "nope", ["party"], [], "app") is None
+
+
 def test_set_marks_same_mark_added_and_removed_is_an_error(store):
     with pytest.raises(ValueError):
         store.set_marks("drinks", "daiquiri", ["try_next"], ["try_next"], "app")

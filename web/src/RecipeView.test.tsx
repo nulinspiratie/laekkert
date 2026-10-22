@@ -498,6 +498,126 @@ describe('marks, rating and Made it', () => {
   })
 })
 
+describe('tag picker', () => {
+  const stew: Recipe = { ...traybake, slug: 'stew', name: 'Stew', tags: ['quick', 'Dinner', 'main'] }
+
+  test('a food page has a + after its tags; with none it says Add tags', async () => {
+    stubApi({ ...traybake, tags: [] })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    expect(screen.getByRole('button', { name: 'Add tags' })).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  test('opening lists every food tag A to Z, the recipe’s own pressed', async () => {
+    stubApi(traybake, stew)
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit tags' }))
+    const popover = screen.getByRole('dialog', { name: 'Tags' })
+    expect(within(popover).getByText('Loading tags…')).toBeInTheDocument()
+    const pills = within(await within(popover).findByRole('group', { name: 'Tags' })).getAllByRole('button')
+    expect(pills.map((b) => [b.textContent, b.getAttribute('aria-pressed')])).toEqual([
+      ['batch cook', 'true'],
+      ['Dinner', 'false'],
+      ['kid approved', 'true'],
+      ['quick', 'false'],
+    ])
+    expect(within(popover).getByText('Tap a tag to add it or take it off.')).toBeInTheDocument()
+  })
+
+  test('taps change only the picker; Done saves them as one change and reloads History', async () => {
+    const fetch = stubApiWith({
+      recipes: [traybake, stew],
+      post: () => json({ ...traybake, tags: ['kid approved', 'quick'] }),
+    })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit tags' }))
+    const popover = screen.getByRole('dialog', { name: 'Tags' })
+    fireEvent.click(await within(popover).findByRole('button', { name: 'quick' }))
+    fireEvent.click(within(popover).getByRole('button', { name: 'batch cook' }))
+    expect(within(popover).getByRole('button', { name: 'quick' })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(popover).getByText('Saves when you close: + quick, − batch cook')).toBeInTheDocument()
+    expect(posts(fetch)).toEqual([])
+    const timelineLoads = () => fetch.mock.calls.filter(([url]) => String(url).endsWith('/timeline')).length
+    expect(timelineLoads()).toBe(1)
+    fireEvent.click(within(popover).getByRole('button', { name: 'Done' }))
+    expect(screen.queryByRole('dialog', { name: 'Tags' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'quick' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'batch cook' })).not.toBeInTheDocument()
+    expect(posts(fetch)).toEqual([
+      { url: '/api/recipes/food/chicken-leek-traybake/tags', body: { add: ['quick'], remove: ['batch cook'] } },
+    ])
+    await waitFor(() => expect(timelineLoads()).toBe(2))
+  })
+
+  test('a click outside the popover closes and saves it', async () => {
+    const fetch = stubApiWith({ recipes: [traybake, stew], post: () => json({ ...traybake, tags: [] }) })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit tags' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Dinner' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close tags' }))
+    await waitFor(() => expect(posts(fetch)).toHaveLength(1))
+    expect(posts(fetch)[0].body).toEqual({ add: ['Dinner'], remove: [] })
+  })
+
+  test('closing without a change posts nothing', async () => {
+    const fetch = stubApi(traybake, stew)
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit tags' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'quick' }))
+    fireEvent.click(screen.getByRole('button', { name: 'quick' }))
+    fireEvent.keyDown(screen.getByRole('dialog', { name: 'Tags' }), { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: 'Tags' })).not.toBeInTheDocument()
+    expect(posts(fetch)).toEqual([])
+    expect(screen.getByRole('button', { name: 'Edit tags' })).toHaveFocus()
+  })
+
+  test('on a phone it is a sheet that saves on Done', async () => {
+    stubViewport(false)
+    const fetch = stubApiWith({ recipes: [traybake, stew], post: () => json({ ...traybake, tags: ['batch cook'] }) })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit tags' }))
+    const sheet = screen.getByRole('dialog', { name: 'Tags' })
+    expect(sheet.tagName).toBe('DIALOG')
+    expect(sheet).toHaveAttribute('open')
+    fireEvent.click(await within(sheet).findByRole('button', { name: 'kid approved' }))
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Done' }))
+    await waitFor(() => expect(posts(fetch)).toHaveLength(1))
+    expect(posts(fetch)[0].body).toEqual({ add: [], remove: ['kid approved'] })
+  })
+
+  test('if the tags fail to load, the recipe’s own can still be taken off', async () => {
+    const fetch = stubApi(traybake)
+    const answer = fetch.getMockImplementation()!
+    fetch.mockImplementation(async (url: string, init?: RequestInit) =>
+      url.startsWith('/api/recipes?') ? json({ error: 'offline' }, 503) : answer(url, init),
+    )
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit tags' }))
+    const popover = screen.getByRole('dialog', { name: 'Tags' })
+    expect(await within(popover).findByRole('alert')).toHaveTextContent("Couldn't load the other tags.")
+    expect(within(popover).getByRole('button', { name: 'batch cook' })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(popover).getByRole('button', { name: 'kid approved' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  test('a failed save shows the error and keeps the tags', async () => {
+    stubApiWith({ recipes: [traybake, stew], post: () => json({ error: 'could not save; nothing was changed' }, 503) })
+    renderAt(TRAYBAKE_PATH)
+    await loaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit tags' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'quick' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not save; nothing was changed')
+    expect(screen.queryByRole('link', { name: 'quick' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'batch cook' })).toBeInTheDocument()
+  })
+})
+
 describe('edit link', () => {
   test('Edit link goes to the editor', async () => {
     stubApi(traybake)
@@ -1038,6 +1158,14 @@ describe('a drink and the bar', () => {
     stubApi({ ...cocktail({ rum: 'have', sec: 'have' }), tags: ['classic'] })
     await open()
     expect(screen.getByRole('link', { name: 'classic' })).toHaveAttribute('href', '/drinks?tag=classic&show=all')
+    expect(screen.queryByRole('button', { name: 'Edit tags' })).not.toBeInTheDocument()
+  })
+
+  test('a drink without tags has no tag row and no Add tags', async () => {
+    stubApi(cocktail({ rum: 'have', sec: 'have' }))
+    await open()
+    expect(screen.queryByRole('list', { name: 'Tags' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add tags' })).not.toBeInTheDocument()
   })
 
   test('a syrup tag link shows syrups, since All drinks has none', async () => {

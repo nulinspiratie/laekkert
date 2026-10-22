@@ -125,6 +125,11 @@ export async function setMarks(side: Side, slug: string, add: Mark[], remove: Ma
   return (await send(`${recipeUrl(side, slug)}/marks`, 'POST', { add, remove })).json()
 }
 
+/** Saved as a new version, like an editor save; the server ignores a tag that is already as asked. */
+export async function setTags(side: Side, slug: string, add: string[], remove: string[]): Promise<Recipe> {
+  return (await send(`${recipeUrl(side, slug)}/tags`, 'POST', { add, remove })).json()
+}
+
 export async function restoreVersion(side: Side, slug: string, version: number): Promise<Recipe> {
   return (await send(`${recipeUrl(side, slug)}/restore`, 'POST', { version })).json()
 }

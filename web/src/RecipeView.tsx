@@ -3,18 +3,19 @@
 
 import { Fragment, useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
-import { addEntry, changeBar, getRecipe, getTimeline, recipeImageUrl, restoreVersion, setMarks } from './api'
+import { addEntry, changeBar, getRecipe, getTimeline, recipeImageUrl, restoreVersion, setMarks, setTags } from './api'
 import { messageOf as barMessageOf, withBar } from './bar'
 import { browseQuery, MARK_LABELS, type DrinksView, type FilterMark } from './browse'
 import { capitalise, formatTime } from './format'
 import { runs } from './groups'
-import { Back, Bookmark, Check, Clock, Edit, Heart, People } from './icons'
+import { Back, Bookmark, Check, Clock, Edit, Heart, People, Plus } from './icons'
 import { History } from './History'
 import { Ingredients } from './Ingredients'
 import { Notes } from './Notes'
 import { PhotoTile } from './PhotoTile'
 import { Shell } from './Shell'
 import { Stars } from './Stars'
+import { TagPicker } from './TagPicker'
 import {
   SIDE_LABELS,
   type BarChanges,
@@ -118,6 +119,8 @@ function Page({ recipe, onRecipe }: { recipe: Recipe; onRecipe: (recipe: Recipe)
   const [timeline, setTimeline] = useState<Timeline | null>(null)
   const [problem, setProblem] = useState<Problem | null>(null)
   const [busy, setBusy] = useState(false)
+  const [picking, setPicking] = useState(false)
+  const addTags = useRef<HTMLButtonElement>(null)
   // The state above disables the buttons; the ref also stops a second call in the same tick.
   const writing = useRef(false)
 
@@ -172,6 +175,12 @@ function Page({ recipe, onRecipe }: { recipe: Recipe; onRecipe: (recipe: Recipe)
   const toggle = (mark: FilterMark) => {
     const on = recipe.marks.includes(mark)
     void perform('head', () => setMarks(side, slug, on ? [] : [mark], on ? [mark] : []))
+  }
+
+  const closePicker = ({ add, remove }: { add: string[]; remove: string[] }) => {
+    setPicking(false)
+    addTags.current?.focus()
+    if (add.length > 0 || remove.length > 0) void perform('head', () => setTags(side, slug, add, remove))
   }
 
   /** Sets an item's state, then reloads the drink so every row and the summary are fresh. */
@@ -246,16 +255,39 @@ function Page({ recipe, onRecipe }: { recipe: Recipe; onRecipe: (recipe: Recipe)
               </div>
             )}
           </div>
-          {recipe.tags.length > 0 && (
-            <ul className="recipe-tags" aria-label="Tags">
-              {recipe.tags.map((tag) => (
-                <li key={tag}>
-                  <Link to={`/${side}?${browseQuery({ q: '', category: null, marks: [], tags: [tag], sort: 'name', show: tagView, have: [] })}`}>
-                    {tag}
-                  </Link>
-                </li>
-              ))}
-            </ul>
+          {/* Food tags are set here too; drinks only show theirs. */}
+          {(recipe.tags.length > 0 || side === 'food') && (
+            <div className="recipe-tags-row">
+              <ul className="recipe-tags" aria-label="Tags">
+                {recipe.tags.map((tag) => (
+                  <li key={tag}>
+                    <Link to={`/${side}?${browseQuery({ q: '', category: null, marks: [], tags: [tag], sort: 'name', show: tagView, have: [] })}`}>
+                      {tag}
+                    </Link>
+                  </li>
+                ))}
+                {side === 'food' && (
+                  <li>
+                    <button
+                      ref={addTags}
+                      type="button"
+                      className="tag-add"
+                      aria-label={recipe.tags.length > 0 ? 'Edit tags' : undefined}
+                      aria-expanded={picking}
+                      aria-haspopup="dialog"
+                      disabled={busy}
+                      onClick={() => setPicking(true)}
+                    >
+                      <Plus size={18} />
+                      {recipe.tags.length === 0 && 'Add tags'}
+                    </button>
+                  </li>
+                )}
+              </ul>
+              {picking && (
+                <TagPicker own={recipe.tags} category={recipe.category} desktop={desktop} onClose={closePicker} />
+              )}
+            </div>
           )}
           <div className="recipe-marks" role="group" aria-label="Marks">
             {TOGGLE_MARKS.map((mark) => {
