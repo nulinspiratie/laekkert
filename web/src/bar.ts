@@ -65,8 +65,8 @@ export function nameList(names: string[], max = 2): string {
 
 /**
  * The line a drink's card shows about the bar; `also` is a drink you can make that uses untracked
- * items. `text` is the short version (two names and "+N", up to two lines on a card); `label`
- * names everything.
+ * items, and its text is just the names (the basket icon says the rest). `text` is the short
+ * version (two names and "+N", up to two lines on a card); `label` names everything.
  */
 export function badge(bar: DrinkBar): { kind: DrinkStatus | 'also'; text: string; label: string } {
   const named = (prefix: string, names: string[]) => ({
@@ -76,7 +76,11 @@ export function badge(bar: DrinkBar): { kind: DrinkStatus | 'also'; text: string
   switch (bar.status) {
     case 'can_make':
       return bar.untracked.length > 0
-        ? { kind: 'also', ...named('Also needs', bar.untracked) }
+        ? {
+            kind: 'also',
+            text: nameList(bar.untracked),
+            label: `Also needs: ${bar.untracked.join(', ')}`,
+          }
         : { kind: 'can_make', text: 'Can make now', label: 'Can make now' }
     case 'missing':
       return { kind: 'missing', ...named('Missing', bar.missing) }

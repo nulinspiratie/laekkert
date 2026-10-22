@@ -196,8 +196,8 @@ export function Ingredients({
 }
 
 /**
- * "Missing: a, b" or "From your bar: 2 of 2 bottles", and "Also needs: x" for what the bar does
- * not track (fresh items, syrups, prep).
+ * "Missing: a, b" or "From your bar: 2 of 2 bottles", and a basket with what the bar does not
+ * track (fresh items, syrups, prep); "Also needs" is there for screen readers only.
  */
 function BarSummary({ bar, ingredients }: { bar: DrinkBar; ingredients: RecipeIngredient[] }) {
   // Unsorted bottles count as missing here; the names go in recipe order.
@@ -225,7 +225,8 @@ function BarSummary({ bar, ingredients }: { bar: DrinkBar; ingredients: RecipeIn
       {bar.untracked.length > 0 && (
         <span className="ingredients-bar-also">
           <Basket size={16} strokeWidth={2} />
-          Also needs: {bar.untracked.join(', ')}
+          <span className="visually-hidden">Also needs: </span>
+          {bar.untracked.join(', ')}
         </span>
       )}
     </p>

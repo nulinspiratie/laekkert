@@ -970,8 +970,8 @@ test('shows card badges', async () => {
   await screen.findByText('5 drinks · 3 you can make')
   const card = (name: RegExp) => screen.getByRole('link', { name })
   expect(within(card(/Negroni/)).getByText('Can make now')).toBeInTheDocument()
-  expect(within(card(/Gimlet/)).getByText('Also needs: lime juice')).toBeInTheDocument()
-  const paloma = within(card(/Paloma/)).getByText('Also needs: grapefruit, lime juice +1')
+  expect(within(card(/Gimlet/)).getByText('lime juice')).toBeInTheDocument()
+  const paloma = within(card(/Paloma/)).getByText('grapefruit, lime juice +1')
   // The full list is the badge's title and accessible name.
   expect(paloma.parentElement).toHaveAttribute('title', 'Also needs: grapefruit, lime juice, soda water')
   expect(paloma.parentElement).toHaveAccessibleName('Also needs: grapefruit, lime juice, soda water')
@@ -982,7 +982,7 @@ test('shows card badges', async () => {
   stubViewport(false)
   renderAt('/drinks?show=all')
   await screen.findByRole('link', { name: /Gimlet/ })
-  expect(within(card(/Gimlet/)).getByText('Also needs: lime juice')).toBeInTheDocument()
+  expect(within(card(/Gimlet/)).getByText('lime juice')).toBeInTheDocument()
   expect(within(card(/Negroni/)).getByText('Can make now')).toBeInTheDocument()
 })
 
@@ -1005,7 +1005,7 @@ test('list views show the badges too', async () => {
   stubViewport(false)
   renderAt('/drinks?show=all')
   await screen.findByRole('link', { name: /Gimlet/ })
-  expect(within(screen.getByRole('link', { name: /Gimlet/ })).getByText('Also needs: lime juice')).toBeInTheDocument()
+  expect(within(screen.getByRole('link', { name: /Gimlet/ })).getByText('lime juice')).toBeInTheDocument()
 })
 
 const NEW_BAR = bar([barItem('gin', null), barItem('orgeat', null)])

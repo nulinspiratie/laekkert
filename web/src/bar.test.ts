@@ -165,12 +165,12 @@ describe('badge', () => {
   it('says Also needs when untracked items are left', () => {
     expect(badge(drinkBar({ untracked: ['lime juice', 'mint', 'soda'] }))).toEqual({
       kind: 'also',
-      text: 'Also needs: lime juice, mint +1',
+      text: 'lime juice, mint +1',
       label: 'Also needs: lime juice, mint, soda',
     })
     expect(badge(drinkBar({ untracked: ['limes'] }))).toEqual({
       kind: 'also',
-      text: 'Also needs: limes',
+      text: 'limes',
       label: 'Also needs: limes',
     })
   })

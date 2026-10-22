@@ -48,8 +48,8 @@ const BADGE_ICONS: Record<DrinkStatus | 'also', () => ReactNode> = {
 }
 
 /**
- * "Can make now", "Also needs: lime juice", "Missing: orgeat" and so on, with an icon; nothing on food,
- * syrups or prep. The full list of names is the badge's title and accessible name.
+ * "Can make now", "lime juice" (what else it needs), "Missing: orgeat" and so on, with an icon;
+ * nothing on food, syrups or prep. The full list of names is the badge's title and accessible name.
  */
 function BarBadge({ recipe }: { recipe: RecipeSummary }) {
   if (!recipe.bar) return null
