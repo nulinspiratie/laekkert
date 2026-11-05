@@ -4,8 +4,8 @@ A self-hosted recipe app for a household's food and drinks, with Claude as a fir
 to add and edit recipes. It runs as one small container, keeps every recipe as a plain file,
 and installs on a phone as an app.
 
-![Lækkert on a phone: the food list, a recipe's ingredients with the servings stepper, and a
-cocktail with what the bar has](docs/screenshots/phone.png)
+![Lækkert on a phone: the food list, a recipe with its photo and servings stepper, and a
+cocktail with what the bar has](docs/screenshots/phone.webp)
 
 ## Features
 
@@ -22,7 +22,7 @@ Type what's in the fridge and the food list ranks recipes by how little you'd ne
 Nothing is saved: it's a filter for tonight, not an inventory.
 
 ![The food list filtered by spaghetti, garlic, olive oil, chilli flakes and parsley: Spaghetti
-aglio e olio has everything, the rest show what's missing](docs/screenshots/food.png)
+aglio e olio has everything, the rest show what's missing](docs/screenshots/food.webp)
 
 ### Drinks from your bar
 
@@ -30,11 +30,11 @@ Mark each bottle as in or out once, and every drink tells you whether you can ma
 only need something fresh (lime, mint, soda), or are missing a bottle. Fresh items are never
 tracked; they just go on the shopping trip.
 
-![The drinks list with Can make now, Buy fresh and Missing badges, and the From your bar
-filter](docs/screenshots/drinks.png)
+![The drinks list showing all drinks, with Can make now, what to buy fresh, and Missing
+badges](docs/screenshots/drinks.webp)
 
-![The bar: bottles grouped by kind with Have and Don't have, a list of fresh items, and how
-many drinks you can make](docs/screenshots/bar.png)
+![The bar: bottles grouped by kind with Have and Don't have, the items it doesn't track, and
+how many drinks you can make](docs/screenshots/bar.png)
 
 ### Recipes that read well in the kitchen
 
